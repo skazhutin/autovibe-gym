@@ -1,55 +1,39 @@
 import os
-from openai import OpenAI
 
-from .env import GymEnv, StepResult
+from .env import GymEnv
+from .llm import LLMClient, OpenAICompatibleLLMClient
+from .protocol import ACTION_JSON_SCHEMA, Action, ActionParseError, Observation
 
-SYSTEM_PROMPT = """You are an expert data scientist solving a supervised machine learning task.
 
-You work in an iterative environment. Each turn you write Python code that gets executed.
-Available variables in your namespace:
-  train_df   — training DataFrame
-  val_df     — validation DataFrame
-  target_col — name of the target column (string)
+SYSTEM_PROMPT = f"""You are an expert data scientist solving a supervised machine learning task.
+
+You work in an iterative AutoML Gym. Each turn you must choose exactly one action.
+
+Available workspace variables:
+  train_df   - training DataFrame
+  val_df     - validation DataFrame
+  target_col - target column name
+  pd, np     - pandas and numpy
 
 Rules:
-- Do NOT access test data — it is hidden until you call env.submit(model).
-- Write clean, executable Python. Do not write markdown, only code blocks.
-- After each step you may receive hints about things you might have missed. Take them seriously.
-- When you have your best model ready, output exactly: SUBMIT
-  (the runner will extract your best model from the namespace and call env.submit)
+- Do not try to access test data; it is hidden until submit.
+- Use validation data for model selection.
+- Keep useful variables in the workspace, especially your final model.
+- Submit only when your best model is ready.
+- Return JSON only. Do not wrap it in markdown.
+
+{ACTION_JSON_SCHEMA}
 """
-
-
-def _build_feedback_message(result: StepResult, budget: int) -> str:
-    parts = []
-    if result.stdout.strip():
-        parts.append(f"[OUTPUT]\n{result.stdout.strip()}")
-    if result.stderr.strip():
-        parts.append(f"[ERROR]\n{result.stderr.strip()}")
-    if result.hints:
-        hints_text = "\n".join(f"- {h}" for h in result.hints)
-        parts.append(f"[HINTS]\n{hints_text}")
-    parts.append(f"[BUDGET] {budget} steps remaining.")
-    return "\n\n".join(parts)
-
-
-def _make_client() -> OpenAI:
-    """
-    Build OpenAI-compatible client.
-    Works with: vLLM (local), OpenAI, any OpenAI-compatible proxy.
-    """
-    base_url = os.getenv("LLM_BASE_URL", "http://localhost:8000/v1")
-    api_key = os.getenv("LLM_API_KEY", "local")
-    return OpenAI(base_url=base_url, api_key=api_key)
 
 
 class GymAgent:
     """
-    LLM agent that interacts with GymEnv via any OpenAI-compatible API.
-    Configure via environment variables:
-      LLM_BASE_URL  — e.g. http://localhost:8000/v1  (vLLM) or https://api.openai.com/v1
-      LLM_API_KEY   — API key (use "local" for vLLM without auth)
-      LLM_MODEL     — model name as served by the endpoint
+    LLM agent that interacts with GymEnv through explicit JSON actions.
+
+    The default client is OpenAI-compatible and is configured via:
+      LLM_BASE_URL  - e.g. http://localhost:8000/v1
+      LLM_API_KEY   - API key (use "local" for vLLM without auth)
+      LLM_MODEL     - model name as served by the endpoint
     """
 
     def __init__(
@@ -57,11 +41,12 @@ class GymAgent:
         env: GymEnv,
         model: str | None = None,
         max_tokens: int = 8192,
+        client: LLMClient | None = None,
     ):
         self.env = env
         self.model = model or os.getenv("LLM_MODEL", "Qwen/Qwen2.5-Coder-7B-Instruct")
         self.max_tokens = max_tokens
-        self.client = _make_client()
+        self.client = client or OpenAICompatibleLLMClient()
         self.messages: list[dict] = []
         self.total_input_tokens = 0
         self.total_output_tokens = 0
@@ -69,51 +54,57 @@ class GymAgent:
     def run(self) -> dict:
         context = self.env.reset()
         self.messages = [{"role": "user", "content": context["task"]}]
+        max_agent_turns = max(self.env.state.max_steps * 2 + 5, 10)
 
-        while True:
-            response = self.client.chat.completions.create(
+        for _ in range(max_agent_turns):
+            response = self.client.complete(
                 model=self.model,
                 max_tokens=self.max_tokens,
-                messages=[{"role": "system", "content": SYSTEM_PROMPT}] + self.messages,
+                system=SYSTEM_PROMPT,
+                messages=self.messages,
             )
-            usage = response.usage
-            if usage:
-                self.total_input_tokens += usage.prompt_tokens
-                self.total_output_tokens += usage.completion_tokens
+            self.total_input_tokens += response.input_tokens
+            self.total_output_tokens += response.output_tokens
+            self.messages.append({"role": "assistant", "content": response.text})
 
-            llm_text = response.choices[0].message.content.strip()
-            self.messages.append({"role": "assistant", "content": llm_text})
-
-            if "SUBMIT" in llm_text.upper():
-                model_obj = (
-                    self.env.state.namespace.get("model")
-                    or self.env.state.namespace.get("best_model")
+            try:
+                action = Action.from_llm_response(response.text)
+            except ActionParseError as exc:
+                self.messages.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            f"[ERROR] Could not parse your action: {exc}\n\n"
+                            f"{ACTION_JSON_SCHEMA}"
+                        ),
+                    }
                 )
-                if model_obj is None:
-                    feedback = (
-                        "[ERROR] No variable named 'model' or 'best_model' found in namespace. "
-                        "Train and assign your model first."
-                    )
-                    self.messages.append({"role": "user", "content": feedback})
-                    continue
-                self.env.submit(model_obj)
+                continue
+
+            observation = self.env.step(action)
+            self.messages.append(
+                {"role": "user", "content": observation.to_feedback_message()}
+            )
+
+            if observation.submitted:
                 return self._build_summary()
 
-            code = self._extract_code(llm_text)
-            result = self.env.step(code)
-            feedback = _build_feedback_message(result, self.env.budget_remaining())
-            self.messages.append({"role": "user", "content": feedback})
-
-            if result.done:
-                model_obj = (
-                    self.env.state.namespace.get("model")
-                    or self.env.state.namespace.get("best_model")
-                )
-                if model_obj is not None:
-                    self.env.submit(model_obj)
+            if observation.done:
+                forced_observation = self._try_forced_submit()
+                if forced_observation is not None:
+                    self.messages.append(
+                        {
+                            "role": "user",
+                            "content": forced_observation.to_feedback_message(),
+                        }
+                    )
                 summary = self._build_summary()
                 summary["forced_submit"] = True
                 return summary
+
+        summary = self._build_summary()
+        summary["stopped_reason"] = "max_agent_turns"
+        return summary
 
     def _build_summary(self) -> dict:
         summary = self.env.get_summary()
@@ -122,14 +113,8 @@ class GymAgent:
         summary["model"] = self.model
         return summary
 
-    @staticmethod
-    def _extract_code(text: str) -> str:
-        if "```python" in text:
-            start = text.index("```python") + len("```python")
-            end = text.index("```", start)
-            return text[start:end].strip()
-        if "```" in text:
-            start = text.index("```") + 3
-            end = text.index("```", start)
-            return text[start:end].strip()
-        return text
+    def _try_forced_submit(self) -> Observation | None:
+        model_var, _ = self.env.state.workspace.first_existing(["best_model", "model"])
+        if model_var is None:
+            return None
+        return self.env.step(Action.submit_action(model_var))

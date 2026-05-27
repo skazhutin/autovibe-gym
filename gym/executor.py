@@ -6,32 +6,6 @@ import tempfile
 import textwrap
 
 
-_RUNNER_TEMPLATE = textwrap.dedent("""
-import pickle, sys
-
-with open({input_path!r}, "rb") as f:
-    namespace = pickle.load(f)
-
-exec(compile(open({code_path!r}).read(), "<llm_code>", "exec"), namespace)
-
-safe = {{k: v for k, v in namespace.items()
-         if not k.startswith("_") and _is_serialisable(k, v)}}
-
-def _is_serialisable(k, v):
-    try:
-        pickle.dumps(v)
-        return True
-    except Exception:
-        return False
-
-safe = {{k: v for k, v in namespace.items()
-         if not k.startswith("_") and _is_serialisable(k, v)}}
-
-with open({output_path!r}, "wb") as f:
-    pickle.dump(safe, f)
-""")
-
-
 class CodeExecutor:
     """
     Executes LLM-generated Python code in a subprocess with a hard timeout.
@@ -105,6 +79,11 @@ import pickle, sys
 
 with open({input_path!r}, "rb") as f:
     namespace = pickle.load(f)
+
+import numpy as np
+import pandas as pd
+namespace.setdefault("pd", pd)
+namespace.setdefault("np", np)
 
 try:
     exec(compile(open({code_path!r}).read(), "<llm_code>", "exec"), namespace)
