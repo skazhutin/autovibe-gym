@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+venv/
+.venv/
+env/
+
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+*.key
+# .env.example is intentionally tracked — it's a template
+
+# Data — load via script, don't commit large files
+datasets/*.csv
+datasets/*.parquet
+datasets/*.xlsx
+datasets/*.json
+!datasets/README.md
+
+# Experiment outputs & logs
+runs/
+outputs/
+results/
+*.log
+*.jsonl
+
+# AI agent artifacts — local to each developer's machine
+.claude/
+memory/
+.codex/
+.cursor/
+.aider*
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Downloaded reference repos (not part of our code)
+agency-agents-main/
