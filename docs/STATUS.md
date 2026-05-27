@@ -43,7 +43,8 @@ Get a first end-to-end run working: dataset → GymEnv → GymAgent → summary 
 | `CLAUDE.md` | ✅ Done | |
 | `docs/PROJECT.md` | ✅ Done | |
 | First end-to-end test run | ❌ TODO | Need ANTHROPIC_API_KEY + a dataset |
-| `.env` / secrets setup | ❌ TODO | |
+| `.env.example` template | ✅ Done | |
+| `.env` / secrets setup | ❌ TODO | Каждый копирует `.env.example` → `.env` |
 
 ---
 
@@ -70,3 +71,4 @@ Get a first end-to-end run working: dataset → GymEnv → GymAgent → summary 
 | Date | Change |
 |------|--------|
 | 2026-05-27 | Initial scaffolding: gym/, executor, checklist, agent, run_gym.py, docs |
+| 2026-05-27 | Added docs/GIT_WORKFLOW.md, .gitignore, .env.example; pushed to GitHub |
