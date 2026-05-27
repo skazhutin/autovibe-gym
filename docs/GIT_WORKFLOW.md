@@ -247,7 +247,7 @@ git push origin --delete dev/<owner>/<topic>
 Для Python-only изменений:
 
 ```bash
-python -m compileall gym experiments
+python3 -m compileall gym experiments tests
 ```
 
 Для изменений `GymEnv` или checklist добавить или запустить smoke script, который

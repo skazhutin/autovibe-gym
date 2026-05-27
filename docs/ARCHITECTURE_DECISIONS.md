@@ -260,12 +260,61 @@ datasets/
 
 ---
 
+## ADR-008: Явный Action / Observation протокол
+
+**Статус:** ✅ Принято и базово реализовано
+**Дата:** 2026-05-27
+
+### Контекст
+Изначально агент возвращал plain Python code, а `SUBMIT` распознавался как магическая
+строка. Это удобно для MVP, но плохо масштабируется: нельзя надёжно различить
+намерение агента, сложно логировать действия, трудно добавлять новые action-типы
+и легко получить неоднозначный parsing.
+
+### Решение
+Ввести явный JSON-контракт:
+
+```json
+{"type": "code", "code": "print(train_df.shape)"}
+```
+
+```json
+{"type": "submit", "model_var": "best_model"}
+```
+
+Среда возвращает структурированный `Observation`:
+
+- `stdout`
+- `stderr`
+- `hints`
+- `checklist_coverage`
+- `budget_remaining`
+- `done`
+- `submitted`
+- `test_metric`
+
+Workspace создаётся и сбрасывается внутри `GymEnv`, а не снаружи в experiment runner.
+В workspace доступны `train_df`, `val_df`, `target_col`, `pd`, `np`; `test_df` туда
+не попадает.
+
+### Последствия
+- `gym/protocol.py` содержит `Action`, `Observation`, parser и legacy fallback.
+- `gym/workspace.py` отвечает за видимый namespace агента.
+- `GymEnv.step()` принимает `Action`, dict или JSON string.
+- `GymAgent` просит LLM возвращать JSON action, больше не зависит от `SUBMIT`
+  и использует OpenAI-compatible `LLMClient`.
+- `run_gym.py` не инжектит namespace вручную.
+- Добавлены базовые unit tests на протокол и workspace lifecycle.
+
+---
+
 ## Итоговый стек (обновлённый)
 
 | Слой | Технология | Статус |
 |------|-----------|--------|
 | Model serving | vLLM | ✅ ADR-004 |
 | LLM client | `openai` SDK + `base_url` | ✅ ADR-001 |
+| Agent protocol | JSON Action / Observation | ✅ ADR-008 |
 | Sandbox | subprocess + timeout | ✅ ADR-002 |
 | Experiment tracking | MLflow (local) | ✅ ADR-003 |
 | Data | pandas, numpy | Без изменений |

@@ -27,7 +27,7 @@
 | Требование | Описание |
 |---|---|
 | Изоляция кода | LLM-код исполняется в изолированном namespace; тест-выборка недоступна |
-| Итеративность | Цикл: action → execution → feedback → action, до N шагов или `submit()` |
+| Итеративность | Цикл: JSON action → execution → observation → JSON action, до N шагов или `submit` action |
 | Submit gate | `env.submit(model)` вызывается ровно один раз; возвращает финальную метрику и закрывает сессию |
 | Бюджет | Агент знает сколько шагов осталось; при исчерпании — авто-сабмит лучшей модели из namespace |
 | Логирование | Каждый шаг пишется в историю: код, stdout, stderr, хинты, покрытие чеклиста |
@@ -51,8 +51,10 @@
 
 - Один LLM-агент (не мульти-агент на старте, можно расширить)
 - Общается с API (Anthropic / OpenAI / local)
-- Парсит код из ответа LLM (markdown code block или plain text)
-- Получает фидбэк: stdout + stderr + список pending hints + оставшийся бюджет
+- Получает от LLM явный JSON action:
+  - `{"type": "code", "code": "..."}`
+  - `{"type": "submit", "model_var": "best_model"}`
+- Получает observation: stdout + stderr + pending hints + checklist coverage + оставшийся бюджет
 
 ### 3.4 Датасеты
 
@@ -83,27 +85,27 @@
 ## 4. Архитектура
 
 ```
-┌─────────────────────────────────────────────────┐
-│                  GymAgent                        │
-│  OpenAI-compat API ──► parse_code ──► env.step()│
-│        ▲                              │          │
-│        └──── feedback message ◄───────┘          │
-└─────────────────────────────────────────────────┘
-                        │
-                        ▼
-┌─────────────────────────────────────────────────┐
-│                   GymEnv                         │
-│                                                  │
-│  EnvState                                        │
-│  ├── train_df / val_df / test_df (hidden)        │
-│  ├── namespace (shared Python context)           │
-│  ├── history: List[StepResult]                   │
-│  └── step counter / submitted flag               │
-│                                                  │
-│  CodeExecutor ──► exec(code, namespace)          │
-│  Checklist    ──► evaluate() → hints             │
-│  submit()     ──► metric_fn(test) → score        │
-└─────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────┐
+│                       GymAgent                            │
+│  OpenAI-compatible LLMClient ─► Action JSON ─► parser     │
+│      ▲                                      │              │
+│      └──────── Observation feedback ◄──────┘              │
+└───────────────────────────────────────────────────────────┘
+                           │
+                           ▼
+┌───────────────────────────────────────────────────────────┐
+│                        GymEnv                             │
+│                                                           │
+│  EnvState                                                 │
+│  ├── train / val / test (test hidden from workspace)       │
+│  ├── Workspace(namespace: train_df, val_df, target_col)    │
+│  ├── history: List[Observation]                            │
+│  └── step counter / submitted flag                         │
+│                                                           │
+│  CodeExecutor ──► subprocess(code, workspace.namespace)    │
+│  Checklist    ──► evaluate() → implicit hints             │
+│  submit       ──► metric_fn(hidden test) → final score     │
+└───────────────────────────────────────────────────────────┘
 ```
 
 ### Файловая структура
@@ -117,19 +119,28 @@ autovibe-gym/
 │
 ├── gym/
 │   ├── __init__.py
-│   ├── env.py                 ← GymEnv, EnvState, StepResult
-│   ├── executor.py            ← изолированный CodeExecutor
+│   ├── env.py                 ← GymEnv, EnvState, Observation history
+│   ├── executor.py            ← subprocess CodeExecutor с timeout
 │   ├── checklist.py           ← Checklist, CheckItem, HINTS
-│   └── agent.py               ← GymAgent (Anthropic API)
+│   ├── protocol.py            ← Action / Observation JSON-контракт
+│   ├── workspace.py           ← видимый namespace агента без test_df
+│   ├── datasets.py            ← DatasetSplits, meta.json loader, metric resolver
+│   ├── llm.py                 ← OpenAI-compatible LLMClient adapter
+│   └── agent.py               ← GymAgent JSON action loop
 │
 ├── experiments/
 │   ├── run_gym.py             ← Gym режим (CLI)
-│   ├── run_baseline.py        ← Single-shot (без среды)     [TODO]
+│   ├── run_baseline.py        ← Single-shot (без среды)
 │   ├── run_multishot.py       ← Multi-shot (без чеклиста)   [TODO]
-│   └── compare.py             ← Сводная таблица по запускам [TODO]
+│   └── compare.py             ← Сводная таблица по запускам
 │
 ├── datasets/
-│   └── *.csv
+│   ├── *.csv                  ← legacy single-file mode
+│   └── <dataset_name>/
+│       ├── train.csv
+│       ├── val.csv
+│       ├── test.csv
+│       └── meta.json          ← target_col, metric, source, seed
 │
 ├── docs/
 │   ├── GIT_WORKFLOW.md        ← правила Git, веток, PR и AI-агентов
@@ -146,7 +157,8 @@ autovibe-gym/
 
 | Слой | Технология | Причина |
 |---|---|---|
-| LLM client | `openai` SDK + `LLM_BASE_URL` | Работает с vLLM (H200), OpenAI, любым OpenAI-совместимым прокси |
+| Agent protocol | JSON `Action` / structured `Observation` | Явный контракт между LLM и средой |
+| LLM client | `LLMClient` + `openai` SDK + `LLM_BASE_URL` | Работает с vLLM (H200), OpenAI, любым OpenAI-совместимым прокси |
 | Model serving | `vLLM` (на сервере H200) | OpenAI-compatible API, лучший throughput |
 | Sandbox | `subprocess` + timeout + pickle | Изолированный процесс, сервер-safe |
 | Experiment tracking | `MLflow` (local) | Без облака, visual UI, сравнение runs |
@@ -164,10 +176,10 @@ autovibe-gym/
 | Режим | Файл | Статус |
 |---|---|---|
 | **Gym** — итеративно с чеклистом | `experiments/run_gym.py` | Готово |
-| **Single-shot** — один запрос | `experiments/run_baseline.py` | TODO |
+| **Single-shot** — один запрос | `experiments/run_baseline.py` | Готово |
 | **Multi-shot** — несколько запросов, тот же бюджет токенов, без чеклиста | `experiments/run_multishot.py` | TODO |
 | **Free-agent** — делает что хочет, без структуры | (расширение gym без checklist) | TODO |
-| **Compare** — сводная таблица всех режимов | `experiments/compare.py` | TODO |
+| **Compare** — сводная таблица всех режимов | `experiments/compare.py` | Готово |
 
 ### Ожидаемый результат
 Gym > Multi-shot > Single-shot по `test_metric`.  
