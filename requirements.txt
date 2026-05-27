@@ -1,4 +1,16 @@
-anthropic>=0.40.0
+# LLM client (OpenAI-compatible — works with vLLM, OpenAI, proxies)
+openai>=1.40.0
+python-dotenv>=1.0.0
+
+# Data & ML
 pandas>=2.0.0
-scikit-learn>=1.4.0
 numpy>=1.26.0
+scikit-learn>=1.4.0
+xgboost>=2.0.0
+lightgbm>=4.0.0
+
+# Experiment tracking (local MLflow server)
+mlflow>=2.14.0
+
+# Server-side only — install on the H200 machine
+# vllm>=0.5.0

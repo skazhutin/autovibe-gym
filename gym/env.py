@@ -1,7 +1,5 @@
 import time
 from dataclasses import dataclass, field
-from typing import Any
-
 import pandas as pd
 
 from .checklist import Checklist
@@ -51,6 +49,7 @@ class GymEnv:
         metric_fn,
         metric_name: str = "score",
         max_steps: int = 20,
+        sandbox_timeout: int = 60,
     ):
         self.state = EnvState(
             train=train,
@@ -61,7 +60,7 @@ class GymEnv:
             max_steps=max_steps,
         )
         self.metric_fn = metric_fn
-        self.executor = CodeExecutor()
+        self.executor = CodeExecutor(timeout=sandbox_timeout)
         self.checklist = Checklist(target_col=target_col)
         self._start_time = time.time()
 
