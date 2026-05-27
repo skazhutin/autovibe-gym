@@ -85,7 +85,7 @@
 ```
 ┌─────────────────────────────────────────────────┐
 │                  GymAgent                        │
-│  Anthropic API ──► parse_code ──► env.step()    │
+│  OpenAI-compat API ──► parse_code ──► env.step()│
 │        ▲                              │          │
 │        └──── feedback message ◄───────┘          │
 └─────────────────────────────────────────────────┘
@@ -146,13 +146,16 @@ autovibe-gym/
 
 | Слой | Технология | Причина |
 |---|---|---|
-| LLM API | `anthropic` (Claude Sonnet 4.6) | Доступен, сильный в коде |
-| Sandbox | `exec()` в изолированном namespace | Просто, без Docker-оверхеда |
+| LLM client | `openai` SDK + `LLM_BASE_URL` | Работает с vLLM (H200), OpenAI, любым OpenAI-совместимым прокси |
+| Model serving | `vLLM` (на сервере H200) | OpenAI-compatible API, лучший throughput |
+| Sandbox | `subprocess` + timeout + pickle | Изолированный процесс, сервер-safe |
+| Experiment tracking | `MLflow` (local) | Без облака, visual UI, сравнение runs |
 | Data | `pandas`, `numpy` | Стандарт DS |
-| ML | `scikit-learn` (+ опционально `xgboost`, `lightgbm`) | LLM хорошо знает эти библиотеки |
+| ML | `scikit-learn`, `xgboost`, `lightgbm` | LLM хорошо знает эти библиотеки |
 | Metrics | `sklearn.metrics` | |
+| Config | `python-dotenv` | `.env` файл для API keys и URL |
 | CLI | `argparse` | Без фреймворков |
-| Python | 3.11+ | Type hints, `X | Y` union syntax |
+| Python | 3.11+ | Type hints, `X \| Y` union syntax |
 
 ---
 

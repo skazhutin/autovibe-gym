@@ -1,7 +1,7 @@
-from anthropic import Anthropic
+import os
+from openai import OpenAI
 
 from .env import GymEnv, StepResult
-
 
 SYSTEM_PROMPT = """You are an expert data scientist solving a supervised machine learning task.
 
@@ -13,7 +13,7 @@ Available variables in your namespace:
 
 Rules:
 - Do NOT access test data — it is hidden until you call env.submit(model).
-- Write clean, executable Python. Do not write markdown, only code.
+- Write clean, executable Python. Do not write markdown, only code blocks.
 - After each step you may receive hints about things you might have missed. Take them seriously.
 - When you have your best model ready, output exactly: SUBMIT
   (the runner will extract your best model from the namespace and call env.submit)
@@ -33,17 +33,35 @@ def _build_feedback_message(result: StepResult, budget: int) -> str:
     return "\n\n".join(parts)
 
 
+def _make_client() -> OpenAI:
+    """
+    Build OpenAI-compatible client.
+    Works with: vLLM (local), OpenAI, any OpenAI-compatible proxy.
+    """
+    base_url = os.getenv("LLM_BASE_URL", "http://localhost:8000/v1")
+    api_key = os.getenv("LLM_API_KEY", "local")
+    return OpenAI(base_url=base_url, api_key=api_key)
+
+
 class GymAgent:
     """
-    Single LLM agent that interacts with GymEnv via the Anthropic API.
-    Runs until submit or budget exhausted.
+    LLM agent that interacts with GymEnv via any OpenAI-compatible API.
+    Configure via environment variables:
+      LLM_BASE_URL  — e.g. http://localhost:8000/v1  (vLLM) or https://api.openai.com/v1
+      LLM_API_KEY   — API key (use "local" for vLLM without auth)
+      LLM_MODEL     — model name as served by the endpoint
     """
 
-    def __init__(self, env: GymEnv, model: str = "claude-sonnet-4-6", max_tokens: int = 4096):
+    def __init__(
+        self,
+        env: GymEnv,
+        model: str | None = None,
+        max_tokens: int = 8192,
+    ):
         self.env = env
-        self.model = model
+        self.model = model or os.getenv("LLM_MODEL", "Qwen/Qwen2.5-Coder-7B-Instruct")
         self.max_tokens = max_tokens
-        self.client = Anthropic()
+        self.client = _make_client()
         self.messages: list[dict] = []
         self.total_input_tokens = 0
         self.total_output_tokens = 0
@@ -53,29 +71,33 @@ class GymAgent:
         self.messages = [{"role": "user", "content": context["task"]}]
 
         while True:
-            response = self.client.messages.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
                 max_tokens=self.max_tokens,
-                system=SYSTEM_PROMPT,
-                messages=self.messages,
+                messages=[{"role": "system", "content": SYSTEM_PROMPT}] + self.messages,
             )
-            self.total_input_tokens += response.usage.input_tokens
-            self.total_output_tokens += response.usage.output_tokens
+            usage = response.usage
+            if usage:
+                self.total_input_tokens += usage.prompt_tokens
+                self.total_output_tokens += usage.completion_tokens
 
-            llm_text = response.content[0].text.strip()
+            llm_text = response.choices[0].message.content.strip()
             self.messages.append({"role": "assistant", "content": llm_text})
 
             if "SUBMIT" in llm_text.upper():
-                model_obj = self.env.state.namespace.get("model") or self.env.state.namespace.get("best_model")
+                model_obj = (
+                    self.env.state.namespace.get("model")
+                    or self.env.state.namespace.get("best_model")
+                )
                 if model_obj is None:
-                    feedback = "[ERROR] No variable named 'model' or 'best_model' found in namespace. Train and assign your model first."
+                    feedback = (
+                        "[ERROR] No variable named 'model' or 'best_model' found in namespace. "
+                        "Train and assign your model first."
+                    )
                     self.messages.append({"role": "user", "content": feedback})
                     continue
-                score = self.env.submit(model_obj)
-                summary = self.env.get_summary()
-                summary["input_tokens"] = self.total_input_tokens
-                summary["output_tokens"] = self.total_output_tokens
-                return summary
+                self.env.submit(model_obj)
+                return self._build_summary()
 
             code = self._extract_code(llm_text)
             result = self.env.step(code)
@@ -83,15 +105,22 @@ class GymAgent:
             self.messages.append({"role": "user", "content": feedback})
 
             if result.done:
-                # Budget exhausted — try to submit whatever is in namespace
-                model_obj = self.env.state.namespace.get("model") or self.env.state.namespace.get("best_model")
+                model_obj = (
+                    self.env.state.namespace.get("model")
+                    or self.env.state.namespace.get("best_model")
+                )
                 if model_obj is not None:
-                    score = self.env.submit(model_obj)
-                summary = self.env.get_summary()
-                summary["input_tokens"] = self.total_input_tokens
-                summary["output_tokens"] = self.total_output_tokens
+                    self.env.submit(model_obj)
+                summary = self._build_summary()
                 summary["forced_submit"] = True
                 return summary
+
+    def _build_summary(self) -> dict:
+        summary = self.env.get_summary()
+        summary["input_tokens"] = self.total_input_tokens
+        summary["output_tokens"] = self.total_output_tokens
+        summary["model"] = self.model
+        return summary
 
     @staticmethod
     def _extract_code(text: str) -> str:
