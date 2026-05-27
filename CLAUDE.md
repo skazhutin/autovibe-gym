@@ -3,7 +3,8 @@
 ## On every session start
 1. Read `docs/STATUS.md` to understand current state
 2. Read `docs/PROJECT.md` if touching architecture or checklist logic
-3. Check `memory/project_context.md` for high-level context
+3. Read `docs/GIT_WORKFLOW.md` before creating branches, committing, pushing, opening PRs, or changing team process
+4. Check `memory/project_context.md` for high-level context
 
 ## On every session end (or after meaningful progress)
 Update `docs/STATUS.md`:
@@ -11,6 +12,8 @@ Update `docs/STATUS.md`:
 - Add new In Progress / Blocked items
 - Update "Last updated" date at the top
 - Add a one-line entry to the Changelog section
+
+Update `docs/GIT_WORKFLOW.md` in the same PR when Git, PR, review, or AI-agent collaboration rules change.
 
 ## Project root
 `C:\Users\klimi\APPS_projects\autovibe-gym`
@@ -25,6 +28,7 @@ Update `docs/STATUS.md`:
 | `experiments/run_gym.py` | CLI entry point |
 | `docs/PROJECT.md` | TZ, goals, architecture, stack |
 | `docs/STATUS.md` | Live project status — update this regularly |
+| `docs/GIT_WORKFLOW.md` | Git, branch, PR, review, and AI-agent collaboration workflow |
 
 ## Coding conventions
 - Python 3.11+, type hints everywhere

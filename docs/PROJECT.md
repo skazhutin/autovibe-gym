@@ -110,6 +110,7 @@
 
 ```
 autovibe-gym/
+├── AGENTS.md                  ← инструкции для Codex
 ├── CLAUDE.md                  ← инструкции для Claude
 ├── README.md
 ├── requirements.txt
@@ -131,6 +132,7 @@ autovibe-gym/
 │   └── *.csv
 │
 ├── docs/
+│   ├── GIT_WORKFLOW.md        ← правила Git, веток, PR и AI-агентов
 │   ├── PROJECT.md             ← этот файл
 │   └── STATUS.md              ← живой статус проекта
 │

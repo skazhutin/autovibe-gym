@@ -40,7 +40,9 @@ Get a first end-to-end run working: dataset → GymEnv → GymAgent → summary 
 | Item | Status | Notes |
 |------|--------|-------|
 | `requirements.txt` | ✅ Done | |
-| `CLAUDE.md` | ✅ Done | |
+| `CLAUDE.md` | ✅ Done | Claude workflow points to status, project, and Git workflow docs |
+| `AGENTS.md` | ✅ Done | Codex workflow points to status, project, and Git workflow docs |
+| `docs/GIT_WORKFLOW.md` | ✅ Done | Team Git/PR workflow and AI-agent collaboration rules |
 | `docs/PROJECT.md` | ✅ Done | |
 | First end-to-end test run | ❌ TODO | Need ANTHROPIC_API_KEY + a dataset |
 | `.env` / secrets setup | ❌ TODO | |
@@ -69,4 +71,6 @@ Get a first end-to-end run working: dataset → GymEnv → GymAgent → summary 
 
 | Date | Change |
 |------|--------|
+| 2026-05-27 | Hardened GIT_WORKFLOW.md, linked agent docs, and synced project doc list |
+| 2026-05-27 | Added AGENTS.md with Codex workflow instructions |
 | 2026-05-27 | Initial scaffolding: gym/, executor, checklist, agent, run_gym.py, docs |
