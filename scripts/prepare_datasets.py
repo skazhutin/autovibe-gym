@@ -69,7 +69,7 @@ def download_and_load(name: str, cfg: dict) -> pd.DataFrame:
         local = os.path.join(raw_dir, cfg["zip_file"])
 
     kwargs = {"sep": cfg.get("sep", ",")}
-    if cfg.get("header") is None:
+    if "header" in cfg and cfg["header"] is None:
         kwargs["header"] = None
         kwargs["names"] = cfg["col_names"]
 
@@ -110,10 +110,10 @@ def split_and_save(df: pd.DataFrame, name: str, cfg: dict) -> None:
         "n_features": df.shape[1] - 1,
         "n_classes": int(df[target].nunique()),
     }
-    with open(os.path.join(out_dir, "meta.json"), "w") as f:
+    with open(os.path.join(out_dir, "meta.json"), "w", encoding="utf-8") as f:
         json.dump(meta, f, indent=2)
 
-    print(f"  Saved: train={len(train)}, val={len(val)}, test={len(test)} → datasets/{name}/")
+    print(f"  Saved: train={len(train)}, val={len(val)}, test={len(test)} -> datasets/{name}/")
 
 
 def main():
