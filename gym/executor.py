@@ -41,6 +41,7 @@ class CodeExecutor:
                     capture_output=True,
                     text=True,
                     timeout=self.timeout,
+                    cwd=tmpdir,
                 )
                 stdout = proc.stdout
                 stderr = proc.stderr

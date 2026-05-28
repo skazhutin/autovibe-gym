@@ -44,7 +44,7 @@ class Checklist:
         self._check_target_leak(code, namespace)
         self._check_train_val_split(combined, namespace)
         self._check_feature_engineering(combined)
-        self._check_model_selection(history)
+        self._check_model_selection(code, history)
         self._check_hyperparameter_tuning(combined)
 
         return self._pending_hints()
@@ -85,15 +85,18 @@ class Checklist:
         if any(kw in combined for kw in keywords):
             self.items["feature_engineering"].passed = True
 
-    def _check_model_selection(self, history: list) -> None:
+    def _check_model_selection(self, current_code: str, history: list) -> None:
         model_keywords = [
             "logisticregression", "randomforest", "gradientboosting",
             "xgbclassifier", "xgbregressor", "lgbm", "svc", "decisiontree",
             "linearregression", "ridge", "lasso", "kneighbors",
         ]
         seen = set()
+        for kw in model_keywords:
+            if kw in current_code.lower():
+                seen.add(kw)
         for step in history:
-            code_lower = step.code.lower()
+            code_lower = (step.code or "").lower()
             for kw in model_keywords:
                 if kw in code_lower:
                     seen.add(kw)

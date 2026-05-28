@@ -1,223 +1,263 @@
 """
-Multi-shot experiment: iterative LLM calls with execution feedback only.
-No checklist hints — pure iteration as the control condition.
+Repeated single-shot: N fully independent attempts.
 
-Ablation ladder:
-  baseline   → 1 shot,  no feedback
-  multishot  → N shots, execution feedback only   ← this script
-  gym        → N shots, execution feedback + checklist hints
+Protocol (per TZ section "Режимы взаимодействия"):
+  - Each attempt is a single LLM call → one code block executed → model evaluated on val.
+  - Between attempts: agent sees ONLY the best validation metric so far. No traceback,
+    no stdout, no checklist hints, no stage feedback.
+  - Final: best attempt's model is evaluated on private test (once, irreversible).
+
+This is the control condition that isolates "does knowing previous best val score help?"
+from "does execution feedback help?" (multishot with feedback) and
+"does checklist guidance help?" (gym / fixed transitions).
 
 Usage:
-    python -m experiments.run_multishot --dataset-dir datasets/wine_quality --mode local
-    python -m experiments.run_multishot --dataset-dir datasets/wine_quality --shots 5
+    python -m experiments.run_multishot --dataset-dir datasets/student_dropout/prepared --mode local
+    python -m experiments.run_multishot --dataset-dir datasets/student_dropout/prepared --shots 5
 """
 import argparse
 import json
 import os
-import re
+import time
 
 import mlflow
 import pandas as pd
-from dotenv import load_dotenv
-from openai import OpenAI
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 from experiments.run_gym import load_dataset, get_metric_fn
+from gym.agent import _default_client
 from gym.executor import CodeExecutor
+from gym.protocol import Action
 
-load_dotenv()
+# Budget defaults — match run_gym.py for fair token-cost comparison
+MODE_DEFAULTS = {
+    "local":  {"max_attempts": 10, "max_tokens": 8192,  "sandbox_timeout": 60},
+    "cloud":  {"max_attempts": 5,  "max_tokens": 4096,  "sandbox_timeout": 30},
+}
 
-SYSTEM_PROMPT = """You are an expert data scientist solving a supervised machine learning task.
+SYSTEM_PROMPT = """You are an expert data scientist solving a supervised ML task.
 
-You work in an iterative environment. Each turn you write Python code that gets executed.
-Available variables in your namespace:
+You write a complete, self-contained Python solution in a single response.
+The code will be executed once; you will not see any output from it.
+
+Available variables pre-loaded in the execution namespace:
   train_df   — training DataFrame
   val_df     — validation DataFrame
-  target_col — name of the target column (string)
+  target_col — target column name (string)
+  pd, np     — pandas and numpy
 
 Rules:
-- Do NOT access test data — it is hidden until you are done.
-- Write clean, executable Python inside a single ```python ... ``` block.
-- Each round you will see the output of your previous code. Improve on it.
-- When you are satisfied with your model, output exactly: SUBMIT
-  (your best trained model must be assigned to variable `model` or `best_model`)
+- Do NOT access test data — it is strictly hidden.
+- Train your best model on train_df, evaluate on val_df.
+- Assign your final trained model to a variable called `model`.
+  The model must have a .predict() method that works on raw DataFrame rows
+  (same dtypes as train_df, without the target column).
+- Do not print sensitive data or file paths.
+- Write only executable Python. Do not include markdown or explanations.
 """
 
 
-def _extract_code(text: str) -> str:
-    m = re.search(r"```python\s*(.*?)```", text, re.DOTALL)
-    if m:
-        return m.group(1).strip()
-    m = re.search(r"```\s*(.*?)```", text, re.DOTALL)
-    if m:
-        return m.group(1).strip()
-    return text.strip()
-
-
-def _build_feedback(stdout: str, stderr: str, budget: int) -> str:
-    parts = []
-    if stdout.strip():
-        parts.append(f"[OUTPUT]\n{stdout.strip()}")
-    if stderr.strip():
-        parts.append(f"[ERROR]\n{stderr.strip()}")
-    parts.append(f"[BUDGET] {budget} shots remaining. Improve your solution or output SUBMIT.")
-    return "\n\n".join(parts)
+def _build_attempt_prompt(task_prompt: str, best_val: float | None, attempt: int) -> str:
+    parts = [task_prompt]
+    if best_val is not None:
+        parts.append(
+            f"\nPrevious best validation score across {attempt} attempt(s): {best_val:.4f}. "
+            "Try to beat it with a different or improved approach."
+        )
+    return "\n".join(parts)
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset-dir", required=True)
+    parser = argparse.ArgumentParser(
+        description="Repeated single-shot: N independent attempts, only best val score shared between them."
+    )
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--dataset-dir", help="Directory with train/val/test CSV + meta.json")
+    source.add_argument("--dataset", help="Single CSV (requires --target)")
+    parser.add_argument("--target")
+    parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--mode", choices=["local", "cloud"], default="local")
     parser.add_argument("--model", default=None)
     parser.add_argument("--shots", type=int, default=None,
-                        help="Max LLM calls (default: 10 local / 5 cloud)")
+                        help="Number of independent attempts (default: 10 local / 5 cloud)")
     parser.add_argument("--max-tokens", type=int, default=None)
     parser.add_argument("--sandbox-timeout", type=int, default=None)
     parser.add_argument("--experiment-name", default="autovibe-gym")
     parser.add_argument("--run-name", default=None)
     args = parser.parse_args()
 
-    # Mode defaults
-    if args.mode == "local":
-        max_shots = args.shots or 10
-        max_tokens = args.max_tokens or 8192
-        sandbox_timeout = args.sandbox_timeout or 60
-    else:
-        max_shots = args.shots or 5
-        max_tokens = args.max_tokens or 4096
-        sandbox_timeout = args.sandbox_timeout or 30
+    defaults = MODE_DEFAULTS[args.mode]
+    max_attempts   = args.shots          or defaults["max_attempts"]
+    max_tokens     = args.max_tokens     or defaults["max_tokens"]
+    sandbox_timeout = args.sandbox_timeout or defaults["sandbox_timeout"]
 
-    train, val, test, meta = load_dataset(args.dataset_dir)
-    metric_fn, metric_name = get_metric_fn(meta["metric"])
-    target_col = meta["target_col"]
-    dataset_name = os.path.basename(args.dataset_dir.rstrip("/\\"))
-    model_name = args.model or os.getenv("LLM_MODEL", "Qwen/Qwen2.5-Coder-7B-Instruct")
-    run_name = args.run_name or f"multishot{max_shots}_{dataset_name}_{model_name.split('/')[-1]}"
-
-    client = OpenAI(
-        base_url=os.getenv("LLM_BASE_URL", "http://localhost:8000/v1"),
-        api_key=os.getenv("LLM_API_KEY", "local"),
+    from gym.datasets import load_dataset_splits, resolve_metric
+    splits = load_dataset_splits(
+        dataset=args.dataset,
+        dataset_dir=args.dataset_dir,
+        target_col=args.target,
+        seed=args.seed,
     )
+    metric_fn, metric_name = resolve_metric(splits.metadata, splits.train[splits.target_col])
+    target_col   = splits.target_col
+    train        = splits.train
+    val          = splits.val
+    test         = splits.test
+    dataset_name = splits.metadata.name or os.path.splitext(os.path.basename(
+        (args.dataset_dir or args.dataset or "").rstrip("/\\")
+    ))[0]
+
+    model_name = args.model or os.getenv("LLM_MODEL", "deepseek-v4-flash")
+    run_name = args.run_name or f"repeated_ss_{dataset_name}_{model_name.split('/')[-1]}"
+
+    llm      = _default_client()
     executor = CodeExecutor(timeout=sandbox_timeout)
 
     task_prompt = (
         f"Solve a supervised ML task.\n"
         f"Target column: '{target_col}'\n"
-        f"Metric: {metric_name}\n\n"
+        f"Metric: {metric_name} (higher is better)\n\n"
         f"Training data shape: {train.shape}\n"
         f"Validation data shape: {val.shape}\n\n"
         f"Dataset statistics:\n{train.describe(include='all').to_string()}\n\n"
-        "Variables available: train_df, val_df, target_col\n"
-        "Assign your best model to: model"
+        "Workspace variables: train_df, val_df, target_col, pd, np\n"
+        "Assign your trained model to variable: model"
     )
 
-    namespace = {
-        "train_df": train.copy(),
-        "val_df": val.copy(),
-        "target_col": target_col,
-        "pd": pd,
-    }
-
-    messages = [{"role": "user", "content": task_prompt}]
-    total_input_tokens = 0
-    total_output_tokens = 0
-    errors_count = 0
-    shots_used = 0
-    test_metric = None
-    model_obj = None
-
+    tracking_uri = os.getenv("MLFLOW_TRACKING_URI")
+    if tracking_uri:
+        mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_experiment(args.experiment_name)
+
+    _start = time.time()
 
     with mlflow.start_run(run_name=run_name):
         mlflow.log_params({
-            "dataset_suite": meta.get("suite", "legacy"),
-            "dataset_split_strategy": meta.get("split_strategy"),
-            "dataset_role": meta.get("role"),
-            "dataset_sampled": str(meta.get("sampled")),
-            "mode": args.mode,
-            "model": model_name,
-            "dataset": dataset_name,
-            "experiment_type": f"multishot_{max_shots}",
-            "max_shots": max_shots,
-            "max_tokens": max_tokens,
-            "sandbox_timeout": sandbox_timeout,
+            "experiment_type":        "repeated_single_shot",
+            "mode":                   args.mode,
+            "model":                  model_name,
+            "dataset":                dataset_name,
+            "max_attempts":           max_attempts,
+            "max_tokens":             max_tokens,
+            "sandbox_timeout":        sandbox_timeout,
+            "dataset_suite":          splits.metadata.suite or "legacy",
+            "dataset_split_strategy": splits.metadata.split_strategy,
+            "dataset_role":           splits.metadata.role,
+            "dataset_sampled":        str(splits.metadata.sampled),
         })
 
-        for shot in range(max_shots):
-            shots_used = shot + 1
+        best_val    : float | None = None
+        best_model  = None
+        total_input_tokens  = 0
+        total_output_tokens = 0
+        errors_count        = 0
+        attempt_log         = []  # [{attempt, val_metric, error}]
 
-            response = client.chat.completions.create(
+        for attempt in range(max_attempts):
+            prompt = _build_attempt_prompt(task_prompt, best_val, attempt)
+
+            response = llm.complete(
                 model=model_name,
                 max_tokens=max_tokens,
-                messages=[{"role": "system", "content": SYSTEM_PROMPT}] + messages,
+                system=SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": prompt}],
             )
-            usage = response.usage
-            if usage:
-                total_input_tokens += usage.prompt_tokens
-                total_output_tokens += usage.completion_tokens
+            total_input_tokens  += response.input_tokens
+            total_output_tokens += response.output_tokens
 
-            llm_text = response.choices[0].message.content.strip()
-            messages.append({"role": "assistant", "content": llm_text})
+            # Parse code from response (reuse Action parser for consistency)
+            try:
+                action = Action.from_llm_response(response.text)
+                code = action.code if action.type == "code" else ""
+            except Exception:
+                code = response.text.strip()
 
-            # Check for SUBMIT
-            if "SUBMIT" in llm_text.upper():
-                model_obj = namespace.get("model") or namespace.get("best_model")
-                if model_obj is None:
-                    feedback = (
-                        "[ERROR] No variable named 'model' or 'best_model' found. "
-                        "Train and assign your model first, then output SUBMIT."
-                    )
-                    messages.append({"role": "user", "content": feedback})
-                    continue
-                break
+            # Fresh namespace each attempt — no state shared
+            namespace = {
+                "train_df":   train.copy(),
+                "val_df":     val.copy(),
+                "target_col": target_col,
+                "pd":         pd,
+            }
 
-            code = _extract_code(llm_text)
             stdout, stderr, namespace = executor.run(code, namespace)
-            if stderr.strip():
+            attempt_error = stderr.strip() if stderr.strip() else None
+            if attempt_error:
                 errors_count += 1
 
-            budget = max_shots - shots_used
-            feedback = _build_feedback(stdout, stderr, budget)
-            messages.append({"role": "user", "content": feedback})
+            model_obj = namespace.get("model") or namespace.get("best_model")
 
-            # Update model_obj from namespace each step (use latest)
-            candidate = namespace.get("model") or namespace.get("best_model")
-            if candidate is not None:
-                model_obj = candidate
+            # Scan for any predict-able object if named variable not found
+            if model_obj is None:
+                for v in namespace.values():
+                    if callable(getattr(v, "predict", None)):
+                        model_obj = v
+                        break
 
-            if budget == 0:
-                break
+            val_metric = None
+            if model_obj is not None:
+                try:
+                    X_val = val.drop(columns=[target_col])
+                    y_val = val[target_col]
+                    val_preds = model_obj.predict(X_val)
+                    val_metric = float(metric_fn(y_val, val_preds))
+                    if best_val is None or val_metric > best_val:
+                        best_val   = val_metric
+                        best_model = model_obj
+                except Exception as e:
+                    attempt_error = (attempt_error or "") + f" [val_eval: {e}]"
+                    errors_count += 1
 
-        # Evaluate on test set
-        if model_obj is not None:
+            attempt_log.append({
+                "attempt":    attempt + 1,
+                "val_metric": val_metric,
+                "error":      attempt_error,
+            })
+            mlflow.log_metric("val_metric", val_metric or 0.0, step=attempt)
+
+        # Private test — once, on best model
+        test_metric = None
+        if best_model is not None:
             try:
                 X_test = test.drop(columns=[target_col])
                 y_test = test[target_col]
-                preds = model_obj.predict(X_test)
-                test_metric = metric_fn(y_test, preds)
+                test_preds = best_model.predict(X_test)
+                test_metric = float(metric_fn(y_test, test_preds))
             except Exception as e:
                 errors_count += 1
                 print(f"[submit error] {e}")
 
-        summary = {
-            "experiment_type": f"multishot_{max_shots}",
-            "model": model_name,
-            "dataset": dataset_name,
-            "test_metric": test_metric,
-            "shots_used": shots_used,
-            "errors_count": errors_count,
-            "input_tokens": total_input_tokens,
-            "output_tokens": total_output_tokens,
-        }
+        elapsed = round(time.time() - _start, 1)
 
+        mlflow.log_text(json.dumps(attempt_log, indent=2), "attempt_log.json")
         mlflow.log_metrics({
-            "test_metric": test_metric or 0.0,
-            "shots_used": shots_used,
-            "error_count": errors_count,
-            "input_tokens": total_input_tokens,
-            "output_tokens": total_output_tokens,
+            "test_metric":    test_metric or 0.0,
+            "best_val_metric": best_val   or 0.0,
+            "attempts_used":  len(attempt_log),
+            "error_count":    errors_count,
+            "input_tokens":   total_input_tokens,
+            "output_tokens":  total_output_tokens,
+            "elapsed_seconds": elapsed,
         })
 
-    print("\n=== Multishot Summary ===")
+    summary = {
+        "experiment_type": "repeated_single_shot",
+        "model":           model_name,
+        "dataset":         dataset_name,
+        "attempts_used":   len(attempt_log),
+        "best_val_metric": best_val,
+        "test_metric":     test_metric,
+        "errors_count":    errors_count,
+        "input_tokens":    total_input_tokens,
+        "output_tokens":   total_output_tokens,
+        "elapsed_seconds": elapsed,
+    }
+    print("\n=== Repeated Single-Shot Summary ===")
     print(json.dumps(summary, indent=2))
 
 

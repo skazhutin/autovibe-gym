@@ -22,6 +22,41 @@ class LLMClient(Protocol):
         ...
 
 
+class LiteLLMClient:
+    """
+    Adapter that uses the LiteLLM Python SDK directly — no proxy server needed.
+
+    Supports any provider litellm knows about. Configure via env vars:
+      LLM_MODEL   — e.g. "groq/llama-3.3-70b-versatile"
+      GROQ_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.
+
+    See: https://docs.litellm.ai/docs/providers
+    """
+
+    def complete(
+        self,
+        *,
+        system: str,
+        messages: list[dict],
+        model: str,
+        max_tokens: int,
+    ) -> LLMResponse:
+        import litellm
+
+        response = litellm.completion(
+            model=model,
+            max_tokens=max_tokens,
+            messages=[{"role": "system", "content": system}] + messages,
+        )
+        usage = response.usage
+        text = response.choices[0].message.content or ""
+        return LLMResponse(
+            text=text.strip(),
+            input_tokens=getattr(usage, "prompt_tokens", 0) if usage else 0,
+            output_tokens=getattr(usage, "completion_tokens", 0) if usage else 0,
+        )
+
+
 class OpenAICompatibleLLMClient:
     """
     Adapter for OpenAI-compatible chat APIs.

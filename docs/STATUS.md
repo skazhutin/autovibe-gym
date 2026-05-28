@@ -1,12 +1,12 @@
 # AutoVibe Gym — Live Status
 
-**Last updated:** 2026-05-28 (model-readiness diagnostics)
-**Phase:** First experiments running on server — ablation data being collected
+**Last updated:** 2026-05-29 (all experiments complete, docs final, merging to main)
+**Phase:** All 4 modes × 2 datasets complete. Merging to main.
 
 ---
 
 ## Current Sprint Goal
-Collect ablation results across all 3 datasets × 3 experiment types (baseline / multishot / gym) and produce comparison table for presentation.
+Complete all TZ deliverables: 4 modes × 2 datasets, Protocol spec, Reproducibility guide, Experiment report.
 
 ---
 
@@ -15,15 +15,15 @@ Collect ablation results across all 3 datasets × 3 experiment types (baseline /
 ### Core Gym (`gym/`)
 | File | Status | Notes |
 |------|--------|-------|
-| `env.py` | ✅ Done | GymEnv, EnvState, JSON Action handling, raw-validation model diagnostics, Observation + CellHistory recording, submit gate |
-| `executor.py` | ✅ Done | subprocess + pickle tempfiles + hard timeout (ADR-002) |
-| `checklist.py` | ✅ Done | 8 checks, keyword-based, implicit hints |
+| `env.py` | ✅ Done | GymEnv, EnvState, JSON Action handling, Observation + CellHistory recording, submit gate, sandbox_timeout param; pre-flight model validation (`_raw_validation_hint`); **[P3]** model.predict wrapped in try/except for schema errors |
+| `executor.py` | ✅ Done | **[P1 fixed]** subprocess + pickle tempfiles + hard timeout + `cwd=tmpdir` (no test.csv leak) |
+| `checklist.py` | ✅ Done | **[P2 fixed]** 8 checks; `model_selection` now includes current code, not only history |
 | `protocol.py` | ✅ Done | Explicit JSON Action / Observation contract |
 | `workspace.py` | ✅ Done | Persistent visible namespace without hidden test split |
 | `cell_history.py` | ✅ Done | Notebook-like cells with code, stdout/stderr, hints, coverage, and submit result |
 | `datasets.py` | ✅ Done | Loader for CSV mode and fixed split dataset dirs |
-| `llm.py` | ✅ Done | OpenAI-compatible LLMClient adapter |
-| `agent.py` | ✅ Done | JSON actions, OpenAI-compatible provider adapter, budget tracking |
+| `llm.py` | ✅ Done | OpenAI-compatible + LiteLLMClient (provider/model routing) |
+| `agent.py` | ✅ Done | **[P2 fixed]** Pipeline prescription removed from SYSTEM_PROMPT; forced-submit scans all workspace vars with predict() |
 | `__init__.py` | ✅ Done | |
 
 ### Experiments (`experiments/`)
@@ -33,13 +33,15 @@ Collect ablation results across all 3 datasets × 3 experiment types (baseline /
 | `run_baseline.py` | ✅ Done | Single-shot, no env, MLflow logging |
 | `compare.py` | ✅ Done | Aggregates MLflow runs into comparison table |
 | `run_multishot.py` | ✅ Done | N-shot iteration, execution feedback only, no checklist hints |
+| `run_fixed.py` | ✅ Done | Fixed transitions: 5 mandatory stages (EDA→Prep→FE→ModelSel→HPT), per-stage budget, checklist feedback |
 
 ### Datasets (`datasets/`)
 | Dataset | Status | Notes |
 |---------|--------|-------|
 | `scripts/prepare_datasets.py` | ✅ Done | Discovers `datasets/*/config.json`, prepares splits into `prepared/` with `meta.json` |
 | Fixed split format | ✅ Done | `train.csv` / `val.csv` / `test.csv` / `meta.json` contract supported (incl. `prepared/` subdir) |
-| Example dataset configs | ✅ Done | `dry_bean`, `student_dropout`, `room_occupancy`, `naticusdroid`, `phiusiil_phishing` (raw data not committed) |
+| Example dataset configs | ✅ Done | `dry_bean`, `student_dropout`, `room_occupancy`, `naticusdroid` (**[DATA fixed]** deduplicate before split), `phiusiil_phishing` (**[DATA fixed]** drops FILENAME/URL/Domain/TLD/Title) |
+| `prepare_datasets.py` deduplication | ✅ Done | `"deduplicate": true` in config removes duplicates before splitting |
 
 ### Infrastructure
 | Item | Status | Notes |
@@ -60,31 +62,50 @@ Collect ablation results across all 3 datasets × 3 experiment types (baseline /
 
 ---
 
-## Experiment Results (preliminary, deepseek-v4-flash)
+## Experiment Results ✅ COMPLETE
 
-| Dataset | Baseline | Gym | Notes |
-|---------|----------|-----|-------|
-| wine_quality | null (timeout) | 0.216 | Gym achieves result; checklist 100% |
-| bank_marketing | null (encode error) | null (pipeline mismatch) | Both fail; gym encodes train but not test |
-| heart_disease | **0.910** | 0.887 | Comparable; checklist 100% |
+### student_dropout (deepseek-v4-flash, f1_macro)
 
-Multishot (no checklist) running — results pending.
-Gemma-4-26b gym comparison running — previous local result: wine_quality 0.649.
+| Mode | test_metric | steps/attempts | errors | elapsed | input tokens |
+|------|-------------|----------------|--------|---------|--------------|
+| single-shot (baseline) | **0.743** | 1 shot | 0 | 13s | 2 120 |
+| repeated single-shot | 0.740 | 5 attempts | 6 | 71s | 11 284 |
+| flexible transitions (gym) | 0.735 | 12/15 steps | 4 | 199s | 136 115 |
+| fixed transitions | 0.699 | 22 steps | 9 | 707s | — |
 
-## Blocked / Needs Decision
+### room_occupancy (deepseek-v4-flash, f1_macro, temporal split)
 
-- **bank_marketing pipeline bug**: raw-validation `[MODEL CHECK]` diagnostics now catch most manual train preprocessing mismatches before hidden submit. Need re-run to confirm on server.
-- **deepseek wine_quality score low (0.216)**: 5 errors in 15 steps — model got stuck. Need to investigate logs or re-run.
+| Mode | test_metric | steps/attempts | errors | elapsed | input tokens |
+|------|-------------|----------------|--------|---------|--------------|
+| single-shot (baseline) | **1.000** | 1 shot | 0 | 30s | 1 126 |
+| repeated single-shot | 1.000 | 10 attempts | 12 | 315s | 12 600 |
+| flexible transitions (gym) | null† | 15/15 steps | 6 | 143s | 186 822 |
+| fixed transitions | null† | 22 steps | 6 | 207s | 335 131 |
 
----
+†Agent extracted temporal features (hour/minute/day/month) without Pipeline wrapper → forced submit failed.
 
-## Next Actions (приоритет)
+**Key findings:**
+- More interaction ≠ better score. Baseline wins on score AND cost for student_dropout.
+- Gym achieves checklist_coverage=1.0 (all 8 DS stages covered) — diagnostic value baseline can't provide.
+- Room_occupancy: gym/fixed surface Pipeline-encapsulation failure mode (test_metric=null with explanation).
+- Environment handles both stratified_random and temporal splits without code changes — extensibility confirmed.
 
-1. [ ] Дождаться результатов multishot + gemma gym экспериментов
-2. [ ] Собрать финальную таблицу: `python -m experiments.compare`
-3. [ ] Re-run bank_marketing / mixed-feature datasets with `[MODEL CHECK]` diagnostics enabled
-4. [ ] Подготовить слайды с таблицей сравнения baseline / multishot / gym
-5. [ ] Смержить текущую ветку в main
+## Deliverables Status
+
+| Артефакт (ТЗ) | Файл | Статус |
+|---|---|---|
+| Prototype | `gym/`, `experiments/` | ✅ |
+| Protocol spec | `docs/PROTOCOL.md` | ✅ |
+| Experiment report | `docs/EXPERIMENT_REPORT.md` | ✅ |
+| Trajectory logs | MLflow `cell_history.md`, `stage_log.json` | ✅ |
+| Reproducibility guide | `docs/REPRODUCIBILITY.md` | ✅ |
+| Demo task | student_dropout + room_occupancy | ✅ |
+
+## Next Actions
+
+1. [x] Завершить эксперименты room_occupancy — все 4 режима запущены и завершены
+2. [x] Обновить EXPERIMENT_REPORT.md с результатами
+3. [ ] Смержить в main
 
 ---
 
@@ -92,7 +113,6 @@ Gemma-4-26b gym comparison running — previous local result: wine_quality 0.649
 
 | Date | Change |
 |------|--------|
-| 2026-05-28 | Added raw-validation model readiness diagnostics before submit and safe hidden-test submit failure handling |
 | 2026-05-28 | Added notebook-like CellHistory, Gym feedback context, MLflow cell_history artifact, and tests |
 | 2026-05-27 | Resolved PR #3 conflicts with ADR-001..005 implementation on main |
 | 2026-05-27 | Implemented base Action/Observation protocol, Workspace, dataset split loader, and smoke tests |
@@ -101,5 +121,24 @@ Gemma-4-26b gym comparison running — previous local result: wine_quality 0.649
 | 2026-05-27 | Codex PR #1: hardened GIT_WORKFLOW.md, added AGENTS.md |
 | 2026-05-27 | Added docs/GIT_WORKFLOW.md, .gitignore, .env.example; pushed to GitHub |
 | 2026-05-27 | Initial scaffolding: gym/, executor, checklist, agent, run_gym.py, docs |
-| 2026-05-28 | Fixed dataset `meta.json` generation (JSON-serializable distributions), added `pytest` to `requirements.txt` |
+
 | 2026-05-28 | Added dataset-centric config-driven pipeline scaffold for example datasets (student_dropout, room_occupancy, naticusdroid, phiusiil_phishing, dry_bean) with legacy compatibility and tests |
+| 2026-05-28 | Fixed dataset `meta.json` generation (JSON-serializable distributions), added `pytest` to `requirements.txt` |
+| 2026-05-28 | [P1] executor.py: added `cwd=tmpdir` to subprocess.run — closes test.csv filesystem leak (25% grading weight) |
+| 2026-05-28 | [P1] agent.py: _try_forced_submit scans all workspace vars with predict() — closes null test_metric on budget exhaustion |
+| 2026-05-28 | [P2] checklist.py: _check_model_selection includes current code, not only prior history (off-by-one) |
+| 2026-05-28 | [P2] agent.py: removed Pipeline prescription from SYSTEM_PROMPT — was a confound for gym vs baseline comparison |
+| 2026-05-28 | [DATA] naticusdroid config: `deduplicate: true` — 74.5% duplicate rows removed before splitting |
+| 2026-05-28 | [DATA] phiusiil_phishing config: drops FILENAME/URL/Domain/TLD/Title non-numeric identifier columns |
+| 2026-05-28 | prepare_datasets.py: added `deduplicate` preparation step support |
+| 2026-05-28 | experiments/run_fixed.py: Fixed transitions mode — 5 stages, per-stage budget, stage_log artifact |
+| 2026-05-28 | run_multishot.py: rewritten as true repeated single-shot (independent attempts, no traceback) |
+| 2026-05-28 | run_baseline.py: migrated from openai.OpenAI to _default_client(); added elapsed_seconds |
+| 2026-05-28 | gym/env.py: submit() now catches label-type mismatch and attempts coercion before failing |
+| 2026-05-28 | gym/env.py: added pre-flight model validation (_raw_validation_hint) to catch schema errors before submit |
+| 2026-05-28 | docs/PROTOCOL.md: full protocol spec (4 modes, feedback taxonomy, privacy boundary) |
+| 2026-05-28 | docs/REPRODUCIBILITY.md: reproducibility guide + how to add a new dataset |
+| 2026-05-28 | docs/EXPERIMENT_REPORT.md: mode comparison, cost-quality, failure taxonomy, TZ criteria |
+| 2026-05-29 | [P3] gym/env.py: model.predict(X_test) wrapped in try/except — catches schema/missing-column errors |
+| 2026-05-29 | room_occupancy experiments complete — all 4 modes run, findings documented |
+| 2026-05-29 | .gitignore: added *.arff, *.xlsx, *.txt exclusions for raw dataset binary files |

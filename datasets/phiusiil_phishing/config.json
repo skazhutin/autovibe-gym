@@ -35,12 +35,13 @@
       "strategy": "stratified_random",
       "seed": 42
     },
-    "drop_columns": []
+    "drop_columns": ["FILENAME", "URL", "Domain", "TLD", "Title"]
   },
   "role": "large_mixed_features_suspicious_columns",
   "notes": {
     "contamination_risk": "reduced_vs_canonical_benchmarks",
     "inspect_suspicious_columns": true,
-    "suspicious_columns": []
+    "suspicious_columns": ["URLSimilarityIndex"],
+    "drop_reason": "FILENAME/URL/Domain/TLD/Title are non-numeric identifiers that would cause dtype errors and may directly encode the label"
   }
 }

@@ -152,9 +152,30 @@ class GymEnv:
         X_test = self.state.test.drop(columns=[self.state.target_col])
         y_test = self.state.test[self.state.target_col]
         preds = model.predict(X_test)
-        score = float(self.metric_fn(y_test, preds))
-        self.state.submitted = True
 
+        # Coerce predictions to match y_test dtype to handle label-encoding mismatches
+        # (e.g. agent encodes strings→ints but test retains original string labels)
+        try:
+            score = float(self.metric_fn(y_test, preds))
+        except (ValueError, TypeError):
+            import numpy as np
+            import pandas as _pd
+            try:
+                preds_coerced = _pd.Series(preds).astype(y_test.dtype).values
+                score = float(self.metric_fn(y_test, preds_coerced))
+            except Exception:
+                classes = sorted(y_test.unique())
+                try:
+                    preds_mapped = np.array([classes[int(p)] for p in preds])
+                    score = float(self.metric_fn(y_test, preds_mapped))
+                except Exception as e:
+                    raise ValueError(
+                        f"Cannot evaluate predictions: {e}. "
+                        "Ensure model.predict() returns labels matching "
+                        f"the target column (e.g. {list(y_test.unique()[:3])})."
+                    ) from e
+
+        self.state.submitted = True
         observation = Observation(
             action="submit",
             step=self.state.step,

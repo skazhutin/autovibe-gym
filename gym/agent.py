@@ -1,8 +1,16 @@
 import os
 
 from .env import GymEnv
-from .llm import LLMClient, OpenAICompatibleLLMClient
+from .llm import LiteLLMClient, LLMClient, OpenAICompatibleLLMClient
 from .protocol import ACTION_JSON_SCHEMA, Action, ActionParseError, Observation
+
+
+def _default_client() -> LLMClient:
+    model = os.getenv("LLM_MODEL", "")
+    # If model contains "/" it's a litellm provider prefix (e.g. "groq/llama-3.3-70b-versatile")
+    if "/" in model:
+        return LiteLLMClient()
+    return OpenAICompatibleLLMClient()
 
 
 SYSTEM_PROMPT = f"""You are an expert data scientist solving a supervised machine learning task.
@@ -19,13 +27,10 @@ CRITICAL RULES:
 - Do not access test data; it is hidden until submit.
 - Treat each code action like a new notebook cell: reuse prior workspace
   variables instead of rewriting the whole solution from scratch.
-- ALWAYS wrap your preprocessing + model in a sklearn Pipeline:
-    from sklearn.pipeline import Pipeline
-    from sklearn.compose import ColumnTransformer
-    model = Pipeline([('prep', preprocessor), ('clf', classifier)])
-  This ensures model.predict() works correctly on raw unseen data at submit time.
-  Never encode data manually with pd.get_dummies outside a Pipeline — the same
-  transform must apply to both validation and test data automatically.
+- When the model is submitted, predict() will be called on raw held-out rows
+  using the same column dtypes as train_df. Whatever preprocessing you apply
+  during training must be reproducible at predict time (e.g. fitted transformers
+  saved inside the model object).
 - If you receive [MODEL CHECK] feedback, fix the submitted model/pipeline before
   trying to submit.
 - Use validation data for model selection.
@@ -57,7 +62,7 @@ class GymAgent:
         self.env = env
         self.model = model or os.getenv("LLM_MODEL", "Qwen/Qwen2.5-Coder-7B-Instruct")
         self.max_tokens = max_tokens
-        self.client = client or OpenAICompatibleLLMClient()
+        self.client = client or _default_client()
         self.messages: list[dict] = []
         self.total_input_tokens = 0
         self.total_output_tokens = 0
@@ -136,7 +141,14 @@ class GymAgent:
         return feedback
 
     def _try_forced_submit(self) -> Observation | None:
+        # Prefer canonical names first, then scan for any object with predict()
         model_var, _ = self.env.state.workspace.first_existing(["best_model", "model"])
+        if model_var is None:
+            ns = self.env.state.workspace.namespace
+            for k, v in ns.items():
+                if not k.startswith("_") and callable(getattr(v, "predict", None)):
+                    model_var = k
+                    break
         if model_var is None:
             return None
         return self.env.step(Action.submit_action(model_var))

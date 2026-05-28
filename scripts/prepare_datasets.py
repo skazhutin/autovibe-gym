@@ -96,6 +96,12 @@ def apply_declared_preparation(
     info = {"sampled": False}
     prep = config.preparation or {}
 
+    if prep.get("deduplicate", False):
+        before = len(df)
+        df = df.drop_duplicates().reset_index(drop=True)
+        info["deduplicated"] = True
+        info["duplicates_removed"] = before - len(df)
+
     rename_columns = prep.get("rename_columns") or {}
     if rename_columns:
         df = df.rename(columns=rename_columns)
