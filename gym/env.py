@@ -10,6 +10,23 @@ from .executor import CodeExecutor
 from .protocol import Action, Observation, StepResult, coerce_action
 from .workspace import Workspace
 
+MODEL_VALIDATION_HINT = (
+    "[MODEL CHECK] Workspace variable '{model_var}' cannot predict raw validation "
+    "features: {error_type}: {error}. Keep preprocessing attached to the estimator "
+    "so model.predict(raw validation/test features) works at submit time."
+)
+
+MODEL_INTERFACE_HINT = (
+    "[MODEL CHECK] Workspace variable '{model_var}' is not submit-ready because "
+    "it does not provide a predict(X) method."
+)
+
+HIDDEN_TEST_SUBMIT_ERROR = (
+    "Submit failed on the hidden test split. The selected model could not predict "
+    "raw hidden features. Ensure preprocessing is inside the submitted model or "
+    "pipeline and handles unseen validation/test values."
+)
+
 
 @dataclass
 class EnvState:
@@ -52,6 +69,7 @@ class GymEnv:
         metric_name: str = "score",
         max_steps: int = 20,
         sandbox_timeout: int = 60,
+        model_validation_rows: int = 32,
     ):
         workspace = Workspace(train=train, val=val, target_col=target_col)
         self.state = EnvState(
@@ -66,6 +84,7 @@ class GymEnv:
         self.metric_fn = metric_fn
         self.executor = CodeExecutor(timeout=sandbox_timeout)
         self.checklist = Checklist(target_col=target_col)
+        self.model_validation_rows = model_validation_rows
         self._start_time = time.time()
 
     def reset(self) -> dict:
@@ -106,19 +125,35 @@ class GymEnv:
             )
             return self._record_observation(observation)
 
-        self.submit(model, model_var=model_var)
+        validation_hint = self._raw_validation_hint(model, model_var)
+        if validation_hint:
+            observation = Observation(
+                action="submit",
+                step=self.state.step,
+                budget_remaining=self.budget_remaining(),
+                stderr=validation_hint,
+                hints=[validation_hint],
+                checklist_coverage=self.checklist.coverage(),
+                model_var=model_var,
+            )
+            return self._record_observation(observation)
+
+        try:
+            self.submit(model, model_var=model_var)
+        except Exception:
+            return self._submit_failure_observation(model_var)
         return self.state.history[-1]
 
     def submit(self, model: Any, model_var: str | None = None) -> float:
         """One-shot final evaluation on hidden test set. Closes the environment."""
         if self.state.submitted:
             raise RuntimeError("Already submitted.")
-        self.state.submitted = True
 
         X_test = self.state.test.drop(columns=[self.state.target_col])
         y_test = self.state.test[self.state.target_col]
         preds = model.predict(X_test)
         score = float(self.metric_fn(y_test, preds))
+        self.state.submitted = True
 
         observation = Observation(
             action="submit",
@@ -162,6 +197,7 @@ class GymEnv:
             namespace=self.state.namespace,
             history=self.state.history,
         )
+        hints.extend(self._model_validation_hints())
         coverage = self.checklist.coverage()
 
         observation = Observation(
@@ -197,6 +233,10 @@ class GymEnv:
                 "  Each code action is stored as a new notebook-like cell.\n"
                 "  Workspace variables persist across cells, so build on prior work "
                 "instead of rewriting everything from scratch.\n\n"
+                "Model readiness check:\n"
+                "  When model or best_model exists, the environment checks whether "
+                "it can predict raw validation features. Fix any [MODEL CHECK] "
+                "feedback before submitting.\n\n"
                 "Each response must be one JSON action:\n"
                 '  {"type": "code", "code": "print(train_df.shape)"}\n'
                 '  {"type": "submit", "model_var": "best_model"}\n\n'
@@ -210,9 +250,59 @@ class GymEnv:
         self.state.cell_history.append_observation(observation)
         return observation
 
+    def _model_validation_hints(self) -> list[str]:
+        hints = []
+        seen_ids = set()
+        for model_var in ("best_model", "model"):
+            model = self.state.workspace.get(model_var)
+            if model is None:
+                continue
+            if id(model) in seen_ids:
+                continue
+            seen_ids.add(id(model))
+            hint = self._raw_validation_hint(model, model_var)
+            if hint:
+                hints.append(hint)
+        return hints
+
+    def _raw_validation_hint(self, model: Any, model_var: str) -> str | None:
+        if not hasattr(model, "predict"):
+            return MODEL_INTERFACE_HINT.format(model_var=model_var)
+
+        X_val = self.state.val.drop(columns=[self.state.target_col])
+        if X_val.empty:
+            return None
+        if self.model_validation_rows > 0:
+            X_val = X_val.head(self.model_validation_rows)
+
+        try:
+            model.predict(X_val)
+        except Exception as exc:
+            return MODEL_VALIDATION_HINT.format(
+                model_var=model_var,
+                error_type=type(exc).__name__,
+                error=_clip(str(exc), 240),
+            )
+        return None
+
+    def _submit_failure_observation(self, model_var: str | None) -> Observation:
+        self.state.submitted = True
+        observation = Observation(
+            action="submit",
+            step=self.state.step,
+            budget_remaining=self.budget_remaining(),
+            stderr=HIDDEN_TEST_SUBMIT_ERROR,
+            checklist_coverage=self.checklist.coverage(),
+            done=True,
+            submitted=True,
+            test_metric=None,
+            model_var=model_var,
+        )
+        return self._record_observation(observation)
+
     def get_summary(self) -> dict:
         final = next(
-            (r for r in reversed(self.state.history) if r.test_metric is not None),
+            (r for r in reversed(self.state.history) if r.submitted),
             None,
         )
         error_count = sum(1 for r in self.state.history if r.stderr.strip())
@@ -222,7 +312,13 @@ class GymEnv:
             "error_count": error_count,
             "errors_count": error_count,
             "cells_used": len(self.state.cell_history),
-            "submitted": final is not None,
+            "submitted": self.state.submitted or final is not None,
             "test_metric": final.test_metric if final else None,
             "elapsed_seconds": round(time.time() - self._start_time, 1),
         }
+
+
+def _clip(text: str, limit: int) -> str:
+    if len(text) <= limit:
+        return text
+    return text[:limit].rstrip() + "... [truncated]"

@@ -31,6 +31,7 @@
 | Submit gate | `env.submit(model)` вызывается ровно один раз; возвращает финальную метрику и закрывает сессию |
 | Бюджет | Агент знает сколько шагов осталось; при исчерпании — авто-сабмит лучшей модели из namespace |
 | Логирование | Каждый шаг пишется в историю: код, stdout, stderr, хинты, покрытие чеклиста |
+| Model readiness | `model` / `best_model` проверяются на raw `val_df` до submit; несовместимые preprocessing-пайплайны получают `[MODEL CHECK]` feedback |
 
 ### 3.2 Чеклист
 
@@ -105,6 +106,7 @@
 │                                                           │
 │  CodeExecutor ──► subprocess(code, workspace.namespace)    │
 │  Checklist    ──► evaluate() → implicit hints             │
+│  Model check  ──► model.predict(raw val) → readiness hint  │
 │  submit       ──► metric_fn(hidden test) → final score     │
 └───────────────────────────────────────────────────────────┘
 ```
@@ -194,6 +196,7 @@ Gym > Free-agent на малых/средних LLM.
 - Тест-выборка недоступна агенту до `submit()` — нет утечки данных
 - Один `submit()` на сессию — имитирует реальный деплой
 - Code actions ведут себя как notebook cells: код добавляется шагами, а переменные живут в Workspace между шагами
+- Если `model` / `best_model` не умеет предсказывать raw `val_df`, Gym возвращает `[MODEL CHECK]` до hidden-test submit
 - Проверки чеклиста — эвристические (regex + keyword match), не семантические
 - Sandbox не изолирован на уровне ОС (нет Docker) — запускать только доверенные агенты
 - Датасеты — только табличные, CSV

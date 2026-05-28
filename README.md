@@ -34,6 +34,10 @@ stderr, checklist hints, and coverage. Workspace variables persist across cells,
 so the agent can build on previous work instead of rewriting a full script every
 turn.
 
+When a `model` or `best_model` appears in the workspace, Gym checks whether it can
+predict raw validation features. If not, the agent gets `[MODEL CHECK]` feedback
+before it reaches hidden-test submit.
+
 ## Dataset Layout
 
 Legacy CSV mode is supported:

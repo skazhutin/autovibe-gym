@@ -26,6 +26,8 @@ CRITICAL RULES:
   This ensures model.predict() works correctly on raw unseen data at submit time.
   Never encode data manually with pd.get_dummies outside a Pipeline — the same
   transform must apply to both validation and test data automatically.
+- If you receive [MODEL CHECK] feedback, fix the submitted model/pipeline before
+  trying to submit.
 - Use validation data for model selection.
 - Assign your best trained pipeline/model to a variable called `model`.
 - Submit only when your best model is ready and assigned.
