@@ -15,11 +15,12 @@ Collect ablation results across all 3 datasets × 3 experiment types (baseline /
 ### Core Gym (`gym/`)
 | File | Status | Notes |
 |------|--------|-------|
-| `env.py` | ✅ Done | GymEnv, EnvState, JSON Action handling, Observation history, submit gate, sandbox_timeout param |
+| `env.py` | ✅ Done | GymEnv, EnvState, JSON Action handling, Observation + CellHistory recording, submit gate, sandbox_timeout param |
 | `executor.py` | ✅ Done | subprocess + pickle tempfiles + hard timeout (ADR-002) |
 | `checklist.py` | ✅ Done | 8 checks, keyword-based, implicit hints |
 | `protocol.py` | ✅ Done | Explicit JSON Action / Observation contract |
 | `workspace.py` | ✅ Done | Persistent visible namespace without hidden test split |
+| `cell_history.py` | ✅ Done | Notebook-like cells with code, stdout/stderr, hints, coverage, and submit result |
 | `datasets.py` | ✅ Done | Loader for CSV mode and fixed split dataset dirs |
 | `llm.py` | ✅ Done | OpenAI-compatible LLMClient adapter |
 | `agent.py` | ✅ Done | JSON actions, OpenAI-compatible provider adapter, budget tracking |
@@ -50,11 +51,11 @@ Collect ablation results across all 3 datasets × 3 experiment types (baseline /
 | `AGENTS.md` | ✅ Done | Codex workflow points to status, project, and Git workflow docs |
 | `docs/GIT_WORKFLOW.md` | ✅ Done | Team Git/PR workflow and AI-agent collaboration rules |
 | `docs/PROJECT.md` | ✅ Done | Stack updated to reflect ADR-001..005 and Action/Observation protocol |
-| `docs/ARCHITECTURE_DECISIONS.md` | ✅ Done | ADR-001..008 |
+| `docs/ARCHITECTURE_DECISIONS.md` | ✅ Done | ADR-001..009 |
 | `scripts/start_vllm.sh` | ✅ Done | vLLM launcher for H200, auto-detects AWQ |
 | `Dockerfile` | ✅ Done | Based on booml-backend:latest; entrypoint python -m |
 | `docker-compose.yml` | ✅ Done | MLflow service with named volume |
-| Unit smoke tests | ✅ Done | `tests/test_env_protocol.py` covers protocol/workspace/submit |
+| Unit smoke tests | ✅ Done | Protocol/workspace/submit plus checklist, executor, env, and CellHistory coverage |
 | `.env.example` | ✅ Done | LLM_BASE_URL, LLM_API_KEY, LLM_MODEL, MLFLOW_TRACKING_URI |
 | Server deployment | ✅ Done | Docker on booml@10.8.52.11; MLflow on :8002 |
 | API access | ✅ Done | http://llm.letovo.site:8809/openai — gemma-4-26b, deepseek-v4-flash |
@@ -93,6 +94,7 @@ Gemma-4-26b gym comparison running — previous local result: wine_quality 0.649
 
 | Date | Change |
 |------|--------|
+| 2026-05-28 | Added notebook-like CellHistory, Gym feedback context, MLflow cell_history artifact, and tests |
 | 2026-05-27 | Resolved PR #3 conflicts with ADR-001..005 implementation on main |
 | 2026-05-27 | Implemented base Action/Observation protocol, Workspace, dataset split loader, and smoke tests |
 | 2026-05-27 | ADR-001..005: agent→openai SDK, executor→subprocess, MLflow, datasets script, vLLM startup |

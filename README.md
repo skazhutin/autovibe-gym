@@ -11,7 +11,7 @@ GymAgent
   -> LLMClient
   -> JSON Action
   -> GymEnv.step()
-  -> CodeExecutor + Checklist
+  -> CodeExecutor + Checklist + CellHistory
   -> Observation feedback
   -> next JSON Action
 ```
@@ -28,6 +28,11 @@ Actions:
 
 The agent workspace contains `train_df`, `val_df`, `target_col`, `pd`, and `np`.
 `test_df` is never exposed to code actions.
+
+Each code action is also stored as a notebook-like cell with code, stdout,
+stderr, checklist hints, and coverage. Workspace variables persist across cells,
+so the agent can build on previous work instead of rewriting a full script every
+turn.
 
 ## Dataset Layout
 

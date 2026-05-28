@@ -126,6 +126,7 @@ def main():
 
         agent = GymAgent(env=env, model=model_name, max_tokens=max_tokens)
         summary = agent.run()
+        mlflow.log_text(env.state.cell_history.to_markdown(), "cell_history.md")
 
         mlflow.log_metrics({
             "test_metric": summary.get("test_metric") or 0.0,

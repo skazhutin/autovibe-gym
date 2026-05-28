@@ -17,6 +17,8 @@ Available workspace variables:
 
 Rules:
 - Do not try to access test data; it is hidden until submit.
+- Treat each code action like a new notebook cell: reuse prior workspace
+  variables instead of rewriting the whole solution from scratch.
 - Use validation data for model selection.
 - Keep useful variables in the workspace, especially your final model.
 - Submit only when your best model is ready.
@@ -83,7 +85,7 @@ class GymAgent:
 
             observation = self.env.step(action)
             self.messages.append(
-                {"role": "user", "content": observation.to_feedback_message()}
+                {"role": "user", "content": self._build_feedback(observation)}
             )
 
             if observation.submitted:
@@ -95,7 +97,7 @@ class GymAgent:
                     self.messages.append(
                         {
                             "role": "user",
-                            "content": forced_observation.to_feedback_message(),
+                            "content": self._build_feedback(forced_observation),
                         }
                     )
                 summary = self._build_summary()
@@ -112,6 +114,17 @@ class GymAgent:
         summary["output_tokens"] = self.total_output_tokens
         summary["model"] = self.model
         return summary
+
+    def _build_feedback(self, observation: Observation) -> str:
+        feedback = observation.to_feedback_message()
+        notebook_context = self.env.state.cell_history.to_feedback_context(
+            max_cells=3,
+            max_code_chars=500,
+            max_output_chars=250,
+        )
+        if notebook_context:
+            feedback = f"{feedback}\n\n{notebook_context}"
+        return feedback
 
     def _try_forced_submit(self) -> Observation | None:
         model_var, _ = self.env.state.workspace.first_existing(["best_model", "model"])
