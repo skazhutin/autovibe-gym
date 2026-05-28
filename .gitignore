@@ -15,30 +15,28 @@ env/
 .env.local
 .env.*.local
 *.key
-# .env.example is intentionally tracked — it's a template
-
-# Data — load via script, don't commit large files
-datasets/*.csv
-datasets/*.parquet
-datasets/*.xlsx
-datasets/*.json
-datasets/**/*.csv
-datasets/**/*.parquet
-datasets/**/*.xlsx
-datasets/_raw/
-!datasets/README.md
 
 # MLflow tracking — generated experiment data
 mlruns/
 
-# Experiment outputs & logs
+# Generic outputs/logs
 runs/
 outputs/
 results/
 *.log
 *.jsonl
 
-# AI agent artifacts — local to each developer's machine
+# Keep dataset configs/docs; ignore generated tables by default
+# and selectively unignore example dataset artifacts.
+datasets/**/*.csv
+datasets/**/*.parquet
+datasets/**/*.xlsx
+datasets/**/*.json
+!datasets/README.md
+!datasets/*/config.json
+!datasets/*/raw_data/.gitkeep
+
+# AI agent artifacts
 .claude/
 memory/
 .codex/
@@ -49,15 +47,13 @@ memory/
 .ipynb_checkpoints/
 *.ipynb
 
-# IDE
+# IDE/OS
 .vscode/
 .idea/
 *.swp
 *.swo
-
-# OS
 .DS_Store
 Thumbs.db
 
-# Downloaded reference repos (not part of our code)
-agency-agents-main/
+# Local raw dataset archives (manual upload, not committed)
+datasets/*/raw_data/*.zip

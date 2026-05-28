@@ -1,0 +1,41 @@
+{
+  "name": "naticusdroid",
+  "suite": "example_datasets",
+  "source": {
+    "type": "local_file",
+    "provider": "example dataset supplied by project team",
+    "reference": "naticusdroid",
+    "license": "unknown"
+  },
+  "raw_data": {
+    "files": [
+      "data.csv"
+    ],
+    "format": "csv",
+    "read_options": {
+      "sep": ",",
+      "encoding": "utf-8"
+    }
+  },
+  "task": {
+    "type": "classification",
+    "target_col": "Result",
+    "metric": "f1_macro"
+  },
+  "split": {
+    "strategy": "stratified_random",
+    "seed": 42,
+    "train_fraction": 0.7,
+    "val_fraction": 0.15,
+    "test_fraction": 0.15
+  },
+  "preparation": {
+    "target_mapping": null,
+    "drop_columns": [],
+    "sampling": null
+  },
+  "role": "high_dimensional_binary_security_domain",
+  "notes": {
+    "contamination_risk": "reduced_vs_canonical_benchmarks"
+  }
+}

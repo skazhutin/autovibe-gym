@@ -1,6 +1,6 @@
 # AutoVibe Gym — Live Status
 
-**Last updated:** 2026-05-28
+**Last updated:** 2026-05-28 (dataset-pipeline update)
 **Phase:** First experiments running on server — ablation data being collected
 
 ---
@@ -100,3 +100,5 @@ Gemma-4-26b gym comparison running — previous local result: wine_quality 0.649
 | 2026-05-27 | Codex PR #1: hardened GIT_WORKFLOW.md, added AGENTS.md |
 | 2026-05-27 | Added docs/GIT_WORKFLOW.md, .gitignore, .env.example; pushed to GitHub |
 | 2026-05-27 | Initial scaffolding: gym/, executor, checklist, agent, run_gym.py, docs |
+
+| 2026-05-28 | Added dataset-centric config-driven pipeline scaffold for example datasets (student_dropout, room_occupancy, naticusdroid, phiusiil_phishing, dry_bean) with legacy compatibility and tests |

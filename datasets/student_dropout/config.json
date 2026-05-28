@@ -1,0 +1,42 @@
+{
+  "name": "student_dropout",
+  "suite": "example_datasets",
+  "source": {
+    "type": "local_file",
+    "provider": "example dataset supplied by project team",
+    "reference": "student_dropout",
+    "license": "unknown"
+  },
+  "raw_data": {
+    "files": [
+      "data.csv"
+    ],
+    "format": "csv",
+    "read_options": {
+      "sep": ";",
+      "encoding": "utf-8"
+    }
+  },
+  "task": {
+    "type": "classification",
+    "target_col": "Target",
+    "metric": "f1_macro"
+  },
+  "split": {
+    "strategy": "stratified_random",
+    "seed": 42,
+    "train_fraction": 0.7,
+    "val_fraction": 0.15,
+    "test_fraction": 0.15
+  },
+  "preparation": {
+    "target_mapping": null,
+    "drop_columns": [],
+    "sampling": null
+  },
+  "role": "mixed_features_imbalanced_multiclass",
+  "notes": {
+    "contamination_risk": "reduced_vs_canonical_benchmarks",
+    "task_definition": "outcome prediction after observed semesters"
+  }
+}

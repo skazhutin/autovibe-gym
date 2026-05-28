@@ -1,0 +1,39 @@
+{
+  "name": "dry_bean",
+  "suite": "example_datasets",
+  "source": {
+    "type": "local_file",
+    "provider": "example dataset supplied by project team",
+    "reference": "dry_bean",
+    "license": "unknown"
+  },
+  "raw_data": {
+    "files": [
+      "DryBeanDataset/Dry_Bean_Dataset.xlsx"
+    ],
+    "format": "xlsx",
+    "read_options": {}
+  },
+  "task": {
+    "type": "classification",
+    "target_col": "Class",
+    "metric": "f1_macro"
+  },
+  "split": {
+    "strategy": "stratified_random",
+    "seed": 42,
+    "train_fraction": 0.7,
+    "val_fraction": 0.15,
+    "test_fraction": 0.15
+  },
+  "preparation": {
+    "target_mapping": null,
+    "drop_columns": [],
+    "sampling": null
+  },
+  "role": "fast_numeric_multiclass_smoke_test",
+  "notes": {
+    "contamination_risk": "reduced_vs_canonical_benchmarks",
+    "usage": "smoke_test_for_dataset_pipeline"
+  }
+}
