@@ -15,7 +15,7 @@ HINTS = {
     "duplicates": "Duplicate rows can silently bias training — worth a quick check.",
     "target_leak": "Make sure no feature is a direct proxy of the target column.",
     "train_val_split": "It helps to evaluate on a held-out validation set during development.",
-    "feature_engineering": "Raw features often aren't the best representation — any transformations tried?",
+    "feature_engineering": "Raw features often aren't the best representation — tried encoding, scaling, or transformations? Use a sklearn Pipeline to keep preprocessing consistent between train and test.",
     "model_selection": "Have you compared more than one model type?",
     "hyperparameter_tuning": "Default hyperparameters are rarely optimal — even a small search can help.",
 }

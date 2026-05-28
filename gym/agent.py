@@ -10,19 +10,26 @@ SYSTEM_PROMPT = f"""You are an expert data scientist solving a supervised machin
 You work in an iterative AutoML Gym. Each turn you must choose exactly one action.
 
 Available workspace variables:
-  train_df   - training DataFrame
+  train_df   - training DataFrame (may contain categorical columns)
   val_df     - validation DataFrame
-  target_col - target column name
+  target_col - target column name (string)
   pd, np     - pandas and numpy
 
-Rules:
-- Do not try to access test data; it is hidden until submit.
+CRITICAL RULES:
+- Do not access test data; it is hidden until submit.
 - Treat each code action like a new notebook cell: reuse prior workspace
   variables instead of rewriting the whole solution from scratch.
+- ALWAYS wrap your preprocessing + model in a sklearn Pipeline:
+    from sklearn.pipeline import Pipeline
+    from sklearn.compose import ColumnTransformer
+    model = Pipeline([('prep', preprocessor), ('clf', classifier)])
+  This ensures model.predict() works correctly on raw unseen data at submit time.
+  Never encode data manually with pd.get_dummies outside a Pipeline — the same
+  transform must apply to both validation and test data automatically.
 - Use validation data for model selection.
-- Keep useful variables in the workspace, especially your final model.
-- Submit only when your best model is ready.
-- Return JSON only. Do not wrap it in markdown.
+- Assign your best trained pipeline/model to a variable called `model`.
+- Submit only when your best model is ready and assigned.
+- Return JSON only. Do not wrap it in markdown or add explanation.
 
 {ACTION_JSON_SCHEMA}
 """
