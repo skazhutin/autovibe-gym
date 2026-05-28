@@ -1,12 +1,12 @@
 # AutoVibe Gym — Live Status
 
-**Last updated:** 2026-05-27
-**Phase:** Core implementation complete with Action/Observation protocol, first end-to-end run needed
+**Last updated:** 2026-05-28
+**Phase:** First experiments running on server — ablation data being collected
 
 ---
 
 ## Current Sprint Goal
-First end-to-end run: `python scripts/prepare_datasets.py` → `python -m experiments.run_gym` → MLflow summary printed.
+Collect ablation results across all 3 datasets × 3 experiment types (baseline / multishot / gym) and produce comparison table for presentation.
 
 ---
 
@@ -31,7 +31,7 @@ First end-to-end run: `python scripts/prepare_datasets.py` → `python -m experi
 | `run_gym.py` | ✅ Done | MLflow logging, `--mode cloud/local`, dataset-dir/CSV loader, sandbox_timeout |
 | `run_baseline.py` | ✅ Done | Single-shot, no env, MLflow logging |
 | `compare.py` | ✅ Done | Aggregates MLflow runs into comparison table |
-| `run_multishot.py` | ❌ TODO | Multi-shot, same token budget, no checklist |
+| `run_multishot.py` | ✅ Done | N-shot iteration, execution feedback only, no checklist hints |
 
 ### Datasets (`datasets/`)
 | Dataset | Status | Notes |
@@ -52,31 +52,40 @@ First end-to-end run: `python scripts/prepare_datasets.py` → `python -m experi
 | `docs/PROJECT.md` | ✅ Done | Stack updated to reflect ADR-001..005 and Action/Observation protocol |
 | `docs/ARCHITECTURE_DECISIONS.md` | ✅ Done | ADR-001..008 |
 | `scripts/start_vllm.sh` | ✅ Done | vLLM launcher for H200, auto-detects AWQ |
+| `Dockerfile` | ✅ Done | Based on booml-backend:latest; entrypoint python -m |
+| `docker-compose.yml` | ✅ Done | MLflow service with named volume |
 | Unit smoke tests | ✅ Done | `tests/test_env_protocol.py` covers protocol/workspace/submit |
 | `.env.example` | ✅ Done | LLM_BASE_URL, LLM_API_KEY, LLM_MODEL, MLFLOW_TRACKING_URI |
-| First end-to-end test run | ❌ TODO | Need vLLM/API server running + dataset prepared |
-| MLflow server running | ❌ TODO | `mlflow server --host 0.0.0.0 --port 5000` on H200 |
+| Server deployment | ✅ Done | Docker on booml@10.8.52.11; MLflow on :8002 |
+| API access | ✅ Done | http://llm.letovo.site:8809/openai — gemma-4-26b, deepseek-v4-flash |
 
 ---
 
+## Experiment Results (preliminary, deepseek-v4-flash)
+
+| Dataset | Baseline | Gym | Notes |
+|---------|----------|-----|-------|
+| wine_quality | null (timeout) | 0.216 | Gym achieves result; checklist 100% |
+| bank_marketing | null (encode error) | null (pipeline mismatch) | Both fail; gym encodes train but not test |
+| heart_disease | **0.910** | 0.887 | Comparable; checklist 100% |
+
+Multishot (no checklist) running — results pending.
+Gemma-4-26b gym comparison running — previous local result: wine_quality 0.649.
+
 ## Blocked / Needs Decision
 
-- **vLLM server**: нужен запущенный сервер на H200 для первого прогона. До этого можно тестировать с облачным API (OpenAI/Anthropic proxy).
-- **Sandbox security**: subprocess изолирует процесс, но не ОС. Docker — вариант для финального деплоя если нужна полная изоляция.
-- **run_multishot.py**: последний недостающий режим сравнения. Нужен для честного сравнения "gym vs. multi-shot с тем же токен-бюджетом".
+- **bank_marketing pipeline bug**: gym encodes train with get_dummies but doesn't apply same transform to test at submit. Consider injecting a preprocessing hint or using pipelines in the system prompt.
+- **deepseek wine_quality score low (0.216)**: 5 errors in 15 steps — model got stuck. Need to investigate logs or re-run.
 
 ---
 
 ## Next Actions (приоритет)
 
-1. [ ] Запустить `python scripts/prepare_datasets.py` — скачать и нарезать датасеты
-2. [ ] Поднять vLLM на H200: `./scripts/start_vllm.sh Qwen/Qwen2.5-Coder-7B-Instruct`
-3. [ ] Поднять MLflow: `mlflow server --host 0.0.0.0 --port 5000`
-4. [ ] Заполнить `.env` (скопировать `.env.example`, прописать IP сервера)
-5. [ ] Первый тестовый прогон: `python -m experiments.run_gym --dataset-dir datasets/wine_quality --mode local`
-6. [ ] Прогнать baseline: `python -m experiments.run_baseline --dataset-dir datasets/wine_quality --mode local`
-7. [ ] Сравнить: `python -m experiments.compare`
-8. [ ] Написать `experiments/run_multishot.py`
+1. [ ] Дождаться результатов multishot + gemma gym экспериментов
+2. [ ] Собрать финальную таблицу: `python -m experiments.compare`
+3. [ ] Исправить pipeline баг для bank_marketing (preprocessing в обучении и на submit)
+4. [ ] Подготовить слайды с таблицей сравнения baseline / multishot / gym
+5. [ ] Смержить текущую ветку в main
 
 ---
 

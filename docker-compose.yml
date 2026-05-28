@@ -1,0 +1,15 @@
+version: "3.8"
+
+services:
+  mlflow:
+    image: autovibe-gym
+    command: -m mlflow server --host 0.0.0.0 --port 8002 --backend-store-uri /autovibe/mlruns
+    ports:
+      - "8002:8002"
+    volumes:
+      - mlruns:/autovibe/mlruns
+    restart: unless-stopped
+    network_mode: host
+
+volumes:
+  mlruns:

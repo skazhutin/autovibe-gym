@@ -22,7 +22,14 @@ datasets/*.csv
 datasets/*.parquet
 datasets/*.xlsx
 datasets/*.json
+datasets/**/*.csv
+datasets/**/*.parquet
+datasets/**/*.xlsx
+datasets/_raw/
 !datasets/README.md
+
+# MLflow tracking — generated experiment data
+mlruns/
 
 # Experiment outputs & logs
 runs/

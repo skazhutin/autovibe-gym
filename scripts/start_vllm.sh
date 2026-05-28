@@ -8,7 +8,7 @@
 #   ./scripts/start_vllm.sh Qwen/Qwen2.5-72B-Instruct-AWQ 8002
 
 MODEL=${1:?"Usage: $0 <model_id> [port]"}
-PORT=${2:-8000}
+PORT=${2:-8003}  # 8000/8001/8080 occupied by host system; use 8002+
 
 echo "Starting vLLM: model=$MODEL port=$PORT"
 
