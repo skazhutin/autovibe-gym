@@ -4,6 +4,7 @@ from typing import Any, Callable
 
 import pandas as pd
 
+from .cell_history import CellHistory
 from .checklist import Checklist
 from .executor import CodeExecutor
 from .protocol import Action, Observation, StepResult, coerce_action
@@ -22,6 +23,7 @@ class EnvState:
     max_steps: int = 20
     submitted: bool = False
     history: list[Observation] = field(default_factory=list)
+    cell_history: CellHistory = field(default_factory=CellHistory)
 
     @property
     def namespace(self) -> dict[str, Any]:
@@ -70,6 +72,7 @@ class GymEnv:
         self.state.step = 0
         self.state.submitted = False
         self.state.history = []
+        self.state.cell_history.reset()
         self.state.workspace.reset()
         self.checklist = Checklist(target_col=self.state.target_col)
         self._start_time = time.time()
@@ -101,8 +104,7 @@ class GymEnv:
                 checklist_coverage=self.checklist.coverage(),
                 model_var=model_var,
             )
-            self.state.history.append(observation)
-            return observation
+            return self._record_observation(observation)
 
         self.submit(model, model_var=model_var)
         return self.state.history[-1]
@@ -129,7 +131,7 @@ class GymEnv:
             test_metric=score,
             model_var=model_var,
         )
-        self.state.history.append(observation)
+        self._record_observation(observation)
         return score
 
     def budget_remaining(self) -> int:
@@ -146,8 +148,7 @@ class GymEnv:
                 checklist_coverage=self.checklist.coverage(),
                 done=True,
             )
-            self.state.history.append(observation)
-            return observation
+            return self._record_observation(observation)
 
         self.state.step += 1
         stdout, stderr, namespace = self.executor.run(
@@ -174,8 +175,7 @@ class GymEnv:
             budget_remaining=self.budget_remaining(),
             done=self.state.step >= self.state.max_steps,
         )
-        self.state.history.append(observation)
-        return observation
+        return self._record_observation(observation)
 
     def _build_context_prompt(self) -> dict:
         train_info = self.state.train.describe(include="all").to_string()
@@ -193,6 +193,10 @@ class GymEnv:
                 f"  {visible_symbols}\n"
                 "Hidden variables:\n"
                 "  test_df is never available to code actions.\n\n"
+                "Notebook workflow:\n"
+                "  Each code action is stored as a new notebook-like cell.\n"
+                "  Workspace variables persist across cells, so build on prior work "
+                "instead of rewriting everything from scratch.\n\n"
                 "Each response must be one JSON action:\n"
                 '  {"type": "code", "code": "print(train_df.shape)"}\n'
                 '  {"type": "submit", "model_var": "best_model"}\n\n'
@@ -200,6 +204,11 @@ class GymEnv:
                 "when your best model is assigned to a workspace variable."
             )
         }
+
+    def _record_observation(self, observation: Observation) -> Observation:
+        self.state.history.append(observation)
+        self.state.cell_history.append_observation(observation)
+        return observation
 
     def get_summary(self) -> dict:
         final = next(
@@ -212,6 +221,7 @@ class GymEnv:
             "checklist_coverage": self.checklist.coverage(),
             "error_count": error_count,
             "errors_count": error_count,
+            "cells_used": len(self.state.cell_history),
             "submitted": final is not None,
             "test_metric": final.test_metric if final else None,
             "elapsed_seconds": round(time.time() - self._start_time, 1),

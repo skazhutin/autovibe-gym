@@ -99,6 +99,7 @@
 │  EnvState                                                 │
 │  ├── train / val / test (test hidden from workspace)       │
 │  ├── Workspace(namespace: train_df, val_df, target_col)    │
+│  ├── CellHistory(notebook-like cells with outputs)         │
 │  ├── history: List[Observation]                            │
 │  └── step counter / submitted flag                         │
 │                                                           │
@@ -124,6 +125,7 @@ autovibe-gym/
 │   ├── checklist.py           ← Checklist, CheckItem, HINTS
 │   ├── protocol.py            ← Action / Observation JSON-контракт
 │   ├── workspace.py           ← видимый namespace агента без test_df
+│   ├── cell_history.py        ← notebook-like история ячеек и outputs
 │   ├── datasets.py            ← DatasetSplits, meta.json loader, metric resolver
 │   ├── llm.py                 ← OpenAI-compatible LLMClient adapter
 │   └── agent.py               ← GymAgent JSON action loop
@@ -177,7 +179,7 @@ autovibe-gym/
 |---|---|---|
 | **Gym** — итеративно с чеклистом | `experiments/run_gym.py` | Готово |
 | **Single-shot** — один запрос | `experiments/run_baseline.py` | Готово |
-| **Multi-shot** — несколько запросов, тот же бюджет токенов, без чеклиста | `experiments/run_multishot.py` | TODO |
+| **Multi-shot** — несколько запросов, тот же бюджет токенов, без чеклиста | `experiments/run_multishot.py` | Готово |
 | **Free-agent** — делает что хочет, без структуры | (расширение gym без checklist) | TODO |
 | **Compare** — сводная таблица всех режимов | `experiments/compare.py` | Готово |
 
@@ -191,6 +193,7 @@ Gym > Free-agent на малых/средних LLM.
 
 - Тест-выборка недоступна агенту до `submit()` — нет утечки данных
 - Один `submit()` на сессию — имитирует реальный деплой
+- Code actions ведут себя как notebook cells: код добавляется шагами, а переменные живут в Workspace между шагами
 - Проверки чеклиста — эвристические (regex + keyword match), не семантические
 - Sandbox не изолирован на уровне ОС (нет Docker) — запускать только доверенные агенты
 - Датасеты — только табличные, CSV

@@ -51,6 +51,8 @@ def test_step_returns_result(tmp_path):
     assert "2" in result.stdout
     assert isinstance(result.hints, list)
     assert 0.0 <= result.checklist_coverage <= 1.0
+    assert len(env.state.cell_history) == 1
+    assert env.state.cell_history.last().code == "x = 1 + 1\nprint(x)"
 
 
 def test_budget_decrements(tmp_path):
@@ -74,6 +76,8 @@ def test_submit_scores_test_set():
     score = env.submit(model)
     assert isinstance(score, float)
     assert 0.0 <= score <= 1.0
+    assert len(env.state.cell_history) == 1
+    assert env.state.cell_history.last().submitted is True
 
 
 def test_double_submit_raises():
@@ -120,4 +124,16 @@ def test_get_summary_shape():
     assert "steps_used" in summary
     assert "checklist_coverage" in summary
     assert "errors_count" in summary
+    assert "cells_used" in summary
     assert "elapsed_seconds" in summary
+
+
+def test_reset_clears_cell_history():
+    env = _make_env()
+    env.reset()
+    env.step("print('cell')")
+    assert len(env.state.cell_history) == 1
+
+    env.reset()
+
+    assert len(env.state.cell_history) == 0
