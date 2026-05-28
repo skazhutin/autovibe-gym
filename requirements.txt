@@ -12,5 +12,8 @@ lightgbm>=4.0.0
 # Experiment tracking (local MLflow server)
 mlflow>=2.14.0
 
+# Tests
+pytest>=8.0.0
+
 # Server-side only — install on the H200 machine
 # vllm>=0.5.0

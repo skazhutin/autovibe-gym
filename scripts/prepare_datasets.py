@@ -8,6 +8,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 
 DATASETS_ROOT = Path("datasets")
+_FRACTION_TOLERANCE = 1e-6
 
 
 @dataclass(frozen=True)
@@ -55,8 +56,15 @@ def load_dataset_config(dataset_dir: Path) -> DatasetConfig:
         )
     raw = json.loads(cfg_path.read_text(encoding="utf-8"))
     return DatasetConfig(
-        name=raw["name"], suite=raw.get("suite", "example_datasets"), source=raw.get("source", {}),
-        raw_data=raw["raw_data"], task=raw["task"], split=raw["split"], preparation=raw.get("preparation", {}), role=raw.get("role"), notes=raw.get("notes", {}),
+        name=raw["name"],
+        suite=raw.get("suite", "example_datasets"),
+        source=raw.get("source", {}),
+        raw_data=raw["raw_data"],
+        task=raw["task"],
+        split=raw["split"],
+        preparation=raw.get("preparation", {}),
+        role=raw.get("role"),
+        notes=raw.get("notes", {}),
     )
 
 
@@ -65,12 +73,12 @@ def load_raw_dataframe(dataset_dir: Path, config: DatasetConfig) -> pd.DataFrame
     if not files:
         raise FileNotFoundError(f"No raw_data.files in config for {dataset_dir}")
     frames = []
+    opts = config.raw_data.get("read_options", {})
+    fmt = config.raw_data.get("format", "csv")
     for file_name in files:
         path = dataset_dir / "raw_data" / file_name
         if not path.exists():
             raise FileNotFoundError(f"Missing raw file: {path}")
-        opts = config.raw_data.get("read_options", {})
-        fmt = config.raw_data.get("format", "csv")
         if fmt == "csv":
             frames.append(pd.read_csv(path, **opts))
         elif fmt in {"xlsx", "excel"}:
@@ -82,14 +90,11 @@ def load_raw_dataframe(dataset_dir: Path, config: DatasetConfig) -> pd.DataFrame
     return pd.concat(frames, ignore_index=True)
 
 
-def apply_declared_preparation(df: pd.DataFrame, config: DatasetConfig, *, max_rows: int | None) -> tuple[pd.DataFrame, dict[str, Any]]:
+def apply_declared_preparation(
+    df: pd.DataFrame, config: DatasetConfig, *, max_rows: int | None
+) -> tuple[pd.DataFrame, dict[str, Any]]:
     info = {"sampled": False}
     prep = config.preparation or {}
-    target_col = config.task["target_col"]
-
-    mapping = prep.get("target_mapping")
-    if mapping:
-        df[target_col] = df[target_col].map(mapping)
 
     rename_columns = prep.get("rename_columns") or {}
     if rename_columns:
@@ -99,6 +104,16 @@ def apply_declared_preparation(df: pd.DataFrame, config: DatasetConfig, *, max_r
     if drop_columns:
         df = df.drop(columns=drop_columns, errors="ignore")
 
+    target_col = config.task["target_col"]
+    if target_col not in df.columns:
+        raise ValueError(
+            f"Missing target column '{target_col}' after preparation in {config.name}"
+        )
+
+    mapping = prep.get("target_mapping")
+    if mapping:
+        df[target_col] = df[target_col].map(mapping)
+
     sampling = prep.get("sampling")
     if max_rows is not None:
         if not sampling or not sampling.get("allowed", False):
@@ -106,7 +121,12 @@ def apply_declared_preparation(df: pd.DataFrame, config: DatasetConfig, *, max_r
         if len(df) > max_rows:
             seed = sampling.get("seed", config.split.get("seed", 42))
             if config.task.get("type") == "classification":
-                df, _ = train_test_split(df, train_size=max_rows, random_state=seed, stratify=df[target_col])
+                df, _ = train_test_split(
+                    df,
+                    train_size=max_rows,
+                    random_state=seed,
+                    stratify=df[target_col],
+                )
             else:
                 df, _ = train_test_split(df, train_size=max_rows, random_state=seed)
             df = df.reset_index(drop=True)
@@ -114,14 +134,55 @@ def apply_declared_preparation(df: pd.DataFrame, config: DatasetConfig, *, max_r
     return df, info
 
 
-def split_stratified_random(df: pd.DataFrame, target_col: str, seed: int, train_fraction: float, val_fraction: float, test_fraction: float):
-    train, temp = train_test_split(df, test_size=val_fraction + test_fraction, random_state=seed, stratify=df[target_col])
+def _validate_split_fractions(
+    *, train_fraction: float, val_fraction: float, test_fraction: float
+) -> None:
+    fractions = [train_fraction, val_fraction, test_fraction]
+    if any(f < 0 or f > 1 for f in fractions):
+        raise ValueError("Split fractions must be in [0, 1].")
+    total = sum(fractions)
+    if abs(total - 1.0) > _FRACTION_TOLERANCE:
+        raise ValueError(
+            f"Split fractions must sum to 1.0, got {total:.6f} "
+            f"(train={train_fraction}, val={val_fraction}, test={test_fraction})."
+        )
+
+
+def split_stratified_random(
+    df: pd.DataFrame,
+    target_col: str,
+    seed: int,
+    train_fraction: float,
+    val_fraction: float,
+    test_fraction: float,
+):
+    _validate_split_fractions(
+        train_fraction=train_fraction,
+        val_fraction=val_fraction,
+        test_fraction=test_fraction,
+    )
+    train, temp = train_test_split(
+        df,
+        test_size=val_fraction + test_fraction,
+        random_state=seed,
+        stratify=df[target_col],
+    )
     relative_test_fraction = test_fraction / (val_fraction + test_fraction)
-    val, test = train_test_split(temp, test_size=relative_test_fraction, random_state=seed, stratify=temp[target_col])
+    val, test = train_test_split(
+        temp,
+        test_size=relative_test_fraction,
+        random_state=seed,
+        stratify=temp[target_col],
+    )
     return train.reset_index(drop=True), val.reset_index(drop=True), test.reset_index(drop=True), {}
 
 
 def split_temporal(df: pd.DataFrame, split_cfg: dict[str, Any]):
+    _validate_split_fractions(
+        train_fraction=split_cfg["train_fraction"],
+        val_fraction=split_cfg["val_fraction"],
+        test_fraction=split_cfg["test_fraction"],
+    )
     timestamp_cfg = split_cfg["timestamp"]
     cols = timestamp_cfg["source_columns"]
     fmt = timestamp_cfg.get("format")
@@ -148,18 +209,29 @@ def split_temporal(df: pd.DataFrame, split_cfg: dict[str, Any]):
     return train.reset_index(drop=True), val.reset_index(drop=True), test.reset_index(drop=True), {"temporal_boundaries": bounds}
 
 
+def _normalized_value_counts(series: pd.Series) -> dict[str, float]:
+    vc = series.value_counts(normalize=True, dropna=False)
+    return {str(key): float(value) for key, value in vc.items()}
+
+
 def prepare_dataset(dataset_dir: Path, *, max_rows: int | None = None) -> dict[str, Any]:
     config = load_dataset_config(dataset_dir)
     if not (dataset_dir / "config.json").exists():
         return {"dataset": dataset_dir.name, "status": "skipped", "reason": "legacy dataset"}
     df = load_raw_dataframe(dataset_dir, config)
     n_rows_source = len(df)
-    if config.task["target_col"] not in df.columns:
-        raise ValueError(f"Missing target column '{config.task['target_col']}' in {dataset_dir}")
     df, prep_info = apply_declared_preparation(df, config, max_rows=max_rows)
+    target = config.task["target_col"]
     split_cfg = config.split
     if split_cfg["strategy"] == "stratified_random":
-        train, val, test, split_info = split_stratified_random(df, config.task["target_col"], split_cfg.get("seed", 42), split_cfg["train_fraction"], split_cfg["val_fraction"], split_cfg["test_fraction"])
+        train, val, test, split_info = split_stratified_random(
+            df,
+            target,
+            split_cfg.get("seed", 42),
+            split_cfg["train_fraction"],
+            split_cfg["val_fraction"],
+            split_cfg["test_fraction"],
+        )
     elif split_cfg["strategy"] == "temporal":
         train, val, test, split_info = split_temporal(df, split_cfg)
     else:
@@ -169,15 +241,34 @@ def prepare_dataset(dataset_dir: Path, *, max_rows: int | None = None) -> dict[s
     train.to_csv(out_dir / "train.csv", index=False)
     val.to_csv(out_dir / "val.csv", index=False)
     test.to_csv(out_dir / "test.csv", index=False)
-    target = config.task["target_col"]
+    n_features = df.drop(columns=[target]).shape[1]
+    n_classes = int(df[target].nunique(dropna=False))
     meta = {
-        "name": config.name, "suite": config.suite, "source": config.source, "raw_files": config.raw_data.get("files", []),
-        "task_type": config.task.get("type"), "target_col": target, "metric": config.task.get("metric"),
-        "split_strategy": split_cfg.get("strategy"), "seed": split_cfg.get("seed", 42),
-        "n_rows_source": n_rows_source, "n_rows_prepared": len(df), "n_train": len(train), "n_val": len(val), "n_test": len(test),
-        "n_features": df.shape[1] - 1, "n_classes": int(df[target].nunique()),
-        "class_distribution": {"all": df[target].value_counts(normalize=True).to_dict(), "train": train[target].value_counts(normalize=True).to_dict(), "val": val[target].value_counts(normalize=True).to_dict(), "test": test[target].value_counts(normalize=True).to_dict()},
-        "sampled": prep_info.get("sampled", False), "role": config.role, "notes": config.notes,
+        "name": config.name,
+        "suite": config.suite,
+        "source": config.source,
+        "raw_files": config.raw_data.get("files", []),
+        "task_type": config.task.get("type"),
+        "target_col": target,
+        "metric": config.task.get("metric"),
+        "split_strategy": split_cfg.get("strategy"),
+        "seed": split_cfg.get("seed", 42),
+        "n_rows_source": n_rows_source,
+        "n_rows_prepared": len(df),
+        "n_train": len(train),
+        "n_val": len(val),
+        "n_test": len(test),
+        "n_features": n_features,
+        "n_classes": n_classes,
+        "class_distribution": {
+            "all": _normalized_value_counts(df[target]),
+            "train": _normalized_value_counts(train[target]),
+            "val": _normalized_value_counts(val[target]),
+            "test": _normalized_value_counts(test[target]),
+        },
+        "sampled": prep_info.get("sampled", False),
+        "role": config.role,
+        "notes": config.notes,
     }
     meta.update(prep_info)
     meta.update(split_info)

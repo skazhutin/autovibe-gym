@@ -43,6 +43,62 @@ class DatasetPipelineTests(unittest.TestCase):
             (ds / "config.json").write_text("{}")
             self.assertIn("abc", discover_dataset_dirs(Path(td)))
 
+    def test_prepare_dataset_writes_json_serializable_meta_for_numeric_labels(self):
+        with tempfile.TemporaryDirectory() as td:
+            ds = Path(td) / "demo"
+            raw_dir = ds / "raw_data"
+            raw_dir.mkdir(parents=True)
+            df = pd.DataFrame({
+                "x": list(range(40)),
+                "y": [0, 1] * 20,
+            })
+            df.to_csv(raw_dir / "data.csv", index=False)
+            (ds / "config.json").write_text(json.dumps({
+                "name": "demo",
+                "suite": "example_datasets",
+                "source": {},
+                "raw_data": {"files": ["data.csv"], "format": "csv", "read_options": {"sep": ","}},
+                "task": {"type": "classification", "target_col": "y", "metric": "f1_macro"},
+                "split": {"strategy": "stratified_random", "seed": 42, "train_fraction": 0.5, "val_fraction": 0.25, "test_fraction": 0.25},
+                "preparation": {},
+                "notes": {},
+            }))
+
+            res = prepare_dataset(ds)
+            self.assertEqual(res["status"], "ok")
+            meta = json.loads((ds / "prepared" / "meta.json").read_text(encoding="utf-8"))
+            self.assertIn("class_distribution", meta)
+            self.assertIsInstance(meta["class_distribution"]["all"], dict)
+            # keys must be JSON-safe strings
+            for key in meta["class_distribution"]["all"].keys():
+                self.assertIsInstance(key, str)
+
+    def test_prepare_dataset_allows_renaming_target_column(self):
+        with tempfile.TemporaryDirectory() as td:
+            ds = Path(td) / "demo"
+            raw_dir = ds / "raw_data"
+            raw_dir.mkdir(parents=True)
+            df = pd.DataFrame({
+                "x": list(range(40)),
+                "label_raw": [0, 1] * 20,
+            })
+            df.to_csv(raw_dir / "data.csv", index=False)
+            (ds / "config.json").write_text(json.dumps({
+                "name": "demo",
+                "suite": "example_datasets",
+                "source": {},
+                "raw_data": {"files": ["data.csv"], "format": "csv", "read_options": {"sep": ","}},
+                "task": {"type": "classification", "target_col": "label", "metric": "f1_macro"},
+                "split": {"strategy": "stratified_random", "seed": 42, "train_fraction": 0.5, "val_fraction": 0.25, "test_fraction": 0.25},
+                "preparation": {"rename_columns": {"label_raw": "label"}},
+                "notes": {},
+            }))
+
+            res = prepare_dataset(ds)
+            self.assertEqual(res["status"], "ok")
+            meta = json.loads((ds / "prepared" / "meta.json").read_text(encoding="utf-8"))
+            self.assertEqual(meta["target_col"], "label")
+
 
 if __name__ == '__main__':
     unittest.main()

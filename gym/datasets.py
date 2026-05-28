@@ -119,7 +119,7 @@ def resolve_metric(metadata: DatasetMetadata, target_series: pd.Series) -> tuple
 
 def infer_metric(target_series: pd.Series) -> tuple[MetricFn, str]:
     if target_series.nunique() <= 10:
-        return (lambda y, p: f1_score(y, p, average="weighted")), "f1_weighted"
+        return (lambda y, p: f1_score(y, p, average="weighted", zero_division=0)), "f1_weighted"
     return (lambda y, p: -mean_squared_error(y, p) ** 0.5), "neg_rmse"
 
 
