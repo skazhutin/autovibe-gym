@@ -374,6 +374,37 @@ LLM работает удобнее, когда среда похожа на not
 
 ---
 
+## ADR-010: Raw-validation model readiness diagnostics
+
+**Статус:** ✅ Принято и базово реализовано
+
+**Дата:** 2026-05-28
+
+### Контекст
+LLM часто делает preprocessing вручную на train, например `pd.get_dummies`, а
+затем сохраняет только estimator. На hidden submit среда вызывает
+`model.predict(raw_X_test)`, и такой estimator падает, потому что test не
+преобразован тем же способом. Давать LLM доступ к `test.csv` нельзя.
+
+### Решение
+**Проверять submit-кандидатов на raw validation features до hidden-test submit.**
+
+- После code action, если в workspace есть `best_model` или `model`, Gym вызывает
+  `model.predict(raw_X_val_sample)`.
+- Если predict падает, observation получает `[MODEL CHECK]` feedback.
+- Submit по такой модели не закрывает среду, чтобы агент мог исправить pipeline.
+- Если модель проходит validation check, но падает уже на hidden test, Gym
+  закрывает submit безопасным generic-сообщением без деталей hidden values.
+
+### Последствия
+- LLM получает ранний сигнал, что preprocessing должен быть внутри submitted
+  model/pipeline.
+- Hidden test остается скрытым.
+- Ошибка `train encoded, test raw` ловится до финального submit в большинстве
+  практических случаев.
+
+---
+
 ## Что требует реализации (приоритет)
 
 | Приоритет | ADR | Задача | Затронутые файлы |

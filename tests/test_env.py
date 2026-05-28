@@ -31,6 +31,34 @@ def _make_env(max_steps=5):
     )
 
 
+def _make_categorical_env():
+    train = pd.DataFrame({
+        "color": ["red", "blue", "red", "blue", "red", "blue"],
+        "value": [1, 2, 3, 4, 5, 6],
+        "target": [0, 1, 0, 1, 0, 1],
+    })
+    val = pd.DataFrame({
+        "color": ["red", "blue"],
+        "value": [7, 8],
+        "target": [0, 1],
+    })
+    test = pd.DataFrame({
+        "color": ["red", "blue"],
+        "value": [9, 10],
+        "target": [0, 1],
+    })
+    metric_fn = lambda y, p: f1_score(y, p, average="weighted", zero_division=0)
+    return GymEnv(
+        train=train,
+        val=val,
+        test=test,
+        target_col="target",
+        metric_fn=metric_fn,
+        metric_name="f1_weighted",
+        max_steps=5,
+    )
+
+
 def test_reset_returns_context(tmp_path):
     env = _make_env()
     ctx = env.reset()
@@ -137,3 +165,139 @@ def test_reset_clears_cell_history():
     env.reset()
 
     assert len(env.state.cell_history) == 0
+
+
+def test_manual_preprocessing_model_gets_raw_validation_hint():
+    env = _make_categorical_env()
+    env.reset()
+
+    result = env.step({
+        "type": "code",
+        "code": """
+from sklearn.linear_model import LogisticRegression
+
+X_train = pd.get_dummies(train_df.drop(columns=[target_col]))
+y_train = train_df[target_col]
+best_model = LogisticRegression(max_iter=200)
+best_model.fit(X_train, y_train)
+""".strip(),
+    })
+
+    joined_hints = "\n".join(result.hints)
+    assert "[MODEL CHECK]" in joined_hints
+    assert "raw validation" in joined_hints
+
+
+def test_pipeline_model_passes_raw_validation_check():
+    env = _make_categorical_env()
+    env.reset()
+
+    result = env.step({
+        "type": "code",
+        "code": """
+from sklearn.compose import ColumnTransformer
+from sklearn.dummy import DummyClassifier
+from sklearn.impute import SimpleImputer
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder
+
+X_train = train_df.drop(columns=[target_col])
+y_train = train_df[target_col]
+num_cols = X_train.select_dtypes(include=["number"]).columns
+cat_cols = X_train.select_dtypes(exclude=["number"]).columns
+preprocessor = ColumnTransformer([
+    ("num", SimpleImputer(strategy="median"), num_cols),
+    ("cat", Pipeline([
+        ("imputer", SimpleImputer(strategy="most_frequent")),
+        ("encoder", OneHotEncoder(handle_unknown="ignore")),
+    ]), cat_cols),
+])
+best_model = Pipeline([
+    ("prep", preprocessor),
+    ("clf", DummyClassifier(strategy="most_frequent")),
+])
+best_model.fit(X_train, y_train)
+""".strip(),
+    })
+
+    joined_hints = "\n".join(result.hints)
+    assert "[MODEL CHECK]" not in joined_hints
+
+
+def test_submit_with_raw_validation_failure_does_not_finalize_env():
+    env = _make_categorical_env()
+    env.reset()
+    env.step({
+        "type": "code",
+        "code": """
+from sklearn.linear_model import LogisticRegression
+
+X_train = pd.get_dummies(train_df.drop(columns=[target_col]))
+y_train = train_df[target_col]
+best_model = LogisticRegression(max_iter=200)
+best_model.fit(X_train, y_train)
+""".strip(),
+    })
+
+    result = env.step({"type": "submit", "model_var": "best_model"})
+
+    assert result.submitted is False
+    assert env.state.submitted is False
+    assert "raw validation" in result.stderr
+
+
+def test_hidden_test_failure_closes_without_leaking_hidden_values():
+    train = pd.DataFrame({
+        "color": ["red", "blue", "red", "blue"],
+        "target": [0, 1, 0, 1],
+    })
+    val = pd.DataFrame({
+        "color": ["red", "blue"],
+        "target": [0, 1],
+    })
+    test = pd.DataFrame({
+        "color": ["green"],
+        "target": [1],
+    })
+    metric_fn = lambda y, p: f1_score(y, p, average="weighted", zero_division=0)
+    env = GymEnv(
+        train=train,
+        val=val,
+        test=test,
+        target_col="target",
+        metric_fn=metric_fn,
+        metric_name="f1_weighted",
+        max_steps=5,
+    )
+    env.reset()
+    train_result = env.step({
+        "type": "code",
+        "code": """
+from sklearn.compose import ColumnTransformer
+from sklearn.dummy import DummyClassifier
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder
+
+X_train = train_df.drop(columns=[target_col])
+y_train = train_df[target_col]
+preprocessor = ColumnTransformer([
+    ("cat", OneHotEncoder(handle_unknown="error"), ["color"]),
+])
+best_model = Pipeline([
+    ("prep", preprocessor),
+    ("clf", DummyClassifier(strategy="most_frequent")),
+])
+best_model.fit(X_train, y_train)
+""".strip(),
+    })
+    assert "[MODEL CHECK]" not in "\n".join(train_result.hints)
+
+    result = env.step({"type": "submit", "model_var": "best_model"})
+
+    assert result.submitted is True
+    assert result.done is True
+    assert result.test_metric is None
+    assert env.state.submitted is True
+    assert "hidden test split" in result.stderr
+    assert "green" not in result.stderr
+    assert env.get_summary()["submitted"] is True

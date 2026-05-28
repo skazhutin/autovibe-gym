@@ -1,6 +1,6 @@
 # AutoVibe Gym — Live Status
 
-**Last updated:** 2026-05-28 (dataset-pipeline fixes)
+**Last updated:** 2026-05-28 (model-readiness diagnostics)
 **Phase:** First experiments running on server — ablation data being collected
 
 ---
@@ -15,7 +15,7 @@ Collect ablation results across all 3 datasets × 3 experiment types (baseline /
 ### Core Gym (`gym/`)
 | File | Status | Notes |
 |------|--------|-------|
-| `env.py` | ✅ Done | GymEnv, EnvState, JSON Action handling, Observation + CellHistory recording, submit gate, sandbox_timeout param |
+| `env.py` | ✅ Done | GymEnv, EnvState, JSON Action handling, raw-validation model diagnostics, Observation + CellHistory recording, submit gate |
 | `executor.py` | ✅ Done | subprocess + pickle tempfiles + hard timeout (ADR-002) |
 | `checklist.py` | ✅ Done | 8 checks, keyword-based, implicit hints |
 | `protocol.py` | ✅ Done | Explicit JSON Action / Observation contract |
@@ -49,7 +49,7 @@ Collect ablation results across all 3 datasets × 3 experiment types (baseline /
 | `AGENTS.md` | ✅ Done | Codex workflow points to status, project, and Git workflow docs |
 | `docs/GIT_WORKFLOW.md` | ✅ Done | Team Git/PR workflow and AI-agent collaboration rules |
 | `docs/PROJECT.md` | ✅ Done | Stack updated to reflect ADR-001..005 and Action/Observation protocol |
-| `docs/ARCHITECTURE_DECISIONS.md` | ✅ Done | ADR-001..009 |
+| `docs/ARCHITECTURE_DECISIONS.md` | ✅ Done | ADR-001..010 |
 | `scripts/start_vllm.sh` | ✅ Done | vLLM launcher for H200, auto-detects AWQ |
 | `Dockerfile` | ✅ Done | Based on booml-backend:latest; entrypoint python -m |
 | `docker-compose.yml` | ✅ Done | MLflow service with named volume |
@@ -73,7 +73,7 @@ Gemma-4-26b gym comparison running — previous local result: wine_quality 0.649
 
 ## Blocked / Needs Decision
 
-- **bank_marketing pipeline bug**: gym encodes train with get_dummies but doesn't apply same transform to test at submit. Consider injecting a preprocessing hint or using pipelines in the system prompt.
+- **bank_marketing pipeline bug**: raw-validation `[MODEL CHECK]` diagnostics now catch most manual train preprocessing mismatches before hidden submit. Need re-run to confirm on server.
 - **deepseek wine_quality score low (0.216)**: 5 errors in 15 steps — model got stuck. Need to investigate logs or re-run.
 
 ---
@@ -82,7 +82,7 @@ Gemma-4-26b gym comparison running — previous local result: wine_quality 0.649
 
 1. [ ] Дождаться результатов multishot + gemma gym экспериментов
 2. [ ] Собрать финальную таблицу: `python -m experiments.compare`
-3. [ ] Исправить pipeline баг для bank_marketing (preprocessing в обучении и на submit)
+3. [ ] Re-run bank_marketing / mixed-feature datasets with `[MODEL CHECK]` diagnostics enabled
 4. [ ] Подготовить слайды с таблицей сравнения baseline / multishot / gym
 5. [ ] Смержить текущую ветку в main
 
@@ -92,6 +92,7 @@ Gemma-4-26b gym comparison running — previous local result: wine_quality 0.649
 
 | Date | Change |
 |------|--------|
+| 2026-05-28 | Added raw-validation model readiness diagnostics before submit and safe hidden-test submit failure handling |
 | 2026-05-28 | Added notebook-like CellHistory, Gym feedback context, MLflow cell_history artifact, and tests |
 | 2026-05-27 | Resolved PR #3 conflicts with ADR-001..005 implementation on main |
 | 2026-05-27 | Implemented base Action/Observation protocol, Workspace, dataset split loader, and smoke tests |
@@ -100,6 +101,5 @@ Gemma-4-26b gym comparison running — previous local result: wine_quality 0.649
 | 2026-05-27 | Codex PR #1: hardened GIT_WORKFLOW.md, added AGENTS.md |
 | 2026-05-27 | Added docs/GIT_WORKFLOW.md, .gitignore, .env.example; pushed to GitHub |
 | 2026-05-27 | Initial scaffolding: gym/, executor, checklist, agent, run_gym.py, docs |
-
-| 2026-05-28 | Added dataset-centric config-driven pipeline scaffold for example datasets (student_dropout, room_occupancy, naticusdroid, phiusiil_phishing, dry_bean) with legacy compatibility and tests |
 | 2026-05-28 | Fixed dataset `meta.json` generation (JSON-serializable distributions), added `pytest` to `requirements.txt` |
+| 2026-05-28 | Added dataset-centric config-driven pipeline scaffold for example datasets (student_dropout, room_occupancy, naticusdroid, phiusiil_phishing, dry_bean) with legacy compatibility and tests |
