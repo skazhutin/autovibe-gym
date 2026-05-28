@@ -66,3 +66,14 @@ python3 -m experiments.run_gym --dataset-dir datasets/wine_quality
   "seed": 42
 }
 ```
+
+## Example datasets (config-driven)
+
+Datasets can be organized as `datasets/<name>/{config.json,raw_data/,prepared/}`.
+Run preparation with:
+
+```bash
+python scripts/prepare_datasets.py --list
+python scripts/prepare_datasets.py --dataset dry_bean
+python scripts/prepare_datasets.py --suite example_datasets
+```

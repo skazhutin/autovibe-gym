@@ -41,6 +41,10 @@ def load_dataset(dataset_dir: str):
         "source": splits.metadata.source,
         "seed": splits.metadata.seed,
         "notes": splits.metadata.notes,
+        "suite": splits.metadata.suite,
+        "split_strategy": splits.metadata.split_strategy,
+        "role": splits.metadata.role,
+        "sampled": splits.metadata.sampled,
     }
     return splits.train, splits.val, splits.test, meta
 
@@ -111,6 +115,10 @@ def main():
             "max_steps": max_steps,
             "max_tokens": max_tokens,
             "sandbox_timeout": sandbox_timeout,
+            "dataset_suite": splits.metadata.suite or "legacy",
+            "dataset_split_strategy": splits.metadata.split_strategy,
+            "dataset_role": splits.metadata.role,
+            "dataset_sampled": str(splits.metadata.sampled),
         })
 
         env = GymEnv(

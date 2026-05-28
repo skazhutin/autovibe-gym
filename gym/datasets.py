@@ -17,7 +17,11 @@ class DatasetMetadata:
     target_col: str
     metric_name: str | None = None
     task_type: str | None = None
-    source: str | None = None
+    source: dict | str | None = None
+    suite: str | None = None
+    split_strategy: str | None = None
+    role: str | None = None
+    sampled: bool | None = None
     seed: int = 42
     notes: dict = field(default_factory=dict)
 
@@ -32,6 +36,10 @@ class DatasetMetadata:
             metric_name=data.get("metric_name") or data.get("metric"),
             task_type=data.get("task_type"),
             source=data.get("source"),
+            suite=data.get("suite"),
+            split_strategy=data.get("split_strategy"),
+            role=data.get("role"),
+            sampled=data.get("sampled"),
             seed=int(data.get("seed", 42)),
             notes=dict(data.get("notes") or {}),
         )
@@ -85,6 +93,8 @@ def load_splits_from_csv(path: str, *, target_col: str, seed: int = 42) -> Datas
 
 def load_splits_from_dir(dataset_dir: str) -> DatasetSplits:
     root = Path(dataset_dir)
+    if (root / "prepared").exists() and not (root / "meta.json").exists():
+        root = root / "prepared"
     metadata_path = root / "meta.json"
     if not metadata_path.exists():
         raise FileNotFoundError(f"Missing dataset metadata: {metadata_path}")
@@ -109,14 +119,16 @@ def resolve_metric(metadata: DatasetMetadata, target_series: pd.Series) -> tuple
 
 def infer_metric(target_series: pd.Series) -> tuple[MetricFn, str]:
     if target_series.nunique() <= 10:
-        return (lambda y, p: f1_score(y, p, average="weighted")), "f1_weighted"
+        return (lambda y, p: f1_score(y, p, average="weighted", zero_division=0)), "f1_weighted"
     return (lambda y, p: -mean_squared_error(y, p) ** 0.5), "neg_rmse"
 
 
 def metric_from_name(metric_name: str) -> MetricFn:
     normalized = metric_name.strip().lower()
     if normalized == "f1_weighted":
-        return lambda y, p: f1_score(y, p, average="weighted")
+        return lambda y, p: f1_score(y, p, average="weighted", zero_division=0)
+    if normalized == "f1_macro":
+        return lambda y, p: f1_score(y, p, average="macro", zero_division=0)
     if normalized == "neg_rmse":
         return lambda y, p: -mean_squared_error(y, p) ** 0.5
     raise ValueError(f"Unsupported metric: {metric_name}")

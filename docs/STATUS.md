@@ -1,6 +1,6 @@
 # AutoVibe Gym — Live Status
 
-**Last updated:** 2026-05-28
+**Last updated:** 2026-05-28 (dataset-pipeline fixes)
 **Phase:** First experiments running on server — ablation data being collected
 
 ---
@@ -37,11 +37,9 @@ Collect ablation results across all 3 datasets × 3 experiment types (baseline /
 ### Datasets (`datasets/`)
 | Dataset | Status | Notes |
 |---------|--------|-------|
-| `scripts/prepare_datasets.py` | ✅ Done | Downloads + splits Wine Quality, Bank Marketing, Heart Disease |
-| Fixed split format | ✅ Done | `train.csv` / `val.csv` / `test.csv` / `meta.json` contract supported |
-| Wine Quality splits | ❌ TODO | Run `python scripts/prepare_datasets.py --dataset wine_quality` |
-| Bank Marketing splits | ❌ TODO | |
-| Heart Disease splits | ❌ TODO | |
+| `scripts/prepare_datasets.py` | ✅ Done | Discovers `datasets/*/config.json`, prepares splits into `prepared/` with `meta.json` |
+| Fixed split format | ✅ Done | `train.csv` / `val.csv` / `test.csv` / `meta.json` contract supported (incl. `prepared/` subdir) |
+| Example dataset configs | ✅ Done | `dry_bean`, `student_dropout`, `room_occupancy`, `naticusdroid`, `phiusiil_phishing` (raw data not committed) |
 
 ### Infrastructure
 | Item | Status | Notes |
@@ -102,3 +100,6 @@ Gemma-4-26b gym comparison running — previous local result: wine_quality 0.649
 | 2026-05-27 | Codex PR #1: hardened GIT_WORKFLOW.md, added AGENTS.md |
 | 2026-05-27 | Added docs/GIT_WORKFLOW.md, .gitignore, .env.example; pushed to GitHub |
 | 2026-05-27 | Initial scaffolding: gym/, executor, checklist, agent, run_gym.py, docs |
+
+| 2026-05-28 | Added dataset-centric config-driven pipeline scaffold for example datasets (student_dropout, room_occupancy, naticusdroid, phiusiil_phishing, dry_bean) with legacy compatibility and tests |
+| 2026-05-28 | Fixed dataset `meta.json` generation (JSON-serializable distributions), added `pytest` to `requirements.txt` |
