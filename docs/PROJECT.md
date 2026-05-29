@@ -208,3 +208,62 @@ Gym > Free-agent на малых/средних LLM.
 - Команда: ~4 человека
 - Дедлайн: ~2 недели от 27.05.2026 (т.е. ~10.06.2026)
 - Формат сдачи: презентация + демо запуска
+
+---
+
+## 9. 2026-05-29 Jupyter Environment Update
+
+The iterative Gym environment now uses a real Jupyter notebook backend for
+agent episodes.
+
+Core runtime:
+
+- `NotebookGymEnv` creates `episode_workspace/solution.ipynb` as the source of
+  truth for the solution.
+- `NotebookDocument` stores real nbformat v4 code/markdown cells, stable cell
+  ids, outputs, execution counts, metadata, and revision numbers.
+- `JupyterKernelSession` runs a persistent `ipykernel` through
+  `jupyter_client`. Variables persist between executed cells.
+- The kernel bootstrap exposes `train_df`, `val_df`, `target_col`, `pd`, and
+  `np`; hidden test data is never copied into the episode workspace or injected
+  into the kernel.
+- `restart_and_run_all` fully restarts the kernel, reinjects bootstrap context,
+  executes the current notebook top-to-bottom, saves outputs, and marks the
+  notebook reproducible only after success.
+
+Candidate lifecycle:
+
+- `validate` is host-controlled and allowed only after a successful clean run of
+  the current notebook revision.
+- The candidate object is loaded from the clean-run kernel, checked for
+  `predict`, evaluated on raw validation features, and stored in a candidate
+  registry.
+- `submit` is allowed only for the validated clean-run candidate. Hidden test
+  evaluation happens once and the score is private.
+
+Feedback and checklist:
+
+- Feedback is separated into runtime, contract, checklist, and terminal/private
+  channels.
+- `[MODEL CHECK]` is generic contract feedback about raw-input readiness.
+- Checklist hints are generic, selective, and never reveal dataset-specific
+  facts or numeric private coverage to the agent.
+
+Experiment modes:
+
+- `single_shot`: one solution without the interactive notebook loop.
+- `repeated_single_shot`: repeated non-notebook attempts, logged as such.
+- `iterative_no_checklist`: real Jupyter notebook with runtime and contract
+  feedback only.
+- `gym_with_checklist`: the same Jupyter backend and budget plus selective
+  generic checklist hints.
+
+Security boundary:
+
+- The local Jupyter kernel provides real notebook functionality but is not a
+  complete sandbox for untrusted code.
+- The immediate privacy boundary is physical hidden-test isolation: no test
+  files, labels, hidden rows, hidden score, or evaluator diagnostics are exposed
+  to the kernel or agent-facing context.
+- `KernelExecutionBackend` has a local implementation now and a
+  `ContainerJupyterKernelBackend` placeholder for future container isolation.

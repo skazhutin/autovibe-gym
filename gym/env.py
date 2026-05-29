@@ -12,8 +12,8 @@ from .workspace import Workspace
 
 MODEL_VALIDATION_HINT = (
     "[MODEL CHECK] Workspace variable '{model_var}' cannot predict raw validation "
-    "features: {error_type}: {error}. Keep preprocessing attached to the estimator "
-    "so model.predict(raw validation/test features) works at submit time."
+    "features: {error_type}: {error}. The saved candidate must reproduce all "
+    "required preprocessing when called on new raw rows."
 )
 
 MODEL_INTERFACE_HINT = (
@@ -24,7 +24,7 @@ MODEL_INTERFACE_HINT = (
 HIDDEN_TEST_SUBMIT_ERROR = (
     "Submit failed on the hidden test split. The selected model could not predict "
     "raw hidden features. Ensure preprocessing is inside the submitted model or "
-    "pipeline and handles unseen validation/test values."
+    "pipeline and handles unseen validation/test values. Error type: {error_type}."
 )
 
 
@@ -69,6 +69,8 @@ class GymEnv:
         metric_name: str = "score",
         max_steps: int = 20,
         sandbox_timeout: int = 60,
+        executor_backend: str | None = None,
+        sandbox_image: str | None = None,
         model_validation_rows: int = 32,
     ):
         workspace = Workspace(train=train, val=val, target_col=target_col)
@@ -82,7 +84,11 @@ class GymEnv:
             workspace=workspace,
         )
         self.metric_fn = metric_fn
-        self.executor = CodeExecutor(timeout=sandbox_timeout)
+        self.executor = CodeExecutor(
+            timeout=sandbox_timeout,
+            backend=executor_backend,
+            docker_image=sandbox_image,
+        )
         self.checklist = Checklist(target_col=target_col)
         self.model_validation_rows = model_validation_rows
         self._start_time = time.time()
@@ -140,8 +146,8 @@ class GymEnv:
 
         try:
             self.submit(model, model_var=model_var)
-        except Exception:
-            return self._submit_failure_observation(model_var)
+        except Exception as exc:
+            return self._submit_failure_observation(model_var, exc)
         return self.state.history[-1]
 
     def submit(self, model: Any, model_var: str | None = None) -> float:
@@ -180,7 +186,7 @@ class GymEnv:
             action="submit",
             step=self.state.step,
             budget_remaining=self.budget_remaining(),
-            stdout=f"{self.state.metric_name}={score:.4f}",
+            stdout="[SUBMITTED] Final candidate accepted. Episode finished.",
             checklist_coverage=self.checklist.coverage(),
             done=True,
             submitted=True,
@@ -306,13 +312,19 @@ class GymEnv:
             )
         return None
 
-    def _submit_failure_observation(self, model_var: str | None) -> Observation:
+    def _submit_failure_observation(
+        self,
+        model_var: str | None,
+        exc: Exception,
+    ) -> Observation:
         self.state.submitted = True
         observation = Observation(
             action="submit",
             step=self.state.step,
             budget_remaining=self.budget_remaining(),
-            stderr=HIDDEN_TEST_SUBMIT_ERROR,
+            stderr=HIDDEN_TEST_SUBMIT_ERROR.format(
+                error_type=type(exc).__name__,
+            ),
             checklist_coverage=self.checklist.coverage(),
             done=True,
             submitted=True,

@@ -1,31 +1,42 @@
-# Datasets
+# Example Datasets
 
-Each dataset follows:
+This directory intentionally contains only curated example datasets for local
+smoke tests, CI, and demos of the AutoVibe Gym dataset pipeline.
 
-```
-<dataset_name>/
-  config.json
+Only these five dataset folders are allowed to be committed:
+
+- `example_dry_bean`
+- `example_student_dropout`
+- `example_room_occupancy`
+- `example_naticusdroid`
+- `example_phiusiil_phishing`
+
+Each example dataset follows:
+
+```text
+example_<dataset_name>/
+  config.yaml
   raw_data/
-  prepared/
+    .gitkeep
+    <source archive>.zip
+  prepared/        # generated locally, ignored by git
 ```
 
-- `raw_data/`: source files provided by project team.
-- `prepared/`: generated `train.csv`, `val.csv`, `test.csv`, `meta.json`.
-- `config.json`: declarative preparation settings.
+The `config.yaml` files and the raw zip archives for these five examples are
+committed so a fresh clone can run the dataset pipeline without manual uploads.
+Prepared outputs such as `train.csv`, `val.csv`, `test.csv`, and `meta.json` are
+generated locally and ignored.
+
+No other dataset folders should be committed under `datasets/`: not configs, not
+raw files, not prepared splits. The repository `.gitignore` enforces this by
+allowing only the five `example_*` directories above.
 
 Commands:
 
 ```bash
 python scripts/prepare_datasets.py --list
-python scripts/prepare_datasets.py --dataset dry_bean
+python scripts/prepare_datasets.py --dataset example_dry_bean
 python scripts/prepare_datasets.py --suite example_datasets
 ```
 
-Example datasets:
-- student_dropout — mixed_features_imbalanced_multiclass
-- room_occupancy — temporal_sensor_leakage_discipline
-- naticusdroid — high_dimensional_binary_security_domain
-- phiusiil_phishing — large_mixed_features_suspicious_columns
-- dry_bean — fast_numeric_multiclass_smoke_test
-
-Preparation does not perform ML preprocessing for the agent.
+These examples are for pipeline validation, not canonical benchmark claims.

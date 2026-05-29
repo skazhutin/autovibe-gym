@@ -38,6 +38,7 @@ class EnvProtocolTests(unittest.TestCase):
             metric_fn=accuracy,
             metric_name="accuracy",
             max_steps=3,
+            executor_backend="subprocess",
         )
 
     def test_action_json_parsing(self):

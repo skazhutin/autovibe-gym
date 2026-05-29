@@ -421,3 +421,184 @@ LLM часто делает preprocessing вручную на train, напри�
 | ADR-008 | JSON Action / Observation протокол | ✅ Done |
 | ADR-009 | CellHistory поверх Workspace | ✅ Done |
 | ADR-010 | Pre-flight validation + `[MODEL CHECK]` hints | ✅ Done |
+| ADR-011 | Real Jupyter notebook + ipykernel backend | ✅ Done |
+| ADR-012 | Persistent interaction + mandatory clean replay | ✅ Done |
+| ADR-013 | Environment-controlled validate before submit | ✅ Done |
+| ADR-014 | Feedback channel separation | ✅ Done |
+| ADR-015 | Generic selective hidden-checklist policy | ✅ Done |
+
+---
+
+## ADR-011: Real Jupyter notebook as the iterative environment
+
+**Status:** Accepted
+**Date:** 2026-05-29
+
+### Context
+The previous runtime behaved like a notebook but stored a custom cell history
+and executed code through a subprocess namespace. That was useful for early
+experiments, but it could not faithfully model notebook editing, rich outputs,
+dirty interactive state, or clean replay.
+
+### Decision
+Use a real nbformat v4 `.ipynb` file and a persistent `ipykernel` session for
+iterative Gym episodes. `NotebookDocument` owns the notebook document and
+`JupyterKernelSession` executes authored code cells through the Jupyter message
+protocol. Legacy `code` actions are mapped to "add code cell and execute".
+
+### Consequences
+Episodes now save `solution.ipynb`, `final_notebook.ipynb`,
+`final_notebook.py`, `notebook_events.json`, `feedback_trace.json`,
+`validation_trajectory.json`, and `episode_summary.json`. Rich outputs stay in
+the notebook, while agent feedback receives compact text.
+
+---
+
+## ADR-012: Persistent interaction plus mandatory clean replay
+
+**Status:** Accepted
+**Date:** 2026-05-29
+
+### Context
+Interactive notebooks can contain stale variables from deleted or edited cells.
+Validation based only on the current kernel can accept a solution that cannot be
+reproduced.
+
+### Decision
+`restart_and_run_all` terminates the current kernel, starts a new kernel,
+injects the allowed bootstrap context, executes the current notebook top to
+bottom, saves real outputs, and records a clean-run id. Editing or running cells
+after a clean run invalidates validation until another clean run succeeds.
+
+### Consequences
+`validate` and `submit` are blocked unless the current notebook revision matches
+the latest successful clean run.
+
+---
+
+## ADR-013: Environment-controlled validate before submit
+
+**Status:** Accepted
+**Date:** 2026-05-29
+
+### Context
+Candidate readiness checks after every cell are expensive and can produce side
+effects. Hidden test evaluation must remain one-shot and private.
+
+### Decision
+The agent must call `validate` explicitly. The environment extracts the named
+model from the clean-run kernel, checks `predict`, evaluates raw validation
+features host-side, stores a `CandidateRecord`, and returns only the validation
+metric. `submit` is allowed only for the validated clean-run candidate.
+
+### Consequences
+`[MODEL CHECK]` is contract feedback during validate/submit readiness checks,
+not an automatic post-cell side effect.
+
+---
+
+## ADR-014: Feedback channel separation
+
+**Status:** Accepted
+**Date:** 2026-05-29
+
+### Context
+Runtime errors, contract violations, checklist hints, and private evaluator
+state have different visibility rules.
+
+### Decision
+Use explicit feedback items with `runtime`, `contract`, `checklist`, and
+`terminal` channels. Runtime and contract feedback can be visible to all
+iterative modes. Checklist feedback is visible only in `gym_with_checklist`.
+Terminal/private evaluation details are never sent to the agent.
+
+### Consequences
+Agent-facing messages no longer contain private checklist coverage or hidden
+test metrics.
+
+---
+
+## ADR-015: Generic selective hidden-checklist policy
+
+**Status:** Accepted
+**Date:** 2026-05-29
+
+### Context
+Dataset-specific hints can leak facts that the LLM should discover by analysis.
+Mandatory tuning/feature-engineering requirements can make small-budget agents
+worse.
+
+### Decision
+Use a generic checklist covering task understanding, schema review, target
+distribution, missing values, categorical/cardinality audit, duplicates,
+suspicious columns, target exclusion, reproducibility, validation, and
+raw-input readiness. Emit at most one generic hint per eligible execution, with
+cooldown and suppression on runtime or contract blockers.
+
+### Consequences
+Coverage is private. Hints ask the agent to check whether issues exist; they do
+not reveal dataset properties or prescribe specific sklearn components.
+
+---
+
+## ADR-016: Hidden test score privacy
+
+**Status:** Accepted
+**Date:** 2026-05-29
+
+### Context
+Returning the hidden score to the LLM after submit contaminates interaction
+history and weakens experimental validity.
+
+### Decision
+Successful submit returns only `[SUBMITTED] Final candidate accepted. Episode
+finished.` to agent-facing context. Hidden score is stored only in private
+summary and MLflow metrics. Hidden-test failures remain generic and omit hidden
+rows, labels, categories, and score.
+
+### Consequences
+Tests assert the hidden score is absent from feedback traces and notebook
+outputs while still present in private summaries.
+
+---
+
+## ADR-017: Iterative no-checklist as the fair control
+
+**Status:** Accepted
+**Date:** 2026-05-29
+
+### Context
+The previous multishot runner was not the right control for checklist feedback
+because it did not use the same notebook environment.
+
+### Decision
+Define `EpisodeMode` and run both `iterative_no_checklist` and
+`gym_with_checklist` through the same Jupyter backend, action protocol, budget,
+runtime feedback, and contract feedback. The only behavioral difference is
+checklist feedback visibility.
+
+### Consequences
+`experiments.run_multishot` is logged as `repeated_single_shot`; the fair
+checklist ablation is `experiments.run_gym --episode-mode iterative_no_checklist`.
+
+---
+
+## ADR-018: Security boundary for the local Jupyter backend
+
+**Status:** Accepted
+**Date:** 2026-05-29
+
+### Context
+A real local Jupyter kernel gives notebook fidelity but not full isolation for
+untrusted code.
+
+### Decision
+For this PR, use `LocalJupyterKernelBackend`, sanitize common secret
+environment variables, and physically keep hidden evaluator artifacts outside
+the episode workspace. Define `KernelExecutionBackend` and a future
+`ContainerJupyterKernelBackend` placeholder for container isolation.
+
+### Consequences
+Hidden test isolation is enforced now. Full filesystem/network/CPU/RAM sandbox
+for notebook kernels remains future work and is documented as a limitation.
+>>>>>>> eba926e (feat(gym): add real jupyter notebook environment)

@@ -1,14 +1,17 @@
 import argparse
 import json
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
+import yaml
 from sklearn.model_selection import train_test_split
 
 DATASETS_ROOT = Path("datasets")
 _FRACTION_TOLERANCE = 1e-6
+CONFIG_FILENAMES = ("config.yaml", "config.yml")
 
 
 @dataclass(frozen=True)
@@ -31,7 +34,7 @@ def discover_dataset_dirs(datasets_root: Path) -> dict[str, Path]:
     for child in datasets_root.iterdir():
         if not child.is_dir():
             continue
-        if (child / "config.json").exists():
+        if _config_path(child) is not None:
             discovered[child.name] = child
         elif (child / "meta.json").exists() and (child / "train.csv").exists():
             discovered[child.name] = child
@@ -39,8 +42,8 @@ def discover_dataset_dirs(datasets_root: Path) -> dict[str, Path]:
 
 
 def load_dataset_config(dataset_dir: Path) -> DatasetConfig:
-    cfg_path = dataset_dir / "config.json"
-    if not cfg_path.exists():
+    cfg_path = _config_path(dataset_dir)
+    if cfg_path is None:
         # legacy
         meta = json.loads((dataset_dir / "meta.json").read_text(encoding="utf-8"))
         return DatasetConfig(
@@ -54,7 +57,9 @@ def load_dataset_config(dataset_dir: Path) -> DatasetConfig:
             role=meta.get("role"),
             notes=meta.get("notes", {}),
         )
-    raw = json.loads(cfg_path.read_text(encoding="utf-8"))
+    raw = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError(f"Dataset config must be a mapping: {cfg_path}")
     return DatasetConfig(
         name=raw["name"],
         suite=raw.get("suite", "example_datasets"),
@@ -68,10 +73,19 @@ def load_dataset_config(dataset_dir: Path) -> DatasetConfig:
     )
 
 
+def _config_path(dataset_dir: Path) -> Path | None:
+    for filename in CONFIG_FILENAMES:
+        path = dataset_dir / filename
+        if path.exists():
+            return path
+    return None
+
+
 def load_raw_dataframe(dataset_dir: Path, config: DatasetConfig) -> pd.DataFrame:
     files = config.raw_data.get("files", [])
     if not files:
         raise FileNotFoundError(f"No raw_data.files in config for {dataset_dir}")
+    _ensure_raw_files_available(dataset_dir, files)
     frames = []
     opts = config.raw_data.get("read_options", {})
     fmt = config.raw_data.get("format", "csv")
@@ -88,6 +102,54 @@ def load_raw_dataframe(dataset_dir: Path, config: DatasetConfig) -> pd.DataFrame
     if len(frames) == 1:
         return frames[0]
     return pd.concat(frames, ignore_index=True)
+
+
+def _ensure_raw_files_available(dataset_dir: Path, files: list[str]) -> None:
+    missing = [file_name for file_name in files if not (dataset_dir / "raw_data" / file_name).exists()]
+    if not missing:
+        return
+
+    raw_dir = dataset_dir / "raw_data"
+    for archive_path in sorted(raw_dir.glob("*.zip")):
+        with zipfile.ZipFile(archive_path) as archive:
+            _safe_extract_zip(archive, raw_dir, missing)
+        missing = [file_name for file_name in files if not (raw_dir / file_name).exists()]
+        if not missing:
+            return
+
+
+def _raw_files_available(dataset_dir: Path, files: list[str]) -> bool:
+    if not files:
+        return False
+    raw_dir = dataset_dir / "raw_data"
+    missing = [file_name for file_name in files if not (raw_dir / file_name).exists()]
+    if not missing:
+        return True
+    normalized_missing = {Path(file_name).as_posix() for file_name in missing}
+    for archive_path in raw_dir.glob("*.zip"):
+        with zipfile.ZipFile(archive_path) as archive:
+            members = {Path(name).as_posix() for name in archive.namelist()}
+        normalized_missing -= members
+        if not normalized_missing:
+            return True
+    return False
+
+
+def _safe_extract_zip(archive: zipfile.ZipFile, destination: Path, members: list[str]) -> None:
+    destination = destination.resolve()
+    requested = {Path(member).as_posix() for member in members}
+    archive_members = {
+        Path(info.filename).as_posix(): info
+        for info in archive.infolist()
+    }
+    for member_name in requested & archive_members.keys():
+        member = archive_members[member_name]
+        target = (destination / member.filename).resolve()
+        try:
+            target.relative_to(destination)
+        except ValueError as exc:
+            raise ValueError(f"Unsafe zip member path: {member.filename}")
+        archive.extract(member, destination)
 
 
 def apply_declared_preparation(
@@ -222,7 +284,7 @@ def _normalized_value_counts(series: pd.Series) -> dict[str, float]:
 
 def prepare_dataset(dataset_dir: Path, *, max_rows: int | None = None) -> dict[str, Any]:
     config = load_dataset_config(dataset_dir)
-    if not (dataset_dir / "config.json").exists():
+    if _config_path(dataset_dir) is None:
         return {"dataset": dataset_dir.name, "status": "skipped", "reason": "legacy dataset"}
     df = load_raw_dataframe(dataset_dir, config)
     n_rows_source = len(df)
@@ -294,9 +356,9 @@ def main():
     if args.list:
         print("name | suite | task_type | metric | split_strategy | raw_data_status | prepared_status | role")
         for name, ds_dir in discovered.items():
-            if (ds_dir / "config.json").exists():
+            if _config_path(ds_dir) is not None:
                 cfg = load_dataset_config(ds_dir)
-                raw_ok = all((ds_dir / "raw_data" / f).exists() for f in cfg.raw_data.get("files", [])) if cfg.raw_data.get("files") else False
+                raw_ok = _raw_files_available(ds_dir, cfg.raw_data.get("files", []))
                 prepared_ok = (ds_dir / "prepared" / "meta.json").exists() or (ds_dir / "meta.json").exists()
                 print(f"{name} | {cfg.suite} | {cfg.task.get('type')} | {cfg.task.get('metric')} | {cfg.split.get('strategy')} | {'ok' if raw_ok else 'missing'} | {'ok' if prepared_ok else 'missing'} | {cfg.role}")
             else:
@@ -310,7 +372,7 @@ def main():
     elif args.suite:
         to_process = [d for _, d in discovered.items() if (load_dataset_config(d).suite == args.suite)]
     else:
-        to_process = [d for _, d in discovered.items() if (d / "config.json").exists()]
+        to_process = [d for _, d in discovered.items() if _config_path(d) is not None]
 
     summary = []
     for ds_dir in to_process:
