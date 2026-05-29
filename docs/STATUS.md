@@ -1,7 +1,7 @@
 # AutoVibe Gym — Live Status
 
-**Last updated:** 2026-05-29 (all experiments complete, docs final, merging to main)
-**Phase:** All 4 modes × 2 datasets complete. Merging to main.
+**Last updated:** 2026-05-29 (all experiments complete, docs final, merged to main)
+**Phase:** COMPLETE. All 4 modes × 2 datasets. All 47 tests passing. Pushed to main.
 
 ---
 
@@ -105,7 +105,7 @@ Complete all TZ deliverables: 4 modes × 2 datasets, Protocol spec, Reproducibil
 
 1. [x] Завершить эксперименты room_occupancy — все 4 режима запущены и завершены
 2. [x] Обновить EXPERIMENT_REPORT.md с результатами
-3. [ ] Смержить в main
+3. [x] Смержить в main — commit 983ec54 pushed to origin/main 2026-05-29
 
 ---
 

@@ -19,14 +19,17 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--experiment", default="autovibe-gym")
     parser.add_argument("--metric", default="test_metric")
+    parser.add_argument("--dataset", default=None, help="Filter by dataset name")
     parser.add_argument("--output", default=None, help="Save CSV to this path")
     args = parser.parse_args()
 
     tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
     mlflow.set_tracking_uri(tracking_uri)
 
+    filter_str = f"params.dataset = '{args.dataset}'" if args.dataset else None
     runs = mlflow.search_runs(
         experiment_names=[args.experiment],
+        filter_string=filter_str,
         order_by=[f"metrics.{args.metric} DESC"],
     )
 

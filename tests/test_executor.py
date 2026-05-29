@@ -54,6 +54,31 @@ def test_import_pandas(executor):
     assert stderr == ""
 
 
+def test_cwd_is_tmpdir_not_project_root(tmp_path):
+    """Subprocess cwd must be an isolated tmpdir — not the caller's directory.
+
+    This is the core privacy guarantee: agent code cannot read test.csv by
+    relative path even if test.csv sits alongside the training data.
+    """
+    # Write a sentinel file in a test-controlled directory
+    sentinel = tmp_path / "test.csv"
+    sentinel.write_text("secret_label\n1\n0\n")
+
+    import os
+    original_cwd = os.getcwd()
+    os.chdir(tmp_path)           # pretend project cwd contains test.csv
+    try:
+        executor = CodeExecutor(timeout=10)
+        stdout, stderr, ns = executor.run(
+            "import pandas as pd\ndf = pd.read_csv('test.csv')\nprint('LEAKED')"
+        )
+    finally:
+        os.chdir(original_cwd)
+
+    assert "LEAKED" not in stdout, "test.csv was readable — cwd isolation failed"
+    assert stderr.strip() != "", "Expected FileNotFoundError in stderr"
+
+
 def test_sklearn_model_survives_pickle(executor):
     """Trained sklearn model must survive namespace serialisation."""
     code = """
