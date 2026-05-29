@@ -9,11 +9,101 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from queue import Empty
 from typing import Any, Protocol
 
 from jupyter_client import BlockingKernelClient, KernelManager
 from nbformat.v4 import output_from_msg
+
+
+_DOCKER_EXECUTE_SCRIPT = r"""
+import json
+import sys
+import time
+
+from jupyter_client import BlockingKernelClient
+from nbformat.v4 import output_from_msg
+
+payload = json.load(sys.stdin)
+with open(payload["connection_file"], encoding="utf-8") as fh:
+    connection_info = json.load(fh)
+connection_info["ip"] = "127.0.0.1"
+
+client = BlockingKernelClient()
+client.load_connection_info(connection_info)
+client.start_channels()
+
+started = time.time()
+msg_id = client.execute(
+    payload["source"],
+    store_history=bool(payload["store_history"]),
+    allow_stdin=False,
+)
+result = {
+    "execution_count": None,
+    "outputs": [],
+    "stdout": "",
+    "stderr": "",
+    "error_name": None,
+    "error_value": None,
+    "traceback": [],
+    "display_outputs": [],
+    "success": True,
+    "elapsed_seconds": 0.0,
+}
+
+try:
+    while True:
+        try:
+            msg = client.get_iopub_msg(timeout=1)
+        except Exception:
+            continue
+
+        if msg.get("parent_header", {}).get("msg_id") != msg_id:
+            continue
+
+        msg_type = msg.get("msg_type")
+        content = msg.get("content", {})
+
+        if msg_type == "status" and content.get("execution_state") == "idle":
+            break
+        if msg_type == "execute_input":
+            result["execution_count"] = content.get("execution_count")
+            continue
+        if msg_type not in {"stream", "execute_result", "display_data", "error"}:
+            continue
+
+        try:
+            output = output_from_msg(msg)
+        except Exception:
+            output = None
+        if output is not None:
+            result["outputs"].append(output)
+
+        if msg_type == "stream":
+            text = content.get("text", "")
+            if content.get("name") == "stderr":
+                result["stderr"] += text
+            else:
+                result["stdout"] += text
+        elif msg_type in {"execute_result", "display_data"}:
+            if msg_type == "execute_result":
+                result["execution_count"] = content.get(
+                    "execution_count",
+                    result["execution_count"],
+                )
+            result["display_outputs"].append(output or {})
+        elif msg_type == "error":
+            result["success"] = False
+            result["error_name"] = content.get("ename")
+            result["error_value"] = content.get("evalue")
+            result["traceback"] = list(content.get("traceback") or [])
+            result["stderr"] += "\n".join(result["traceback"])
+finally:
+    client.stop_channels()
+
+result["elapsed_seconds"] = round(time.time() - started, 3)
+print(json.dumps(result, default=str))
+"""
 
 
 @dataclass
@@ -351,18 +441,26 @@ class ContainerJupyterKernelSession(_KernelClientMixin):
             )
         self._container_id = proc.stdout.strip()
 
-        kc = BlockingKernelClient()
-        kc.load_connection_info({**conn_info, "ip": "127.0.0.1"})
-        kc.start_channels()
         try:
-            self._wait_for_kernel_info(kc)
+            ready = self.execute_cell(
+                "pass",
+                timeout=min(10, self.timeout),
+                store_history=False,
+            )
         except Exception as exc:
             logs = self._container_logs()
-            kc.stop_channels()
             self.shutdown()
             details = f"\nContainer logs:\n{logs}" if logs else ""
             raise RuntimeError(f"Kernel container did not become ready.{details}") from exc
-        self.client = kc
+        if not ready.success:
+            logs = self._container_logs()
+            self.shutdown()
+            details = f"\nContainer logs:\n{logs}" if logs else ""
+            raise RuntimeError(
+                "Kernel container did not become ready: "
+                f"{ready.error_name}: {ready.error_value}{details}"
+            )
+        self.client = object()
 
     def shutdown(self) -> None:
         if self.client is not None:
@@ -387,20 +485,56 @@ class ContainerJupyterKernelSession(_KernelClientMixin):
         self.kernel_id = str(uuid.uuid4())
         self.start()
 
-    def _wait_for_kernel_info(self, client: BlockingKernelClient) -> None:
-        deadline = time.time() + self.timeout
-        while time.time() < deadline:
-            client.kernel_info()
-            try:
-                msg = client.shell_channel.get_msg(timeout=1)
-            except Empty:
-                continue
-            if msg.get("msg_type") == "kernel_info_reply":
-                handler = getattr(client, "_handle_kernel_info_reply", None)
-                if handler is not None:
-                    handler(msg)
-                return
-        raise RuntimeError(f"Kernel did not reply to kernel_info in {self.timeout} seconds")
+    def execute_cell(
+        self,
+        source: str,
+        *,
+        timeout: int | None = None,
+        store_history: bool = True,
+    ) -> CellExecutionResult:
+        if self._container_id is None:
+            raise RuntimeError("Jupyter kernel container is not started.")
+
+        effective_timeout = timeout or self.timeout
+        payload = {
+            "connection_file": f"/workspace/{self._CONN_FILE}",
+            "source": source,
+            "store_history": store_history,
+        }
+        try:
+            proc = subprocess.run(
+                [
+                    _docker_binary(),
+                    "exec",
+                    "-i",
+                    self._container_id,
+                    "python",
+                    "-c",
+                    _DOCKER_EXECUTE_SCRIPT,
+                ],
+                input=json.dumps(payload),
+                capture_output=True,
+                text=True,
+                timeout=effective_timeout + 5,
+            )
+        except subprocess.TimeoutExpired:
+            self._interrupt_kernel()
+            return _timeout_result(effective_timeout)
+
+        if proc.returncode != 0:
+            raise RuntimeError(
+                "Failed to execute code through Docker kernel client: "
+                f"{proc.stderr.strip()}"
+            )
+
+        try:
+            data = json.loads(proc.stdout)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                "Docker kernel client returned invalid JSON: "
+                f"{proc.stdout.strip()} {proc.stderr.strip()}"
+            ) from exc
+        return CellExecutionResult(**data)
 
     def _interrupt_kernel(self) -> None:
         if self._container_id is None:
@@ -577,6 +711,24 @@ def _docker_user_args() -> list[str]:
     if os.name == "nt" or not hasattr(os, "getuid") or not hasattr(os, "getgid"):
         return []
     return ["--user", f"{os.getuid()}:{os.getgid()}"]
+
+
+def _timeout_result(timeout: int) -> CellExecutionResult:
+    error_value = f"Cell execution exceeded {timeout}s"
+    return CellExecutionResult(
+        success=False,
+        error_name="TimeoutError",
+        error_value=error_value,
+        stderr=error_value,
+        outputs=[
+            {
+                "output_type": "error",
+                "ename": "TimeoutError",
+                "evalue": error_value,
+                "traceback": [error_value],
+            }
+        ],
+    )
 
 
 def _int_env(env_var: str, override: int | None, default: int) -> int:

@@ -1,3 +1,4 @@
+import json
 import types
 
 import pandas as pd
@@ -84,6 +85,25 @@ def _make_fake_subprocess(container_id="abc123", returncode=0):
 
     def fake_run(command, **kwargs):
         calls.append(command)
+        if "exec" in command:
+            return types.SimpleNamespace(
+                stdout=json.dumps(
+                    {
+                        "execution_count": None,
+                        "outputs": [],
+                        "stdout": "",
+                        "stderr": "",
+                        "error_name": None,
+                        "error_value": None,
+                        "traceback": [],
+                        "display_outputs": [],
+                        "success": True,
+                        "elapsed_seconds": 0.0,
+                    }
+                ),
+                stderr="",
+                returncode=0,
+            )
         return types.SimpleNamespace(
             stdout=container_id + "\n",
             stderr="",
