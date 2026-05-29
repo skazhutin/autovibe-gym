@@ -17,6 +17,7 @@ from .notebook_env import NotebookGymEnv
 from .jupyter_kernel import (
     CellExecutionResult,
     ContainerJupyterKernelBackend,
+    ContainerJupyterKernelSession,
     JupyterKernelSession,
     LocalJupyterKernelBackend,
 )
@@ -32,6 +33,7 @@ __all__ = [
     "Checklist",
     "CodeExecutor",
     "ContainerJupyterKernelBackend",
+    "ContainerJupyterKernelSession",
     "DatasetMetadata",
     "DatasetSplits",
     "EpisodeMode",

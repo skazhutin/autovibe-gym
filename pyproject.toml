@@ -46,3 +46,6 @@ namespaces = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+  "integration: end-to-end tests requiring external services (Docker, network)",
+]

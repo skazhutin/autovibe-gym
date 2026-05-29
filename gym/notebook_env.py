@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 import pickle
 import shutil
 import tempfile
@@ -23,6 +24,14 @@ from .jupyter_kernel import (
 from .modes import EpisodeMode, resolve_episode_mode
 from .notebook import NotebookDocument
 from .protocol import Action, Observation, coerce_action
+
+
+def _default_kernel_backend() -> KernelExecutionBackend:
+    mode = os.getenv("AUTOVIBE_KERNEL_BACKEND", "local").lower()
+    if mode == "docker":
+        from .jupyter_kernel import ContainerJupyterKernelBackend
+        return ContainerJupyterKernelBackend()
+    return LocalJupyterKernelBackend()
 
 
 MODEL_INTERFACE_MESSAGE = (
@@ -99,7 +108,7 @@ class NotebookGymEnv:
         self.workspace_dir = Path(workspace_dir).resolve() if workspace_dir else Path(
             tempfile.mkdtemp(prefix="autovibe_episode_")
         ).resolve()
-        self.backend = backend or LocalJupyterKernelBackend()
+        self.backend = backend or _default_kernel_backend()
         self.kernel_timeout = kernel_timeout
         self.kernel = self.backend.create_session(self.workspace_dir)
         self.notebook = NotebookDocument.create(self.workspace_dir / "solution.ipynb")
