@@ -81,4 +81,4 @@ def test_to_markdown_includes_submit_result():
 
     assert "# AutoVibe Gym Cell History" in markdown
     assert "Submitted model: best_model" in markdown
-    assert "Test metric: 0.9" in markdown
+    assert "Test metric: 0.9" not in markdown

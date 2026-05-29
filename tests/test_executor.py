@@ -1,11 +1,13 @@
 """Tests for CodeExecutor — no LLM or server required."""
+import types
+
 import pytest
 from gym.executor import CodeExecutor
 
 
 @pytest.fixture
 def executor():
-    return CodeExecutor(timeout=10)
+    return CodeExecutor(timeout=10, backend="subprocess")
 
 
 def test_basic_execution(executor):
@@ -41,7 +43,7 @@ def test_runtime_error_captured(executor):
 
 
 def test_timeout(tmp_path):
-    fast_executor = CodeExecutor(timeout=2)
+    fast_executor = CodeExecutor(timeout=2, backend="subprocess")
     stdout, stderr, ns = fast_executor.run("import time\ntime.sleep(10)")
     assert "timed out" in stderr.lower()
 
@@ -94,3 +96,76 @@ print("fitted")
     assert "fitted" in stdout
     assert "model" in ns
     assert hasattr(ns["model"], "predict")
+
+
+def test_subprocess_backend_does_not_inherit_secret_env(monkeypatch, executor):
+    monkeypatch.setenv("GEMINI_API_KEY", "secret-token")
+
+    stdout, stderr, ns = executor.run(
+        "import os\nprint(os.getenv('GEMINI_API_KEY'))"
+    )
+
+    assert "None" in stdout
+    assert "secret-token" not in stdout
+    assert stderr == ""
+
+
+def test_subprocess_backend_blocks_network(executor):
+    stdout, stderr, ns = executor.run(
+        "import socket\nsocket.create_connection(('example.com', 80), timeout=1)"
+    )
+
+    assert "Network access is disabled" in stderr
+
+
+def test_subprocess_backend_blocks_external_file_reads(tmp_path, executor):
+    secret = tmp_path / "secret.txt"
+    secret.write_text("hidden", encoding="utf-8")
+
+    stdout, stderr, ns = executor.run(f"open({str(secret)!r}).read()")
+
+    assert "Sandbox read outside allowed roots is blocked" in stderr
+
+
+def test_docker_backend_builds_locked_down_command(monkeypatch):
+    captured = {}
+
+    def fake_run(command, **kwargs):
+        captured["command"] = command
+        captured["kwargs"] = kwargs
+        return types.SimpleNamespace(stdout="", stderr="")
+
+    monkeypatch.setattr("gym.executor.subprocess.run", fake_run)
+    executor = CodeExecutor(
+        timeout=10,
+        backend="docker",
+        docker_image="autovibe-test-sandbox",
+    )
+
+    stdout, stderr, ns = executor.run("x = 1")
+
+    command = captured["command"]
+    joined = " ".join(command)
+    assert command[:3] == ["docker", "run", "--rm"]
+    assert "--network none" in joined
+    assert "--read-only" in command
+    assert "--cap-drop ALL" in joined
+    assert "--security-opt no-new-privileges" in joined
+    assert "--memory 2048m" in joined
+    assert "--pids-limit 128" in joined
+    assert "--entrypoint python" in joined
+    assert "autovibe-test-sandbox" in command
+    assert "GEMINI_API_KEY" not in joined
+
+
+def test_docker_backend_reports_missing_cli(monkeypatch):
+    def fake_run(command, **kwargs):
+        raise FileNotFoundError()
+
+    monkeypatch.setattr("gym.executor.subprocess.run", fake_run)
+    executor = CodeExecutor(timeout=10, backend="docker")
+
+    stdout, stderr, ns = executor.run("print(1)")
+
+    assert stdout == ""
+    assert "Docker backend is enabled" in stderr

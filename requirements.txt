@@ -1,6 +1,8 @@
 # LLM client (OpenAI-compatible — works with vLLM, OpenAI, proxies)
 openai>=1.40.0
+google-genai>=1.0.0
 python-dotenv>=1.0.0
+PyYAML>=6.0.0
 
 # Data & ML
 openpyxl>=3.1.0
@@ -12,6 +14,12 @@ lightgbm>=4.0.0
 
 # Experiment tracking (local MLflow server)
 mlflow>=2.14.0
+
+# Real notebook backend
+nbformat>=5.10.0
+nbclient>=0.10.0
+jupyter_client>=8.6.0
+ipykernel>=6.29.0
 
 # Tests
 pytest>=8.0.0

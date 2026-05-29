@@ -16,8 +16,9 @@ env/
 .env.*.local
 *.key
 
-# MLflow tracking — generated experiment data
+# MLflow tracking - generated experiment data
 mlruns/
+mlflow.db
 
 # Generic outputs/logs
 runs/
@@ -25,16 +26,62 @@ outputs/
 results/
 *.log
 *.jsonl
+.coverage
+coverage.xml
+htmlcov/
 
-# Keep dataset configs/docs; ignore generated tables by default
-# and selectively unignore example dataset artifacts.
+# Dataset policy:
+# - only the five curated example_* datasets are committed
+# - every other datasets/<name>/ folder is ignored completely, including configs
+# - generated prepared splits stay ignored even inside example datasets
+datasets/*
+!datasets/README.md
+
+!datasets/example_dry_bean/
+!datasets/example_naticusdroid/
+!datasets/example_phiusiil_phishing/
+!datasets/example_room_occupancy/
+!datasets/example_student_dropout/
+
 datasets/**/*.csv
 datasets/**/*.parquet
 datasets/**/*.xlsx
 datasets/**/*.json
-!datasets/README.md
-!datasets/*/config.json
-!datasets/*/raw_data/.gitkeep
+datasets/**/*.yaml
+datasets/**/*.yml
+datasets/**/prepared/
+datasets/**/raw_data/*
+
+!datasets/example_dry_bean/config.yaml
+!datasets/example_dry_bean/raw_data/
+!datasets/example_dry_bean/raw_data/.gitkeep
+!datasets/example_dry_bean/raw_data/*.zip
+
+!datasets/example_naticusdroid/config.yaml
+!datasets/example_naticusdroid/raw_data/
+!datasets/example_naticusdroid/raw_data/.gitkeep
+!datasets/example_naticusdroid/raw_data/*.zip
+
+!datasets/example_phiusiil_phishing/config.yaml
+!datasets/example_phiusiil_phishing/raw_data/
+!datasets/example_phiusiil_phishing/raw_data/.gitkeep
+!datasets/example_phiusiil_phishing/raw_data/*.zip
+
+!datasets/example_room_occupancy/config.yaml
+!datasets/example_room_occupancy/raw_data/
+!datasets/example_room_occupancy/raw_data/.gitkeep
+!datasets/example_room_occupancy/raw_data/*.zip
+
+!datasets/example_student_dropout/config.yaml
+!datasets/example_student_dropout/raw_data/
+!datasets/example_student_dropout/raw_data/.gitkeep
+!datasets/example_student_dropout/raw_data/*.zip
+
+# Non-example raw dataset uploads remain ignored.
+datasets/*/raw_data/*.zip
+datasets/*/raw_data/**/*.arff
+datasets/*/raw_data/**/*.xlsx
+datasets/*/raw_data/**/*.txt
 
 # AI agent artifacts
 .claude/
@@ -54,9 +101,3 @@ memory/
 *.swo
 .DS_Store
 Thumbs.db
-
-# Local raw dataset archives (manual upload, not committed)
-datasets/*/raw_data/*.zip
-datasets/*/raw_data/**/*.arff
-datasets/*/raw_data/**/*.xlsx
-datasets/*/raw_data/**/*.txt

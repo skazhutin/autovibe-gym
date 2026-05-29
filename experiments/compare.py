@@ -6,11 +6,12 @@ Usage:
     python -m experiments.compare --experiment autovibe-gym --metric test_metric
 """
 import argparse
-import os
 
 import mlflow
 import pandas as pd
 from dotenv import load_dotenv
+
+from experiments.mlflow_config import configure_mlflow_tracking
 
 load_dotenv()
 
@@ -23,8 +24,7 @@ def main():
     parser.add_argument("--output", default=None, help="Save CSV to this path")
     args = parser.parse_args()
 
-    tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
-    mlflow.set_tracking_uri(tracking_uri)
+    configure_mlflow_tracking(mlflow)
 
     filter_str = f"params.dataset = '{args.dataset}'" if args.dataset else None
     runs = mlflow.search_runs(
@@ -46,6 +46,8 @@ def main():
         "metrics.checklist_coverage": "checklist_cov",
         "metrics.steps_used": "steps",
         "metrics.error_count": "errors",
+        "metrics.has_test_metric": "has_metric",
+        "metrics.submit_failed": "submit_failed",
         "metrics.input_tokens": "in_tokens",
         "metrics.output_tokens": "out_tokens",
         "metrics.elapsed_seconds": "elapsed_s",
@@ -53,7 +55,8 @@ def main():
 
     available = {k: v for k, v in cols.items() if k in runs.columns}
     table = runs[list(available.keys())].rename(columns=available)
-    table = table.sort_values(args.metric, ascending=False)
+    if args.metric in table.columns:
+        table = table.sort_values(args.metric, ascending=False)
 
     pd.set_option("display.max_columns", None)
     pd.set_option("display.width", 160)

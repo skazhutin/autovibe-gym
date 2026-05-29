@@ -110,7 +110,7 @@ class CellHistory:
                 lines.append("error:")
                 lines.append(_indent(_clip(cell.stderr.strip(), max_output_chars)))
             if cell.submitted:
-                lines.append(f"submitted model={cell.model_var} metric={cell.test_metric}")
+                lines.append(f"submitted model={cell.model_var}")
         return "\n".join(lines)
 
     def to_markdown(self) -> str:
@@ -130,7 +130,6 @@ class CellHistory:
             ])
             if cell.submitted:
                 lines.append(f"- Submitted model: {cell.model_var}")
-                lines.append(f"- Test metric: {cell.test_metric}")
             if cell.code.strip():
                 lines.extend(["", "```python", cell.code.strip(), "```"])
             if cell.stdout.strip():

@@ -28,6 +28,7 @@ def _make_env(max_steps=5):
         metric_fn=metric_fn,
         metric_name="f1_weighted",
         max_steps=max_steps,
+        executor_backend="subprocess",
     )
 
 
@@ -56,6 +57,7 @@ def _make_categorical_env():
         metric_fn=metric_fn,
         metric_name="f1_weighted",
         max_steps=5,
+        executor_backend="subprocess",
     )
 
 
@@ -268,6 +270,7 @@ def test_hidden_test_failure_closes_without_leaking_hidden_values():
         metric_fn=metric_fn,
         metric_name="f1_weighted",
         max_steps=5,
+        executor_backend="subprocess",
     )
     env.reset()
     train_result = env.step({

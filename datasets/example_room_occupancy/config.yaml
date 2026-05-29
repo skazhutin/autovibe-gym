@@ -1,0 +1,35 @@
+name: example_room_occupancy
+suite: example_datasets
+source:
+  type: local_file
+  provider: example dataset supplied by project team
+  reference: example_room_occupancy
+  license: unknown
+raw_data:
+  files:
+  - Occupancy_Estimation.csv
+  format: csv
+  read_options:
+    sep: ','
+    encoding: utf-8
+task:
+  type: classification
+  target_col: Room_Occupancy_Count
+  metric: f1_macro
+split:
+  strategy: temporal
+  train_fraction: 0.7
+  val_fraction: 0.15
+  test_fraction: 0.15
+  timestamp:
+    source_columns:
+    - Date
+    - Time
+    format: null
+preparation:
+  target_mapping: null
+  drop_columns: []
+  sampling: null
+role: temporal_sensor_leakage_discipline
+notes:
+  contamination_risk: reduced_vs_canonical_benchmarks

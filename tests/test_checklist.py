@@ -1,5 +1,6 @@
-"""Tests for Checklist — no LLM or server required."""
+"""Tests for generic Checklist wrapper."""
 import pytest
+
 from gym.checklist import Checklist
 
 
@@ -12,85 +13,79 @@ def test_initial_coverage_zero(cl):
     assert cl.coverage() == 0.0
 
 
-def test_eda_check(cl):
-    cl.evaluate(code="print(df.describe())", stdout="", namespace={}, history=[])
-    assert cl.items["eda"].passed
+def test_behavioral_schema_check_requires_output(cl):
+    cl.evaluate(code="train_df.shape", stdout="", namespace={}, history=[])
+    assert not cl.items["schema_review"].passed
+
+    cl.evaluate(code="print(train_df.shape)", stdout="(10, 3)", namespace={}, history=[])
+    assert cl.items["schema_review"].passed
 
 
-def test_missing_values_check(cl):
-    cl.evaluate(code="df.isnull().sum()", stdout="", namespace={}, history=[])
-    assert cl.items["missing_values"].passed
+def test_missing_values_check_is_generic(cl):
+    hints = cl.evaluate(
+        code="print(train_df.isnull().sum())",
+        stdout="x    0",
+        namespace={},
+        history=[],
+    )
+
+    assert cl.items["missing_values_audit"].passed
+    assert len(hints) <= 1
+    assert all("SimpleImputer" not in hint for hint in hints)
 
 
-def test_duplicates_check(cl):
-    cl.evaluate(code="df.drop_duplicates(inplace=True)", stdout="", namespace={}, history=[])
-    assert cl.items["duplicates"].passed
+def test_target_distribution_and_exclusion_checks(cl):
+    cl.evaluate(
+        code="print(train_df['quality'].value_counts())",
+        stdout="0    5\n1    5",
+        namespace={},
+        history=[],
+    )
+    cl.evaluate(
+        code="X_train = train_df.drop(columns=['quality']); print(X_train.columns)",
+        stdout="Index(['x'], dtype='object')",
+        namespace={},
+        history=[],
+    )
+
+    assert cl.items["target_distribution_review"].passed
+    assert cl.items["target_exclusion"].passed
 
 
-def test_target_leak_check_drop(cl):
-    cl.evaluate(code="X = df.drop('quality', axis=1)", stdout="", namespace={}, history=[])
-    assert cl.items["target_leak"].passed
+def test_duplicate_and_suspicious_column_checks(cl):
+    cl.evaluate(
+        code="print(train_df.duplicated().sum())",
+        stdout="0",
+        namespace={},
+        history=[],
+    )
+    cl.evaluate(
+        code="print(train_df.nunique())",
+        stdout="id    100",
+        namespace={},
+        history=[],
+    )
+
+    assert cl.items["duplicates_audit"].passed
+    assert cl.items["suspicious_columns_audit"].passed
 
 
-def test_target_leak_check_X_train(cl):
-    cl.evaluate(code="X_train = train_df.drop('quality', axis=1)", stdout="", namespace={}, history=[])
-    assert cl.items["target_leak"].passed
+def test_structural_checks_update_coverage(cl):
+    for key in [
+        "baseline_candidate_created",
+        "validation_evaluated",
+        "reproducible_solution",
+        "submit_ready_artifact",
+    ]:
+        cl.record_structural(key, reason="unit")
+
+    assert cl.items["validation_evaluated"].passed
+    assert cl.coverage() > 0
 
 
-def test_train_val_split_check(cl):
-    cl.evaluate(code="score = model.score(val_df[features], y_val)", stdout="", namespace={}, history=[])
-    assert cl.items["train_val_split"].passed
+def test_hints_are_selective_not_full_private_coverage(cl):
+    hints = cl.evaluate(code="print('hello')", stdout="hello", namespace={}, history=[])
 
-
-def test_feature_engineering_check(cl):
-    cl.evaluate(code="X['log_feat'] = np.log(X['feat'] + 1)", stdout="", namespace={}, history=[])
-    assert cl.items["feature_engineering"].passed
-
-
-def test_model_selection_requires_two_models(cl):
-    from gym.env import StepResult
-
-    step1 = StepResult(action="code", step=1, budget_remaining=9,
-                       code="m = RandomForestClassifier()")
-    # Only one model seen — should not pass
-    cl.evaluate(code="", stdout="", namespace={}, history=[step1])
-    assert not cl.items["model_selection"].passed
-
-    step2 = StepResult(action="code", step=2, budget_remaining=8,
-                       code="m2 = LogisticRegression()")
-    cl.evaluate(code="", stdout="", namespace={}, history=[step1, step2])
-    assert cl.items["model_selection"].passed
-
-
-def test_hyperparameter_tuning_check(cl):
-    cl.evaluate(code="gs = GridSearchCV(model, param_grid)", stdout="", namespace={}, history=[])
-    assert cl.items["hyperparameter_tuning"].passed
-
-
-def test_full_coverage(cl):
-    from gym.env import StepResult
-
-    code = """
-df.describe()
-df.isnull().sum()
-df.drop_duplicates()
-X = df.drop('quality', axis=1)
-X['feat2'] = np.log(X['feat'] + 1)
-val_df
-gs = GridSearchCV(model, {})
-"""
-    h1 = StepResult(action="code", step=1, budget_remaining=9,
-                    code="m = RandomForestClassifier()")
-    h2 = StepResult(action="code", step=2, budget_remaining=8,
-                    code="m2 = LogisticRegression()")
-
-    cl.evaluate(code=code, stdout="", namespace={}, history=[h1, h2])
-    assert cl.coverage() == 1.0
-
-
-def test_hints_only_for_unpassed(cl):
-    hints = cl.evaluate(code="print(df.describe())", stdout="", namespace={}, history=[])
-    keys = [h for h in cl.items if not cl.items[h].passed]
-    # All pending items should have hints
-    assert len(hints) == len(keys)
-    assert "eda" not in [cl.items[k].key for k in keys]
+    assert len(hints) == 1
+    assert "Coverage=" not in hints[0]
+    assert "Missing checklist item" not in hints[0]
