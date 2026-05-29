@@ -1,7 +1,7 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-05-29 (real Jupyter notebook environment added)
-**Phase:** Jupyter notebook backend merged. All 4 modes × 2 datasets experiments complete. 126 tests passing.
+**Last updated:** 2026-05-29 (ContainerJupyterKernelBackend — Docker sandbox for Jupyter kernels)
+**Phase:** PR #11 open. 133 tests passing. ContainerJupyterKernelBackend awaiting merge.
 
 ---
 
@@ -93,6 +93,7 @@ Result after rebase: `126 passed`, coverage `72.76%`.
 2. [x] Обновить EXPERIMENT_REPORT.md с результатами
 3. [x] Смержить эксперименты в main — commit 638fcd6
 4. [x] Добавить real Jupyter notebook environment (PR #9) — merged to main
+5. [ ] Смержить ContainerJupyterKernelBackend (PR #11) — ожидает ревью
 
 ---
 
@@ -100,6 +101,7 @@ Result after rebase: `126 passed`, coverage `72.76%`.
 
 | Date | Change |
 |------|--------|
+| 2026-05-29 | Implemented ContainerJupyterKernelBackend: Docker sandbox with --internal network, --read-only rootfs, --cap-drop ALL; PR #11 open |
 | 2026-05-29 | Rebasing Jupyter branch on updated `origin/main` and preserving LiteLLM/Groq provider support |
 | 2026-05-29 | Added real Jupyter `.ipynb` + persistent kernel backend with notebook actions |
 | 2026-05-29 | Added clean `restart_and_run_all`, host-controlled `validate`, candidate registry, and submit gate |
