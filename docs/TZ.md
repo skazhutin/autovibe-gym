@@ -153,48 +153,48 @@ Train → Validate → Choose → Replay → Final
 
 ---
 
-## Что уже реализовано
+## Статус реализации (актуально на 2026-05-29)
 
-| Компонент | Статус | Режим |
+| Компонент | Статус | Примечание |
 |---|---|---|
-| `GymEnv` — среда с бюджетом, submit, историей | ✅ | flexible transitions |
-| `GymAgent` — LLM-агент с JSON-действиями | ✅ | flexible transitions |
-| `Checklist` — 8 пунктов с неявными хинтами | ✅ | flexible transitions |
-| `CodeExecutor` — subprocess sandbox | ✅ | все |
-| `run_baseline.py` — single-shot | ✅ | single-shot |
-| `run_multishot.py` — итеративный без чеклиста | ✅ | ≈ repeated single-shot |
-| `run_gym.py` — итеративный с чеклистом | ✅ | ≈ flexible transitions |
-| MLflow трекинг | ✅ | все |
-| Датасеты (5 штук) | ✅ | — |
-| Docker-окружение на H200 | ✅ | — |
-| Fixed transitions режим | ❌ | — |
-| Candidate replay (raw-input) | ⚠️ частично | — |
-| Trajectory logs в MLflow | ⚠️ частично | — |
-| Reproducibility guide | ❌ | — |
+| `NotebookGymEnv` — среда на реальном Jupyter kernel | ✅ | основная среда |
+| `GymEnv` (legacy) — subprocess sandbox | ✅ | retained for compatibility |
+| `GymAgent` — LLM-агент с JSON-действиями | ✅ | |
+| `Checklist` — 8 пунктов с generic hints | ✅ | режим gym_with_checklist |
+| `CodeExecutor` — Docker/subprocess sandbox | ✅ | legacy path |
+| `ContainerJupyterKernelBackend` — Docker kernel | ✅ | `AUTOVIBE_KERNEL_BACKEND=docker` |
+| `run_baseline.py` — single-shot | ✅ | |
+| `run_multishot.py` — repeated single-shot | ✅ | N независимых попыток, только scalar val metric |
+| `run_fixed.py` — fixed transitions | ✅ | legacy GymEnv runtime |
+| `run_gym.py` — flexible transitions | ✅ | NotebookGymEnv |
+| `run_matrix.py` — batch experiment runner | ✅ | N датасетов × M режимов |
+| `iterative_no_checklist` — fair control | ✅ | тот же backend, без hints |
+| Candidate lifecycle: Train→Validate→Replay→Final | ✅ | `restart_and_run_all` + `validate` + `submit` |
+| Trajectory artifacts (notebook, feedback_trace, etc.) | ✅ | MLflow artifacts |
+| MLflow трекинг | ✅ | все режимы |
+| Privacy: test.csv скрыт, score не виден агенту | ✅ | `private_dir` изолирован |
+| Датасеты (5 штук с fixed splits) | ✅ | |
+| `scripts/prepare_datasets.py` | ✅ | |
+| `docs/REPRODUCIBILITY.md` | ✅ | |
+| CI (GitHub Actions) + Docker integration tests | ✅ | `tests.yml` + `docker-sandbox.yml` |
 
----
+## Открытые вопросы (архитектурные решения)
 
-## Открытые проблемы
+### Fallback auto-submit — намеренный строгий контракт
 
-### P1 — блокируют валидность экспериментов
+ТЗ (строка 74): *«среда использует лучший кандидат по validation metric»*.
 
-1. **Тестовая выборка доступна из кода** — subprocess наследует cwd, `test.csv` читается через `pd.read_csv`. Нужен `cwd=tmpdir` в executor. *Нарушает Privacy & isolation (25% оценки).*
+В `NotebookGymEnv` fallback (`_try_forced_submit`) работает только если был успешный `validate`. Это **намеренно строже**: без clean replay нет гарантии воспроизводимости на raw test rows.
 
-2. **Нет гарантированного auto-submit** — если бюджет кончился и нет модели в workspace, сессия закрывается с `test_metric=None`.
+**Решение:** поведение задокументировано в `docs/PROTOCOL.md`. Для legacy `GymEnv` fallback по-прежнему работает через `workspace.first_existing`.
 
-### P2 — влияют на чистоту сравнения
+### Эксперименты на legacy runtime
 
-3. **Repeated single-shot не реализован** — `run_multishot.py` технически похож, но бюджет (10/5) не совпадает с Gym (30/15). Нужен отдельный режим с budget-matching.
-
-4. **SYSTEM_PROMPT предписывает sklearn Pipeline** — `ALWAYS wrap your preprocessing + model in a sklearn Pipeline` это инструкция, а не hint. Конфаунд для сравнения Gym vs контроль.
-
-5. **`model_selection` в чеклисте off-by-one** — текущий шаг не включается в подсчёт, только история.
-
-6. **Fixed transitions не реализован** — один из 4 обязательных режимов.
+Результаты в `EXPERIMENT_REPORT.md` получены на legacy `GymEnv` (subprocess). Notebook-era эксперименты запускаются через `run_matrix.py` на H200.
 
 ### Data
 
-7. **naticusdroid** — 74.5% дублей в источнике → cross-split overlap. Нужна дедупликация перед сплитом.
+`naticusdroid` — 74.5% дублей исправлено (`"deduplicate": true` в config). `dry_bean` требует `openpyxl` (есть в `requirements.txt`, нужна пересборка Docker-образа).
 
 ---
 

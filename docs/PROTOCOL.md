@@ -62,9 +62,16 @@ Train → Validate → Choose → Replay → Final
 | **Replay** | Env | `model.predict(X_test)` called on raw held-out rows — no manual preprocessing; model must be self-contained |
 | **Final** | Env | One-time private test evaluation; score logged to MLflow |
 
-**Fallback:** If the agent does not submit before budget exhaustion, the environment
-scans the workspace for any object with a `predict()` method (in order: `best_model`,
-`model`, then any other name) and auto-submits it.
+**Fallback (legacy `GymEnv` path):** If the agent does not submit before budget exhaustion,
+the environment scans the workspace for any object with a `predict()` method (in order:
+`best_model`, `model`, then any other name) and auto-submits it.
+
+**Fallback (`NotebookGymEnv` path — stricter contract):** The notebook environment requires
+an explicit `validate` action before `submit`. If the budget is exhausted without a
+successful `validate`, the forced submit attempt returns a `NEEDS_VALIDATION` blocker and
+`test_metric` remains `null`. This is intentional: without a confirmed `restart_and_run_all`
+clean replay, the environment cannot guarantee raw-input reproducibility on the hidden test
+split. The agent is expected to complete at least one `validate` cycle within its step budget.
 
 ---
 
