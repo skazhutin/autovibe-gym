@@ -4,6 +4,129 @@ AutoVibe Gym is an iterative AutoML environment where an LLM writes ML code,
 receives structured feedback, improves the solution, and submits one final model
 against a hidden test split.
 
+The goal is not the highest score — it is a **verifiable evaluation environment**
+that makes agent failures observable and private test evaluation tamper-proof.
+
+---
+
+## Quickstart — run all 4 experiment modes in 5 minutes
+
+### Prerequisites
+
+- Docker installed
+- Git
+- An API key for the LLM (OpenAI-compatible endpoint)
+
+### Step 1 — Clone and build
+
+```bash
+git clone https://github.com/skazhutin/autovibe-gym.git
+cd autovibe-gym
+docker build -t autovibe-gym .
+```
+
+### Step 2 — Download raw datasets
+
+The five example datasets are configured but raw files must be downloaded once.
+The simplest dataset that works immediately is `student_dropout` (CSV, no account needed):
+
+```bash
+# Download student_dropout raw data
+mkdir -p datasets/student_dropout/raw_data
+curl -L "https://archive.ics.uci.edu/static/public/697/predict+students+dropout+and+academic+success.zip" \
+  -o datasets/student_dropout/raw_data/predict+students+dropout+and+academic+success.zip
+```
+
+Or copy the `datasets/student_dropout/prepared/` directory directly from someone who already has it.
+
+### Step 3 — Prepare splits
+
+```bash
+docker run --rm \
+  -v "$(pwd):/autovibe" \
+  -e MLFLOW_TRACKING_URI=file:///autovibe/mlruns \
+  autovibe-gym \
+  -m scripts.prepare_datasets --dataset student_dropout
+```
+
+### Step 4 — Set your API key
+
+```bash
+export LLM_BASE_URL="http://llm.letovo.site:8809/openai"   # or any OpenAI-compatible URL
+export LLM_API_KEY="sk-..."                                  # key provided separately
+export LLM_MODEL="deepseek-v4-flash"
+```
+
+### Step 5 — Run all 4 modes
+
+```bash
+DS="/autovibe/datasets/student_dropout/prepared"
+DOCKER="docker run --rm \
+  -v $(pwd):/autovibe \
+  -e LLM_BASE_URL=$LLM_BASE_URL \
+  -e LLM_API_KEY=$LLM_API_KEY \
+  -e LLM_MODEL=$LLM_MODEL \
+  -e MLFLOW_TRACKING_URI=file:///autovibe/mlruns \
+  autovibe-gym"
+
+# Mode 1 — Single-shot (no feedback, ~15s)
+$DOCKER -m experiments.run_baseline --dataset-dir $DS --mode cloud
+
+# Mode 2 — Repeated single-shot (5 attempts, ~2 min)
+$DOCKER -m experiments.run_multishot --dataset-dir $DS --mode cloud
+
+# Mode 3 — Flexible transitions / gym (15 steps, ~5 min)
+$DOCKER -m experiments.run_gym --dataset-dir $DS --mode cloud
+
+# Mode 4 — Fixed transitions (5 stages, ~5 min)
+$DOCKER -m experiments.run_fixed --dataset-dir $DS --mode cloud
+```
+
+Or run everything in one command with the batch runner:
+
+```bash
+$DOCKER -m experiments.run_matrix \
+  --datasets /autovibe/datasets/student_dropout/prepared \
+  --episode-modes gym_with_checklist iterative_no_checklist \
+  --mode cloud
+```
+
+### Step 6 — Compare results
+
+```bash
+docker run --rm \
+  -v "$(pwd):/autovibe" \
+  -e MLFLOW_TRACKING_URI=file:///autovibe/mlruns \
+  autovibe-gym \
+  -m experiments.compare --dataset student_dropout
+```
+
+Expected output (values will vary by model):
+
+```
+Mode                  test_metric  steps  tokens   elapsed
+--------------------  -----------  -----  -------  -------
+baseline_single_shot        0.747      1    2 120      12s
+repeated_single_shot        0.730      5   11 228     110s
+gym (flexible)              0.745     14  146 013     111s
+fixed_transitions           0.000     17  218 322     218s
+```
+
+> The single-shot baseline wins on score **and** cost.
+> The gym reveals what the agent did (checklist coverage, failure types).
+> Fixed transitions with rigid stage order performs worst when the agent
+> exhausts its preprocessing budget before finding good features.
+
+---
+
+## Key finding
+
+More interaction ≠ better score. The environment's value is **diagnostic**:
+it shows *why* an agent succeeded or failed, not just the final number.
+This is invisible to a plain leaderboard.
+
+---
+
 ## Core Loop
 
 ```text
