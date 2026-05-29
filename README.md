@@ -52,8 +52,8 @@ docker run --rm \
 ### Step 4 — Set your API key
 
 ```bash
-export LLM_BASE_URL="http://llm.letovo.site:8809/openai"   # or any OpenAI-compatible URL
-export LLM_API_KEY="sk-..."                                  # key provided separately
+export LLM_BASE_URL="<provided separately>"   # OpenAI-compatible endpoint
+export LLM_API_KEY="<provided separately>"    # API key
 export LLM_MODEL="deepseek-v4-flash"
 ```
 
