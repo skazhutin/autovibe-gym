@@ -104,6 +104,10 @@ def test_container_session_docker_command_includes_security_flags(monkeypatch, t
         start_channels=lambda: None,
         wait_for_ready=lambda timeout=30: None,
         stop_channels=lambda: None,
+        kernel_info=lambda: None,
+        shell_channel=types.SimpleNamespace(
+            get_msg=lambda timeout=1: {"msg_type": "kernel_info_reply"}
+        ),
     )
     monkeypatch.setattr(
         "gym.jupyter_kernel.BlockingKernelClient",
@@ -161,6 +165,10 @@ def test_container_session_shutdown_stops_container(monkeypatch, tmp_path):
         start_channels=lambda: None,
         wait_for_ready=lambda timeout=30: None,
         stop_channels=lambda: None,
+        kernel_info=lambda: None,
+        shell_channel=types.SimpleNamespace(
+            get_msg=lambda timeout=1: {"msg_type": "kernel_info_reply"}
+        ),
     )
     monkeypatch.setattr("gym.jupyter_kernel.BlockingKernelClient", lambda: fake_client)
 

@@ -9,6 +9,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
+from queue import Empty
 from typing import Any, Protocol
 
 from jupyter_client import BlockingKernelClient, KernelManager
@@ -354,7 +355,7 @@ class ContainerJupyterKernelSession(_KernelClientMixin):
         kc.load_connection_info({**conn_info, "ip": "127.0.0.1"})
         kc.start_channels()
         try:
-            kc.wait_for_ready(timeout=self.timeout)
+            self._wait_for_kernel_info(kc)
         except Exception as exc:
             logs = self._container_logs()
             kc.stop_channels()
@@ -385,6 +386,21 @@ class ContainerJupyterKernelSession(_KernelClientMixin):
         self.shutdown()
         self.kernel_id = str(uuid.uuid4())
         self.start()
+
+    def _wait_for_kernel_info(self, client: BlockingKernelClient) -> None:
+        deadline = time.time() + self.timeout
+        while time.time() < deadline:
+            client.kernel_info()
+            try:
+                msg = client.shell_channel.get_msg(timeout=1)
+            except Empty:
+                continue
+            if msg.get("msg_type") == "kernel_info_reply":
+                handler = getattr(client, "_handle_kernel_info_reply", None)
+                if handler is not None:
+                    handler(msg)
+                return
+        raise RuntimeError(f"Kernel did not reply to kernel_info in {self.timeout} seconds")
 
     def _interrupt_kernel(self) -> None:
         if self._container_id is None:
