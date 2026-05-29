@@ -1,7 +1,7 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-05-29 (Jupyter sandbox CI hardening)
-**Phase:** Test/CI hardening and hidden-state privacy audit
+**Last updated:** 2026-05-29 (experiment tooling: run_matrix, Docker verify, RELEASE_CHECKLIST)
+**Phase:** All core infrastructure merged. PR #13 open with experiment tooling layer.
 
 ---
 

@@ -1,9 +1,13 @@
 import json
+import sys
+import types
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from experiments import compare, mlflow_config, run_baseline, run_fixed, run_gym, run_multishot
+from experiments import run_matrix
 
 
 def test_run_gym_load_dataset_returns_splits_and_metadata(tmp_path):
@@ -193,3 +197,72 @@ def test_compare_handles_runs_without_test_metric(monkeypatch, capsys):
     printed = capsys.readouterr().out
     assert "submit_failed" in printed
     assert "m1" in printed
+
+
+# ---------------------------------------------------------------------------
+# run_gym — executor_backend MLflow param reflects AUTOVIBE_KERNEL_BACKEND
+# ---------------------------------------------------------------------------
+
+def test_run_gym_executor_backend_param_reflects_env(monkeypatch):
+    """_kernel_backend_label() must return the correct label for each backend value."""
+    monkeypatch.setenv("AUTOVIBE_KERNEL_BACKEND", "docker")
+    assert run_gym._kernel_backend_label() == "jupyter-docker"
+
+    monkeypatch.setenv("AUTOVIBE_KERNEL_BACKEND", "local")
+    assert run_gym._kernel_backend_label() == "jupyter-local"
+
+    monkeypatch.delenv("AUTOVIBE_KERNEL_BACKEND", raising=False)
+    assert run_gym._kernel_backend_label() == "jupyter-local"
+
+
+# ---------------------------------------------------------------------------
+# run_matrix — batch orchestrator unit tests
+# ---------------------------------------------------------------------------
+
+def test_run_matrix_dry_run_prints_plan(tmp_path, capsys, monkeypatch):
+    """--dry-run should print the matrix plan without calling subprocess.run."""
+    prepared = tmp_path / "ds_a" / "prepared"
+    prepared.mkdir(parents=True)
+    (prepared / "meta.json").write_text("{}", encoding="utf-8")
+
+    monkeypatch.setattr("sys.argv", [
+        "run_matrix",
+        "--datasets", str(tmp_path / "ds_a"),
+        "--episode-modes", "gym_with_checklist",
+        "--dry-run",
+    ])
+
+    run_matrix.main()
+
+    out = capsys.readouterr().out
+    assert "ds_a" in out
+    assert "gym_with_checklist" in out
+    assert "dry-run" in out
+
+
+def test_run_matrix_discover_datasets(tmp_path):
+    """_discover_datasets finds directories that contain prepared/meta.json."""
+    for name in ("ds_x", "ds_y"):
+        (tmp_path / name / "prepared").mkdir(parents=True)
+        (tmp_path / name / "prepared" / "meta.json").write_text("{}", encoding="utf-8")
+    # A directory without prepared/meta.json should NOT be included
+    (tmp_path / "not_a_dataset").mkdir()
+
+    found = run_matrix._discover_datasets(str(tmp_path))
+    names = {Path(d).name for d in found}
+    assert names == {"ds_x", "ds_y"}
+
+
+def test_run_matrix_exits_when_no_datasets(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr("sys.argv", [
+        "run_matrix",
+        "--datasets-root", str(tmp_path),
+        "--dry-run",
+    ])
+
+    with pytest.raises(SystemExit) as exc:
+        run_matrix.main()
+
+    assert exc.value.code == 1
+
+
