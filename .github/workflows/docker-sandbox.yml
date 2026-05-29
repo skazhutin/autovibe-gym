@@ -1,0 +1,44 @@
+name: Docker sandbox integration
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Dockerfile.sandbox"
+      - "gym/jupyter_kernel.py"
+      - "scripts/verify_docker_sandbox.py"
+      - "tests/test_jupyter_kernel.py"
+      - ".github/workflows/docker-sandbox.yml"
+  pull_request:
+    paths:
+      - "Dockerfile.sandbox"
+      - "gym/jupyter_kernel.py"
+      - "scripts/verify_docker_sandbox.py"
+      - "tests/test_jupyter_kernel.py"
+  workflow_dispatch:
+
+jobs:
+  docker-sandbox:
+    name: Build image and run integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -e ".[test]"
+
+      - name: Build sandbox image
+        run: docker build -f Dockerfile.sandbox -t autovibe-gym-sandbox:latest .
+
+      - name: Run integration tests
+        run: python -m pytest tests/test_jupyter_kernel.py -m integration -v
+
+      - name: Verify Docker sandbox (smoke test)
+        run: python scripts/verify_docker_sandbox.py
