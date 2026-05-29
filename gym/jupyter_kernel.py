@@ -314,6 +314,7 @@ class ContainerJupyterKernelSession(_KernelClientMixin):
 
     def start(self) -> None:
         self.workspace_dir.mkdir(parents=True, exist_ok=True)
+        _ensure_internal_network(self.network_name)
 
         ports = _find_free_ports(5)
         shell_port, iopub_port, stdin_port, control_port, hb_port = ports
@@ -410,9 +411,11 @@ class ContainerJupyterKernelSession(_KernelClientMixin):
         ]
         for port in ports:
             command.extend(["-p", f"127.0.0.1:{port}:{port}"])
+        command.extend(_docker_user_args())
         command.extend([
             "--env", "PYTHONIOENCODING=utf-8",
             "--env", "PYTHONUTF8=1",
+            "--env", "HOME=/tmp",
             "--env", "MPLBACKEND=Agg",
             "--env", "AUTOVIBE_JUPYTER_KERNEL=1",
             self.docker_image,
@@ -464,7 +467,7 @@ class ContainerJupyterKernelBackend:
         self.network_name = network_name or os.getenv(
             "AUTOVIBE_KERNEL_NETWORK", "autovibe-kernels"
         )
-        self._ensure_network()
+        _ensure_internal_network(self.network_name)
 
     def create_session(self, workspace_dir: str | Path) -> ContainerJupyterKernelSession:
         return ContainerJupyterKernelSession(
@@ -475,30 +478,6 @@ class ContainerJupyterKernelBackend:
             pids_limit=self.pids_limit,
             network_name=self.network_name,
         )
-
-    def _ensure_network(self) -> None:
-        try:
-            subprocess.run(
-                [
-                    _docker_binary(),
-                    "network",
-                    "create",
-                    "--internal",
-                    "--driver",
-                    "bridge",
-                    self.network_name,
-                ],
-                capture_output=True,
-                timeout=10,
-            )
-        except FileNotFoundError as exc:
-            raise RuntimeError(
-                "Docker backend is enabled for the kernel but the 'docker' binary "
-                "was not found. Install Docker or set DOCKER_BINARY to the correct path."
-            ) from exc
-        except Exception:
-            pass
-
 
 def _find_free_ports(n: int) -> list[int]:
     """Bind n sockets to ephemeral ports, collect port numbers, then release."""
@@ -519,6 +498,43 @@ def _find_free_ports(n: int) -> list[int]:
 
 def _docker_binary() -> str:
     return os.getenv("DOCKER_BINARY", "docker")
+
+
+def _ensure_internal_network(network_name: str) -> None:
+    try:
+        proc = subprocess.run(
+            [
+                _docker_binary(),
+                "network",
+                "create",
+                "--internal",
+                "--driver",
+                "bridge",
+                network_name,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except FileNotFoundError as exc:
+        raise RuntimeError(
+            "Docker backend is enabled for the kernel but the 'docker' binary "
+            "was not found. Install Docker or set DOCKER_BINARY to the correct path."
+        ) from exc
+    except Exception:
+        return
+
+    stderr = proc.stderr or ""
+    if proc.returncode != 0 and "already exists" not in stderr.lower():
+        raise RuntimeError(
+            f"Failed to create Docker network '{network_name}': {stderr.strip()}"
+        )
+
+
+def _docker_user_args() -> list[str]:
+    if os.name == "nt" or not hasattr(os, "getuid") or not hasattr(os, "getgid"):
+        return []
+    return ["--user", f"{os.getuid()}:{os.getgid()}"]
 
 
 def _int_env(env_var: str, override: int | None, default: int) -> int:

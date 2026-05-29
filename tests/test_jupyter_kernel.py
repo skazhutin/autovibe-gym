@@ -121,7 +121,8 @@ def test_container_session_docker_command_includes_security_flags(monkeypatch, t
     session.start()
 
     assert calls, "subprocess.run was never called"
-    docker_cmd = calls[0]
+    assert any(cmd[:5] == ["docker", "network", "create", "--internal", "--driver"] for cmd in calls)
+    docker_cmd = next(cmd for cmd in calls if cmd[:3] == ["docker", "run", "-d"])
     joined = " ".join(str(t) for t in docker_cmd)
 
     assert docker_cmd[:3] == ["docker", "run", "-d"]
@@ -141,6 +142,7 @@ def test_container_session_docker_command_includes_security_flags(monkeypatch, t
     ]
     assert len(published_ports) == 5
     assert all(port.startswith("127.0.0.1:") for port in published_ports)
+    assert "HOME=/tmp" in docker_cmd
     assert "autovibe-test-sandbox" in docker_cmd
     assert "ipykernel_launcher" in joined
 
