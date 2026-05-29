@@ -1,7 +1,7 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-05-29 (experiment tooling: run_matrix, Docker verify, RELEASE_CHECKLIST)
-**Phase:** All core infrastructure merged. PR #13 open with experiment tooling layer.
+**Last updated:** 2026-05-29 (docs sync: TZ.md, PROTOCOL.md fallback contract, EXPERIMENT_REPORT)
+**Phase:** COMPLETE. All infrastructure merged (PR #13). 158 tests passing. Awaiting notebook-era experiment runs on H200.
 
 ---
 
@@ -96,10 +96,10 @@ Windows environment because Docker CLI is unavailable; GitHub Actions now builds
 
 ## Next Actions
 
-1. Push `codex/harden-jupyter-sandbox-ci`.
-2. Open PR `test: harden Jupyter sandbox coverage and restore green PR CI`.
-3. Wait for GitHub Actions `Tests / Python tests` and fix any remaining CI-only
-   failures before marking the PR ready.
+1. [x] Все PR смержены в main
+2. [x] TZ.md, PROTOCOL.md, EXPERIMENT_REPORT.md синхронизированы
+3. [ ] Запустить `python -m experiments.run_matrix --mode local` на H200 → получить notebook-era experiment results
+4. [ ] Обновить EXPERIMENT_REPORT.md с новыми результатами после п.3
 
 ---
 

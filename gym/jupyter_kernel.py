@@ -444,7 +444,7 @@ class ContainerJupyterKernelSession(_KernelClientMixin):
         try:
             ready = self.execute_cell(
                 "pass",
-                timeout=min(10, self.timeout),
+                timeout=self.timeout,
                 store_history=False,
             )
         except Exception as exc:

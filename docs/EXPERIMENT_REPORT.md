@@ -253,8 +253,7 @@ The environment exposes failures across 5 categories (per TZ):
 
 ### Reproducibility failures
 - dry_bean: `openpyxl` not in Docker image → Excel file unreadable.
-  Fixed by adding `openpyxl>=3.1.0` to `requirements.txt`.
-  Note: requires Docker image rebuild to take effect.
+  Fixed: `openpyxl>=3.1.0` added to `requirements.txt` and `pyproject.toml`; included in sandbox image build.
 
 ---
 
