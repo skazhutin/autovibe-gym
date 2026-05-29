@@ -259,6 +259,22 @@ class FixedTransitionsAgent:
         self.messages.append({"role": "user", "content": obs.to_feedback_message()})
 
 
+def _summary_metrics(summary: dict) -> dict:
+    metrics = {
+        "has_test_metric": int(summary.get("test_metric") is not None),
+        "submit_failed": int(summary.get("test_metric") is None),
+        "checklist_coverage": summary["checklist_coverage"],
+        "steps_used": summary["steps_used"],
+        "error_count": summary.get("error_count", summary.get("errors_count", 0)),
+        "input_tokens": summary.get("input_tokens", 0),
+        "output_tokens": summary.get("output_tokens", 0),
+        "elapsed_seconds": summary.get("elapsed_seconds", 0),
+    }
+    if summary.get("test_metric") is not None:
+        metrics["test_metric"] = summary["test_metric"]
+    return metrics
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
@@ -355,15 +371,7 @@ def main():
             "stage_log.json",
         )
 
-        mlflow.log_metrics({
-            "test_metric": summary.get("test_metric") or 0.0,
-            "checklist_coverage": summary["checklist_coverage"],
-            "steps_used": summary["steps_used"],
-            "error_count": summary.get("error_count", summary.get("errors_count", 0)),
-            "input_tokens": summary.get("input_tokens", 0),
-            "output_tokens": summary.get("output_tokens", 0),
-            "elapsed_seconds": summary.get("elapsed_seconds", 0),
-        })
+        mlflow.log_metrics(_summary_metrics(summary))
 
     print("\n=== Run Summary ===")
     stage_log = summary.pop("stage_log", [])

@@ -1,8 +1,12 @@
 import json
+import subprocess
+from pathlib import Path
 
 import nbformat
 import pandas as pd
+import pytest
 
+from gym.jupyter_kernel import ContainerJupyterKernelBackend
 from gym.notebook_env import NotebookGymEnv
 from gym.protocol import Action
 
@@ -192,6 +196,205 @@ def test_hidden_submit_failure_is_generic(tmp_path):
         env.close()
 
 
+def test_kernel_visible_artifacts_do_not_expose_private_evaluation_state(tmp_path):
+    env = _make_env(tmp_path)
+    try:
+        env.step(
+            {
+                "type": "add_cell",
+                "cell_type": "code",
+                "source": _constant_model_source(),
+                "execute": True,
+            }
+        )
+
+        before_submit = env.step(
+            {
+                "type": "add_cell",
+                "cell_type": "code",
+                "source": _workspace_probe_source(),
+                "execute": True,
+            }
+        )
+        assert "PRIVATE_LEAK" not in before_submit.stdout
+        assert "test.csv" not in before_submit.stdout
+
+        env.step({"type": "restart_and_run_all"})
+        env.step({"type": "validate", "model_var": "model"})
+
+        after_validate = env.step(
+            {
+                "type": "add_cell",
+                "cell_type": "code",
+                "source": _workspace_probe_source(),
+                "execute": True,
+            }
+        )
+        assert "PRIVATE_LEAK" not in after_validate.stdout
+        assert "final_test_metric" not in after_validate.stdout
+        assert "private_checklist_coverage" not in after_validate.stdout
+
+        env.step({"type": "restart_and_run_all"})
+        env.step({"type": "validate", "model_var": "model"})
+        submit = env.step({"type": "submit", "model_var": "model"})
+        assert submit.submitted
+
+        direct_probe = env.kernel.execute_cell(_workspace_probe_source())
+        assert direct_probe.success
+        assert "PRIVATE_LEAK" not in direct_probe.stdout
+        assert "final_test_metric" not in direct_probe.stdout
+        assert "private_checklist_coverage" not in direct_probe.stdout
+
+        public_text = "\n".join(
+            path.read_text(encoding="utf-8", errors="ignore")
+            for path in tmp_path.rglob("*.json")
+        )
+        assert "final_test_metric" not in public_text
+        assert "private_checklist_coverage" not in public_text
+        assert "submit_failure_type" not in public_text
+        assert not (tmp_path / "artifacts").exists()
+
+        summary = env.get_summary()
+        private_dir = summary["private_episode_dir"]
+        private_summary = json.loads(
+            (Path(private_dir) / "episode_summary.json").read_text(encoding="utf-8")
+        )
+        assert private_summary["final_test_metric"] == 1.0
+        assert private_summary["private_checklist_coverage"] >= 0.0
+    finally:
+        env.close()
+
+
+@pytest.mark.parametrize("mode", ["gym_with_checklist", "iterative_no_checklist"])
+def test_notebook_step_budget_blocks_actions_after_exhaustion(tmp_path, mode):
+    env = _make_env(tmp_path, mode=mode)
+    try:
+        first = env.step(
+            {
+                "type": "add_cell",
+                "cell_type": "code",
+                "source": "budget_value = 1\nprint('ran once')",
+                "execute": True,
+            }
+        )
+        assert first.done is False
+
+        env.state.max_steps = env.state.step
+        before_cells = len(env.notebook.list_cells())
+        blocked = env.step(
+            {
+                "type": "add_cell",
+                "cell_type": "code",
+                "source": "budget_value = 2\nprint('should not run')",
+                "execute": True,
+            }
+        )
+
+        assert blocked.done
+        assert "Step budget exhausted" in blocked.stderr
+        assert len(env.notebook.list_cells()) == before_cells
+        probe = env.kernel.execute_cell("print(budget_value)")
+        assert "1" in probe.stdout
+        assert "2" not in probe.stdout
+
+        validate = env.step({"type": "validate", "model_var": "model"})
+        assert "Step budget exhausted" in validate.stderr
+        assert env.state.step == env.state.max_steps
+    finally:
+        env.close()
+
+
+def test_submit_is_allowed_after_budget_exhaustion_for_validated_candidate(tmp_path):
+    env = _make_env(tmp_path)
+    try:
+        env.state.max_steps = 3
+        env.step(
+            {
+                "type": "add_cell",
+                "cell_type": "code",
+                "source": _constant_model_source(),
+                "execute": False,
+            }
+        )
+        env.step({"type": "restart_and_run_all"})
+        validated = env.step({"type": "validate", "model_var": "model"})
+        assert validated.done
+        assert validated.validation_metric == 0.5
+
+        submit = env.step({"type": "submit", "model_var": "model"})
+        assert submit.submitted
+        assert submit.done
+        assert env.get_summary()["final_test_metric"] == 1.0
+    finally:
+        env.close()
+
+
+def _docker_available() -> bool:
+    try:
+        result = subprocess.run(["docker", "info"], capture_output=True, timeout=5)
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not _docker_available(), reason="Docker not available")
+def test_notebook_env_docker_backend_end_to_end(tmp_path):
+    backend = ContainerJupyterKernelBackend()
+    env = _make_env(tmp_path, mode="iterative_no_checklist")
+    env.close()
+    env = NotebookGymEnv(
+        train=env.state.train,
+        val=env.state.val,
+        test=env.state.test,
+        target_col=env.state.target_col,
+        metric_fn=_accuracy,
+        metric_name="accuracy",
+        max_steps=20,
+        workspace_dir=tmp_path,
+        mode="iterative_no_checklist",
+        backend=backend,
+    )
+    try:
+        env.reset()
+        bootstrap = env.step(
+            {
+                "type": "add_cell",
+                "cell_type": "code",
+                "source": (
+                    "print(train_df.shape)\n"
+                    "print(val_df.shape)\n"
+                    "print(target_col)\n"
+                    "print('test_df' in globals())"
+                ),
+                "execute": True,
+            }
+        )
+        assert "(4, 3)" in bootstrap.stdout
+        assert "(2, 3)" in bootstrap.stdout
+        assert "target" in bootstrap.stdout
+        assert "False" in bootstrap.stdout
+
+        env.step(
+            {
+                "type": "add_cell",
+                "cell_type": "code",
+                "source": _constant_model_source(),
+                "execute": False,
+            }
+        )
+        clean = env.step({"type": "restart_and_run_all"})
+        assert "successfully" in clean.stdout
+        validated = env.step({"type": "validate", "model_var": "model"})
+        assert validated.validation_metric == 0.5
+        submit = env.step({"type": "submit", "model_var": "model"})
+        assert submit.submitted
+        assert submit.test_metric is None
+        assert env.get_summary()["final_test_metric"] == 1.0
+    finally:
+        env.close()
+
+
 def _constant_model_source():
     return """
 from sklearn.dummy import DummyClassifier
@@ -220,4 +423,33 @@ model = Pipeline([
     ('clf', DummyClassifier(strategy='most_frequent')),
 ])
 model.fit(X_train, y_train)
+""".strip()
+
+
+def _workspace_probe_source():
+    return """
+import json
+from pathlib import Path
+
+tokens = [
+    "final" + "_test_metric",
+    "private" + "_checklist_coverage",
+    "submit" + "_failure_type",
+]
+hits = []
+for path in sorted(Path(".").rglob("*")):
+    if path.is_file():
+        rel = path.as_posix()
+        if rel.endswith(".csv") or rel.endswith(".json") or rel.endswith(".pkl"):
+            try:
+                text = path.read_text(encoding="utf-8", errors="ignore")
+            except UnicodeDecodeError:
+                text = ""
+            except Exception as exc:
+                text = f"ERROR:{type(exc).__name__}"
+            if any(token in text for token in tokens):
+                hits.append(f"PRIVATE_LEAK:{rel}:{text[:120]}")
+            else:
+                hits.append(rel)
+print("\\n".join(hits))
 """.strip()

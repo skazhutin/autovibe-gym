@@ -58,7 +58,7 @@ Successful submit returns only:
 
 The hidden test metric is stored only in private summaries and MLflow metrics.
 
-Episode artifacts are saved in the episode workspace:
+Agent-visible episode artifacts are saved in the episode workspace:
 
 ```text
 final_notebook.ipynb
@@ -69,17 +69,33 @@ validation_trajectory.json
 episode_summary.json
 ```
 
+These public JSON artifacts are sanitized: hidden test metrics, private
+checklist coverage, submit failure types, and candidate pickle paths are not
+written where the kernel can read them. Private evaluator artifacts live in a
+separate private episode directory that is not mounted into the Docker kernel:
+
+```text
+episode_summary.json
+feedback_trace_private.json
+notebook_events_private.json
+validation_trajectory_private.json
+artifacts/*.pkl
+```
+
 ## Execution Sandbox
 
-The current iterative Gym runner uses a local real Jupyter kernel. This provides
-real notebook behavior, saved outputs, rich displays, and clean replay, but it
-is not a full OS-level sandbox for untrusted code. The implementation strips
-common secret environment variables from the kernel and physically keeps hidden
-test files outside the episode workspace.
+The default iterative Gym runner uses a local real Jupyter kernel. This provides
+real notebook behavior, saved outputs, rich displays, and clean replay. The
+implementation strips common secret environment variables from the kernel and
+physically keeps hidden test files and private evaluator artifacts outside the
+episode workspace.
 
 `gym.jupyter_kernel` defines `KernelExecutionBackend`,
-`LocalJupyterKernelBackend`, and a future `ContainerJupyterKernelBackend` hook.
-Full container isolation for the Jupyter kernel is planned separately.
+`LocalJupyterKernelBackend`, and `ContainerJupyterKernelBackend`. Set
+`AUTOVIBE_KERNEL_BACKEND=docker` to run each notebook kernel in a Docker
+container with an internal network, read-only root filesystem, dropped
+capabilities, no-new-privileges, resource caps, `/tmp` tmpfs, and ZMQ ports
+published only on `127.0.0.1`.
 
 The legacy `CodeExecutor` is still used by single-shot/repeated-single-shot
 baselines and can run through Docker by default:

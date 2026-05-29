@@ -100,6 +100,8 @@ class Action:
                 raise ActionParseError("move_cell requires a non-empty 'cell_id'.")
             if self.new_position is None:
                 raise ActionParseError("move_cell requires a 'new_position'.")
+            if self.new_position < 0:
+                raise ActionParseError("move_cell requires a non-negative 'new_position'.")
         if self.type in {"validate", "submit"} and not self.model_var:
             raise ActionParseError(f"{self.type} requires a non-empty 'model_var'.")
 
@@ -170,10 +172,12 @@ class Action:
             return cls(type=action_type)
 
         if action_type == "validate":
-            return cls(type="validate", model_var=str(payload.get("model_var") or "model"))
+            model_var = payload.get("model_var", "model")
+            return cls(type="validate", model_var=str(model_var))
 
         if action_type == "submit":
-            return cls.submit_action(str(payload.get("model_var") or "model"))
+            model_var = payload.get("model_var", "model")
+            return cls.submit_action(str(model_var))
 
         raise ActionParseError(f"Unsupported action type: {raw_type!r}")
 
@@ -293,16 +297,20 @@ class Observation:
             "stdout": self.stdout,
             "stderr": self.stderr,
             "hints": self.hints,
-            "checklist_coverage": self.checklist_coverage,
             "done": self.done,
             "submitted": self.submitted,
-            "test_metric": self.test_metric,
             "model_var": self.model_var,
             "cell_id": self.cell_id,
             "notebook_status": self.notebook_status,
             "feedback_items": self.feedback_items,
             "validation_metric": self.validation_metric,
         }
+
+    def to_private_dict(self) -> dict[str, Any]:
+        data = self.to_dict()
+        data["checklist_coverage"] = self.checklist_coverage
+        data["test_metric"] = self.test_metric
+        return data
 
 
 StepResult = Observation

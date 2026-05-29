@@ -15,6 +15,97 @@ from jupyter_client import BlockingKernelClient, KernelManager
 from nbformat.v4 import output_from_msg
 
 
+_DOCKER_EXECUTE_SCRIPT = r"""
+import json
+import sys
+import time
+
+from jupyter_client import BlockingKernelClient
+from nbformat.v4 import output_from_msg
+
+payload = json.load(sys.stdin)
+with open(payload["connection_file"], encoding="utf-8") as fh:
+    connection_info = json.load(fh)
+connection_info["ip"] = "127.0.0.1"
+
+client = BlockingKernelClient()
+client.load_connection_info(connection_info)
+client.start_channels()
+
+started = time.time()
+msg_id = client.execute(
+    payload["source"],
+    store_history=bool(payload["store_history"]),
+    allow_stdin=False,
+)
+result = {
+    "execution_count": None,
+    "outputs": [],
+    "stdout": "",
+    "stderr": "",
+    "error_name": None,
+    "error_value": None,
+    "traceback": [],
+    "display_outputs": [],
+    "success": True,
+    "elapsed_seconds": 0.0,
+}
+
+try:
+    while True:
+        try:
+            msg = client.get_iopub_msg(timeout=1)
+        except Exception:
+            continue
+
+        if msg.get("parent_header", {}).get("msg_id") != msg_id:
+            continue
+
+        msg_type = msg.get("msg_type")
+        content = msg.get("content", {})
+
+        if msg_type == "status" and content.get("execution_state") == "idle":
+            break
+        if msg_type == "execute_input":
+            result["execution_count"] = content.get("execution_count")
+            continue
+        if msg_type not in {"stream", "execute_result", "display_data", "error"}:
+            continue
+
+        try:
+            output = output_from_msg(msg)
+        except Exception:
+            output = None
+        if output is not None:
+            result["outputs"].append(output)
+
+        if msg_type == "stream":
+            text = content.get("text", "")
+            if content.get("name") == "stderr":
+                result["stderr"] += text
+            else:
+                result["stdout"] += text
+        elif msg_type in {"execute_result", "display_data"}:
+            if msg_type == "execute_result":
+                result["execution_count"] = content.get(
+                    "execution_count",
+                    result["execution_count"],
+                )
+            result["display_outputs"].append(output or {})
+        elif msg_type == "error":
+            result["success"] = False
+            result["error_name"] = content.get("ename")
+            result["error_value"] = content.get("evalue")
+            result["traceback"] = list(content.get("traceback") or [])
+            result["stderr"] += "\n".join(result["traceback"])
+finally:
+    client.stop_channels()
+
+result["elapsed_seconds"] = round(time.time() - started, 3)
+print(json.dumps(result, default=str))
+"""
+
+
 @dataclass
 class CellExecutionResult:
     execution_count: int | None = None
@@ -76,6 +167,9 @@ class _KernelClientMixin:
     client: Any
     workspace_dir: Path
     timeout: int
+
+    def kernel_visible_path(self, path: str | Path) -> str:
+        return str(Path(path))
 
     def execute_cell(
         self,
@@ -176,9 +270,9 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 
-_AUTOVIBE_WORKSPACE = Path({str(self.workspace_dir)!r})
-train_df = pd.read_csv(Path({str(train_csv)!r}))
-val_df = pd.read_csv(Path({str(val_csv)!r}))
+_AUTOVIBE_WORKSPACE = Path({self.kernel_visible_path(self.workspace_dir)!r})
+train_df = pd.read_csv(Path({self.kernel_visible_path(train_csv)!r}))
+val_df = pd.read_csv(Path({self.kernel_visible_path(val_csv)!r}))
 target_col = {target_col!r}
 """.strip()
         result = self.execute_cell(source, store_history=False)
@@ -197,7 +291,7 @@ from pathlib import Path as _AutovibePath
 if {variable_name!r} not in globals():
     raise NameError("Variable not found: {variable_name}")
 
-with open(_AutovibePath({str(output_path)!r}), "wb") as _autovibe_file:
+with open(_AutovibePath({self.kernel_visible_path(output_path)!r}), "wb") as _autovibe_file:
     _autovibe_pickle.dump(globals()[{variable_name!r}], _autovibe_file)
 """.strip()
         result = self.execute_cell(source, store_history=False)
@@ -311,6 +405,7 @@ class ContainerJupyterKernelSession(_KernelClientMixin):
 
     def start(self) -> None:
         self.workspace_dir.mkdir(parents=True, exist_ok=True)
+        _ensure_internal_network(self.network_name)
 
         ports = _find_free_ports(5)
         shell_port, iopub_port, stdin_port, control_port, hb_port = ports
@@ -346,11 +441,26 @@ class ContainerJupyterKernelSession(_KernelClientMixin):
             )
         self._container_id = proc.stdout.strip()
 
-        kc = BlockingKernelClient()
-        kc.load_connection_info({**conn_info, "ip": "127.0.0.1"})
-        kc.start_channels()
-        kc.wait_for_ready(timeout=self.timeout)
-        self.client = kc
+        try:
+            ready = self.execute_cell(
+                "pass",
+                timeout=min(10, self.timeout),
+                store_history=False,
+            )
+        except Exception as exc:
+            logs = self._container_logs()
+            self.shutdown()
+            details = f"\nContainer logs:\n{logs}" if logs else ""
+            raise RuntimeError(f"Kernel container did not become ready.{details}") from exc
+        if not ready.success:
+            logs = self._container_logs()
+            self.shutdown()
+            details = f"\nContainer logs:\n{logs}" if logs else ""
+            raise RuntimeError(
+                "Kernel container did not become ready: "
+                f"{ready.error_name}: {ready.error_value}{details}"
+            )
+        self.client = object()
 
     def shutdown(self) -> None:
         if self.client is not None:
@@ -375,6 +485,57 @@ class ContainerJupyterKernelSession(_KernelClientMixin):
         self.kernel_id = str(uuid.uuid4())
         self.start()
 
+    def execute_cell(
+        self,
+        source: str,
+        *,
+        timeout: int | None = None,
+        store_history: bool = True,
+    ) -> CellExecutionResult:
+        if self._container_id is None:
+            raise RuntimeError("Jupyter kernel container is not started.")
+
+        effective_timeout = timeout or self.timeout
+        payload = {
+            "connection_file": f"/workspace/{self._CONN_FILE}",
+            "source": source,
+            "store_history": store_history,
+        }
+        try:
+            proc = subprocess.run(
+                [
+                    _docker_binary(),
+                    "exec",
+                    "-i",
+                    self._container_id,
+                    "python",
+                    "-c",
+                    _DOCKER_EXECUTE_SCRIPT,
+                ],
+                input=json.dumps(payload),
+                capture_output=True,
+                text=True,
+                timeout=effective_timeout + 5,
+            )
+        except subprocess.TimeoutExpired:
+            self._interrupt_kernel()
+            return _timeout_result(effective_timeout)
+
+        if proc.returncode != 0:
+            raise RuntimeError(
+                "Failed to execute code through Docker kernel client: "
+                f"{proc.stderr.strip()}"
+            )
+
+        try:
+            data = json.loads(proc.stdout)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                "Docker kernel client returned invalid JSON: "
+                f"{proc.stdout.strip()} {proc.stderr.strip()}"
+            ) from exc
+        return CellExecutionResult(**data)
+
     def _interrupt_kernel(self) -> None:
         if self._container_id is None:
             return
@@ -396,7 +557,7 @@ class ContainerJupyterKernelSession(_KernelClientMixin):
             "--name", container_name,
             "--workdir", "/workspace",
             "--mount", f"type=bind,source={self.workspace_dir},target=/workspace",
-            "--tmpfs", "/tmp:rw,nosuid,nodev,size=256m",
+            "--tmpfs", "/tmp:rw,nosuid,nodev,size=256m,mode=1777",
             "--read-only",
             "--cap-drop", "ALL",
             "--security-opt", "no-new-privileges",
@@ -406,16 +567,49 @@ class ContainerJupyterKernelSession(_KernelClientMixin):
             "--network", self.network_name,
         ]
         for port in ports:
-            command.extend(["-p", f"{port}:{port}"])
+            command.extend(["-p", f"127.0.0.1:{port}:{port}"])
+        command.extend(_docker_user_args())
         command.extend([
             "--env", "PYTHONIOENCODING=utf-8",
             "--env", "PYTHONUTF8=1",
+            "--env", "HOME=/tmp",
+            "--env", "JUPYTER_RUNTIME_DIR=/tmp/jupyter-runtime",
+            "--env", "IPYTHONDIR=/tmp/ipython",
+            "--env", "MPLCONFIGDIR=/tmp/matplotlib",
+            "--env", "XDG_CACHE_HOME=/tmp/cache",
+            "--env", "XDG_CONFIG_HOME=/tmp/config",
             "--env", "MPLBACKEND=Agg",
             "--env", "AUTOVIBE_JUPYTER_KERNEL=1",
             self.docker_image,
             "python", "-m", "ipykernel_launcher", "-f", f"/workspace/{self._CONN_FILE}",
         ])
         return command
+
+    def _container_logs(self) -> str:
+        if self._container_id is None:
+            return ""
+        try:
+            proc = subprocess.run(
+                [_docker_binary(), "logs", self._container_id],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+        except Exception:
+            return ""
+        return "\n".join(part for part in (proc.stdout, proc.stderr) if part).strip()
+
+    def kernel_visible_path(self, path: str | Path) -> str:
+        resolved = Path(path).resolve()
+        try:
+            relative = resolved.relative_to(self.workspace_dir)
+        except ValueError as exc:
+            raise ValueError(
+                f"Container kernel path must be inside workspace: {resolved}"
+            ) from exc
+        if str(relative) == ".":
+            return "/workspace"
+        return "/workspace/" + relative.as_posix()
 
 
 class ContainerJupyterKernelBackend:
@@ -449,7 +643,7 @@ class ContainerJupyterKernelBackend:
         self.network_name = network_name or os.getenv(
             "AUTOVIBE_KERNEL_NETWORK", "autovibe-kernels"
         )
-        self._ensure_network()
+        _ensure_internal_network(self.network_name)
 
     def create_session(self, workspace_dir: str | Path) -> ContainerJupyterKernelSession:
         return ContainerJupyterKernelSession(
@@ -460,30 +654,6 @@ class ContainerJupyterKernelBackend:
             pids_limit=self.pids_limit,
             network_name=self.network_name,
         )
-
-    def _ensure_network(self) -> None:
-        try:
-            subprocess.run(
-                [
-                    _docker_binary(),
-                    "network",
-                    "create",
-                    "--internal",
-                    "--driver",
-                    "bridge",
-                    self.network_name,
-                ],
-                capture_output=True,
-                timeout=10,
-            )
-        except FileNotFoundError as exc:
-            raise RuntimeError(
-                "Docker backend is enabled for the kernel but the 'docker' binary "
-                "was not found. Install Docker or set DOCKER_BINARY to the correct path."
-            ) from exc
-        except Exception:
-            pass
-
 
 def _find_free_ports(n: int) -> list[int]:
     """Bind n sockets to ephemeral ports, collect port numbers, then release."""
@@ -504,6 +674,61 @@ def _find_free_ports(n: int) -> list[int]:
 
 def _docker_binary() -> str:
     return os.getenv("DOCKER_BINARY", "docker")
+
+
+def _ensure_internal_network(network_name: str) -> None:
+    try:
+        proc = subprocess.run(
+            [
+                _docker_binary(),
+                "network",
+                "create",
+                "--internal",
+                "--driver",
+                "bridge",
+                network_name,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except FileNotFoundError as exc:
+        raise RuntimeError(
+            "Docker backend is enabled for the kernel but the 'docker' binary "
+            "was not found. Install Docker or set DOCKER_BINARY to the correct path."
+        ) from exc
+    except Exception:
+        return
+
+    stderr = proc.stderr or ""
+    if proc.returncode != 0 and "already exists" not in stderr.lower():
+        raise RuntimeError(
+            f"Failed to create Docker network '{network_name}': {stderr.strip()}"
+        )
+
+
+def _docker_user_args() -> list[str]:
+    if os.name == "nt" or not hasattr(os, "getuid") or not hasattr(os, "getgid"):
+        return []
+    return ["--user", f"{os.getuid()}:{os.getgid()}"]
+
+
+def _timeout_result(timeout: int) -> CellExecutionResult:
+    error_value = f"Cell execution exceeded {timeout}s"
+    return CellExecutionResult(
+        success=False,
+        error_name="TimeoutError",
+        error_value=error_value,
+        stderr=error_value,
+        outputs=[
+            {
+                "output_type": "error",
+                "ename": "TimeoutError",
+                "evalue": error_value,
+                "traceback": [error_value],
+            }
+        ],
+    )
 
 
 def _int_env(env_var: str, override: int | None, default: int) -> int:

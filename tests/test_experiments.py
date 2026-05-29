@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from experiments import compare, mlflow_config, run_baseline, run_gym, run_multishot
+from experiments import compare, mlflow_config, run_baseline, run_fixed, run_gym, run_multishot
 
 
 def test_run_gym_load_dataset_returns_splits_and_metadata(tmp_path):
@@ -44,6 +44,14 @@ def test_run_gym_dataset_name_falls_back_to_file_stem():
     assert run_gym._dataset_name(splits, None) == "dataset"
 
 
+def test_run_gym_logs_kernel_backend_from_environment(monkeypatch):
+    monkeypatch.setenv("AUTOVIBE_KERNEL_BACKEND", "docker")
+    assert run_gym._kernel_backend_label() == "jupyter-docker"
+
+    monkeypatch.setenv("AUTOVIBE_KERNEL_BACKEND", "local")
+    assert run_gym._kernel_backend_label() == "jupyter-local"
+
+
 def test_run_baseline_extract_code_prefers_python_fence():
     text = "explain\n```python\nprint('ok')\n```"
 
@@ -71,6 +79,24 @@ def test_run_multishot_feedback_omits_empty_output_sections():
     assert "[OUTPUT]" not in feedback
     assert "[ERROR]" not in feedback
     assert "0 shots remaining" in feedback
+
+
+def test_run_fixed_summary_metrics_do_not_log_missing_test_metric_as_zero():
+    metrics = run_fixed._summary_metrics(
+        {
+            "test_metric": None,
+            "checklist_coverage": 0.5,
+            "steps_used": 3,
+            "errors_count": 1,
+            "input_tokens": 10,
+            "output_tokens": 4,
+            "elapsed_seconds": 2.0,
+        }
+    )
+
+    assert "test_metric" not in metrics
+    assert metrics["has_test_metric"] == 0
+    assert metrics["submit_failed"] == 1
 
 
 def test_configure_mlflow_tracking_ignores_placeholder_uri(monkeypatch):

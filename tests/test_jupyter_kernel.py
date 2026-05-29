@@ -1,3 +1,4 @@
+import json
 import types
 
 import pandas as pd
@@ -84,6 +85,25 @@ def _make_fake_subprocess(container_id="abc123", returncode=0):
 
     def fake_run(command, **kwargs):
         calls.append(command)
+        if "exec" in command:
+            return types.SimpleNamespace(
+                stdout=json.dumps(
+                    {
+                        "execution_count": None,
+                        "outputs": [],
+                        "stdout": "",
+                        "stderr": "",
+                        "error_name": None,
+                        "error_value": None,
+                        "traceback": [],
+                        "display_outputs": [],
+                        "success": True,
+                        "elapsed_seconds": 0.0,
+                    }
+                ),
+                stderr="",
+                returncode=0,
+            )
         return types.SimpleNamespace(
             stdout=container_id + "\n",
             stderr="",
@@ -104,6 +124,10 @@ def test_container_session_docker_command_includes_security_flags(monkeypatch, t
         start_channels=lambda: None,
         wait_for_ready=lambda timeout=30: None,
         stop_channels=lambda: None,
+        kernel_info=lambda: None,
+        shell_channel=types.SimpleNamespace(
+            get_msg=lambda timeout=1: {"msg_type": "kernel_info_reply"}
+        ),
     )
     monkeypatch.setattr(
         "gym.jupyter_kernel.BlockingKernelClient",
@@ -121,11 +145,13 @@ def test_container_session_docker_command_includes_security_flags(monkeypatch, t
     session.start()
 
     assert calls, "subprocess.run was never called"
-    docker_cmd = calls[0]
+    assert any(cmd[:5] == ["docker", "network", "create", "--internal", "--driver"] for cmd in calls)
+    docker_cmd = next(cmd for cmd in calls if cmd[:3] == ["docker", "run", "-d"])
     joined = " ".join(str(t) for t in docker_cmd)
 
     assert docker_cmd[:3] == ["docker", "run", "-d"]
     assert "--read-only" in docker_cmd
+    assert "/tmp:rw,nosuid,nodev,size=256m,mode=1777" in docker_cmd
     assert "--cap-drop" in docker_cmd and "ALL" in docker_cmd
     assert "--security-opt" in docker_cmd and "no-new-privileges" in docker_cmd
     assert "--memory" in docker_cmd and "1024m" in joined
@@ -134,6 +160,17 @@ def test_container_session_docker_command_includes_security_flags(monkeypatch, t
     assert "--cpus" in docker_cmd and "0.5" in joined
     # 5 ZMQ ports must be published
     assert joined.count("-p ") >= 5 or joined.count(" -p ") >= 5 or docker_cmd.count("-p") >= 5
+    published_ports = [
+        docker_cmd[index + 1]
+        for index, token in enumerate(docker_cmd)
+        if token == "-p"
+    ]
+    assert len(published_ports) == 5
+    assert all(port.startswith("127.0.0.1:") for port in published_ports)
+    assert "HOME=/tmp" in docker_cmd
+    assert "JUPYTER_RUNTIME_DIR=/tmp/jupyter-runtime" in docker_cmd
+    assert "IPYTHONDIR=/tmp/ipython" in docker_cmd
+    assert "XDG_CACHE_HOME=/tmp/cache" in docker_cmd
     assert "autovibe-test-sandbox" in docker_cmd
     assert "ipykernel_launcher" in joined
 
@@ -148,6 +185,10 @@ def test_container_session_shutdown_stops_container(monkeypatch, tmp_path):
         start_channels=lambda: None,
         wait_for_ready=lambda timeout=30: None,
         stop_channels=lambda: None,
+        kernel_info=lambda: None,
+        shell_channel=types.SimpleNamespace(
+            get_msg=lambda timeout=1: {"msg_type": "kernel_info_reply"}
+        ),
     )
     monkeypatch.setattr("gym.jupyter_kernel.BlockingKernelClient", lambda: fake_client)
 
@@ -164,6 +205,19 @@ def test_container_session_shutdown_stops_container(monkeypatch, tmp_path):
 
     assert session.client is None
     assert session._container_id is None
+
+
+def test_container_session_translates_workspace_paths(tmp_path):
+    session = ContainerJupyterKernelSession(tmp_path, docker_image="autovibe-test-sandbox")
+    nested = tmp_path / "data" / "train.csv"
+    nested.parent.mkdir()
+    nested.write_text("x,y\n1,0\n", encoding="utf-8")
+
+    assert session.kernel_visible_path(tmp_path) == "/workspace"
+    assert session.kernel_visible_path(nested) == "/workspace/data/train.csv"
+
+    with pytest.raises(ValueError, match="inside workspace"):
+        session.kernel_visible_path(tmp_path.parent / "outside.pkl")
 
 
 def test_container_session_raises_if_docker_unavailable(monkeypatch, tmp_path):
@@ -192,6 +246,9 @@ def test_container_backend_ensure_network_called_on_init(monkeypatch):
         "network" in " ".join(str(t) for t in cmd) and "test-net" in " ".join(str(t) for t in cmd)
         for cmd in calls
     ), f"Expected docker network create in calls, got: {calls}"
+    network_cmd = calls[0]
+    assert "--internal" in network_cmd
+    assert "--driver" in network_cmd and "bridge" in network_cmd
 
 
 def test_container_backend_raises_if_docker_missing(monkeypatch):
@@ -210,6 +267,28 @@ def test_find_free_ports_returns_distinct_ports():
     assert len(set(ports)) == 5
     for port in ports:
         assert 1024 <= port <= 65535
+
+
+def test_local_kernel_env_strips_common_secret_variables(monkeypatch, tmp_path):
+    secret_names = [
+        "OPENAI_API_KEY",
+        "GOOGLE_API_KEY",
+        "GEMINI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "LLM_API_KEY",
+        "MLFLOW_TRACKING_URI",
+        "SERVICE_TOKEN",
+        "PRIVATE_SECRET",
+        "DB_PASSWORD",
+    ]
+    for name in secret_names:
+        monkeypatch.setenv(name, f"secret-{name}")
+
+    session = JupyterKernelSession(tmp_path)
+
+    for name in secret_names:
+        assert name not in session.env
+    assert session.env["AUTOVIBE_JUPYTER_KERNEL"] == "1"
 
 
 # ---------------------------------------------------------------------------
