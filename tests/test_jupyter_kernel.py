@@ -127,6 +127,7 @@ def test_container_session_docker_command_includes_security_flags(monkeypatch, t
 
     assert docker_cmd[:3] == ["docker", "run", "-d"]
     assert "--read-only" in docker_cmd
+    assert "/tmp:rw,nosuid,nodev,size=256m,mode=1777" in docker_cmd
     assert "--cap-drop" in docker_cmd and "ALL" in docker_cmd
     assert "--security-opt" in docker_cmd and "no-new-privileges" in docker_cmd
     assert "--memory" in docker_cmd and "1024m" in joined
@@ -143,6 +144,9 @@ def test_container_session_docker_command_includes_security_flags(monkeypatch, t
     assert len(published_ports) == 5
     assert all(port.startswith("127.0.0.1:") for port in published_ports)
     assert "HOME=/tmp" in docker_cmd
+    assert "JUPYTER_RUNTIME_DIR=/tmp/jupyter-runtime" in docker_cmd
+    assert "IPYTHONDIR=/tmp/ipython" in docker_cmd
+    assert "XDG_CACHE_HOME=/tmp/cache" in docker_cmd
     assert "autovibe-test-sandbox" in docker_cmd
     assert "ipykernel_launcher" in joined
 

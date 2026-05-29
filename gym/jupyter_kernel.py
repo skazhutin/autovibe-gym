@@ -353,7 +353,14 @@ class ContainerJupyterKernelSession(_KernelClientMixin):
         kc = BlockingKernelClient()
         kc.load_connection_info({**conn_info, "ip": "127.0.0.1"})
         kc.start_channels()
-        kc.wait_for_ready(timeout=self.timeout)
+        try:
+            kc.wait_for_ready(timeout=self.timeout)
+        except Exception as exc:
+            logs = self._container_logs()
+            kc.stop_channels()
+            self.shutdown()
+            details = f"\nContainer logs:\n{logs}" if logs else ""
+            raise RuntimeError(f"Kernel container did not become ready.{details}") from exc
         self.client = kc
 
     def shutdown(self) -> None:
@@ -400,7 +407,7 @@ class ContainerJupyterKernelSession(_KernelClientMixin):
             "--name", container_name,
             "--workdir", "/workspace",
             "--mount", f"type=bind,source={self.workspace_dir},target=/workspace",
-            "--tmpfs", "/tmp:rw,nosuid,nodev,size=256m",
+            "--tmpfs", "/tmp:rw,nosuid,nodev,size=256m,mode=1777",
             "--read-only",
             "--cap-drop", "ALL",
             "--security-opt", "no-new-privileges",
@@ -416,12 +423,31 @@ class ContainerJupyterKernelSession(_KernelClientMixin):
             "--env", "PYTHONIOENCODING=utf-8",
             "--env", "PYTHONUTF8=1",
             "--env", "HOME=/tmp",
+            "--env", "JUPYTER_RUNTIME_DIR=/tmp/jupyter-runtime",
+            "--env", "IPYTHONDIR=/tmp/ipython",
+            "--env", "MPLCONFIGDIR=/tmp/matplotlib",
+            "--env", "XDG_CACHE_HOME=/tmp/cache",
+            "--env", "XDG_CONFIG_HOME=/tmp/config",
             "--env", "MPLBACKEND=Agg",
             "--env", "AUTOVIBE_JUPYTER_KERNEL=1",
             self.docker_image,
             "python", "-m", "ipykernel_launcher", "-f", f"/workspace/{self._CONN_FILE}",
         ])
         return command
+
+    def _container_logs(self) -> str:
+        if self._container_id is None:
+            return ""
+        try:
+            proc = subprocess.run(
+                [_docker_binary(), "logs", self._container_id],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+        except Exception:
+            return ""
+        return "\n".join(part for part in (proc.stdout, proc.stderr) if part).strip()
 
     def kernel_visible_path(self, path: str | Path) -> str:
         resolved = Path(path).resolve()
