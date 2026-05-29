@@ -54,7 +54,7 @@ STAGES_LOCAL = [
             "numeric. Check for and remove duplicate rows if present. "
             "Build reusable transformers that can be applied at predict time."
         ),
-        "budget": 4,
+        "budget": 5,
     },
     {
         "name": "feature_engineering",
@@ -64,7 +64,7 @@ STAGES_LOCAL = [
             "interaction terms, or domain-specific encodings. "
             "Evaluate impact on validation score."
         ),
-        "budget": 4,
+        "budget": 5,
     },
     {
         "name": "model_selection",
@@ -88,9 +88,11 @@ STAGES_LOCAL = [
     },
 ]
 
-# Cloud: same stages but tighter budgets
+# Cloud: reduce only EDA and tuning; keep preprocessing/feature_eng full budget
+# so the agent has enough room to recover from errors before model training.
+_CLOUD_BUDGET_CUTS = {"eda": 1, "hyperparameter_tuning": 1}
 STAGES_CLOUD = [
-    {**s, "budget": max(1, s["budget"] - 1)}
+    {**s, "budget": max(2, s["budget"] - _CLOUD_BUDGET_CUTS.get(s["name"], 0))}
     for s in STAGES_LOCAL
 ]
 
@@ -228,6 +230,17 @@ class FixedTransitionsAgent:
                 stage_steps += 1
             if observation.stderr.strip():
                 stage_errors += 1
+                # If more than half of stage budget consumed by errors, nudge
+                # agent to fall back to a simpler approach.
+                if stage_errors >= budget // 2 and stage_remaining > 0:
+                    self.messages.append({
+                        "role": "user",
+                        "content": (
+                            f"[STAGE HINT] You have {stage_errors} errors so far in {stage_label}. "
+                            "If you are stuck, fall back to the simplest working approach "
+                            "(e.g. passthrough or basic imputer) so you can move on and train a model."
+                        ),
+                    })
             if observation.submitted or observation.done:
                 break
 
@@ -254,7 +267,12 @@ class FixedTransitionsAgent:
                     model_var = k
                     break
         if model_var is None:
+            print(
+                "[fixed] WARNING: forced submit skipped — no trained model found in workspace. "
+                "Agent exhausted stage budgets without producing a model. test_metric will be None."
+            )
             return
+        print(f"[fixed] Forced submit using workspace variable '{model_var}'.")
         obs = self.env.step(Action.submit_action(model_var))
         self.messages.append({"role": "user", "content": obs.to_feedback_message()})
 
