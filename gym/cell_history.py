@@ -35,9 +35,13 @@ class Cell:
             "checklist_coverage": self.checklist_coverage,
             "done": self.done,
             "submitted": self.submitted,
-            "test_metric": self.test_metric,
             "model_var": self.model_var,
         }
+
+    def to_private_dict(self) -> dict[str, Any]:
+        data = self.to_dict()
+        data["test_metric"] = self.test_metric
+        return data
 
 
 @dataclass

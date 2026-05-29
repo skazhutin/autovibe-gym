@@ -25,6 +25,13 @@ def test_action_parses_json_and_markdown_json_blocks():
     assert action == Action.code_action("x = 1")
 
 
+def test_action_rejects_malformed_or_non_object_json():
+    with pytest.raises(ActionParseError, match="Invalid action JSON"):
+        Action.from_json('{"type": "code",')
+    with pytest.raises(ActionParseError, match="must be an object"):
+        Action.from_json('["not", "an", "object"]')
+
+
 def test_action_falls_back_to_python_code_block_for_legacy_responses():
     action = Action.from_llm_response("```python\nx = 1\n```")
 
@@ -38,6 +45,25 @@ def test_action_parses_legacy_submit_literal():
 def test_coerce_action_rejects_unknown_object_type():
     with pytest.raises(ActionParseError, match="Unsupported action object"):
         coerce_action(123)
+
+
+@pytest.mark.parametrize(
+    "payload, message",
+    [
+        ({"type": "dance"}, "Unsupported action type"),
+        ({"type": "add_cell", "cell_type": "raw", "source": ""}, "cell_type"),
+        ({"type": "update_cell", "source": "x = 1"}, "cell_id"),
+        ({"type": "delete_cell"}, "cell_id"),
+        ({"type": "run_cell"}, "cell_id"),
+        ({"type": "move_cell", "cell_id": "cell_01"}, "new_position"),
+        ({"type": "move_cell", "cell_id": "cell_01", "new_position": "later"}, "integer"),
+        ({"type": "validate", "model_var": ""}, "model_var"),
+        ({"type": "submit", "model_var": ""}, "model_var"),
+    ],
+)
+def test_invalid_notebook_actions_fail_clearly(payload, message):
+    with pytest.raises(ActionParseError, match=message):
+        Action.from_payload(payload)
 
 
 def test_observation_feedback_includes_outputs_hints_and_submission():
@@ -60,6 +86,20 @@ def test_observation_feedback_includes_outputs_hints_and_submission():
     assert "- hint" in feedback
     assert "test_metric=0.9" not in feedback
     assert "[SUBMITTED] Final candidate accepted" in feedback
+
+
+def test_observation_public_dict_omits_private_metrics():
+    data = Observation(
+        action="submit",
+        step=1,
+        budget_remaining=0,
+        checklist_coverage=0.75,
+        test_metric=0.91,
+        submitted=True,
+    ).to_dict()
+
+    assert "test_metric" not in data
+    assert "checklist_coverage" not in data
 
 
 def test_observation_feedback_marks_budget_exhaustion_without_submission():

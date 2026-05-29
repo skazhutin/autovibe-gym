@@ -63,6 +63,11 @@ def _dataset_name(splits: DatasetSplits, dataset_arg: str | None) -> str:
     return "dataset"
 
 
+def _kernel_backend_label() -> str:
+    backend = os.getenv("AUTOVIBE_KERNEL_BACKEND", "local").strip().lower()
+    return "jupyter-docker" if backend == "docker" else "jupyter-local"
+
+
 def main():
     parser = argparse.ArgumentParser()
     source = parser.add_mutually_exclusive_group(required=True)
@@ -130,7 +135,8 @@ def main():
             "max_tokens": max_tokens,
             "token_budget": max_tokens,
             "sandbox_timeout": sandbox_timeout,
-            "executor_backend": "jupyter-local",
+            "executor_backend": _kernel_backend_label(),
+            "kernel_backend": os.getenv("AUTOVIBE_KERNEL_BACKEND", "local").strip().lower(),
             "dataset_suite": splits.metadata.suite or "legacy",
             "dataset_split_strategy": splits.metadata.split_strategy,
             "dataset_role": splits.metadata.role,
@@ -151,7 +157,10 @@ def main():
         )
 
         agent = GymAgent(env=env, model=model_name, max_tokens=max_tokens)
-        summary = agent.run()
+        try:
+            summary = agent.run()
+        finally:
+            env.close()
 
         has_test_metric = summary.get("final_test_metric") is not None
         metrics = {
@@ -183,7 +192,11 @@ def main():
             metrics["test_metric"] = summary["final_test_metric"]
         mlflow.log_metrics(metrics)
         mlflow.log_artifacts(summary["episode_workspace"], artifact_path="episode")
-        env.close()
+        if summary.get("private_episode_dir"):
+            mlflow.log_artifacts(
+                summary["private_episode_dir"],
+                artifact_path="episode_private",
+            )
 
     print("\n=== Run Summary ===")
     print(json.dumps(summary, indent=2))

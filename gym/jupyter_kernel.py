@@ -77,6 +77,9 @@ class _KernelClientMixin:
     workspace_dir: Path
     timeout: int
 
+    def kernel_visible_path(self, path: str | Path) -> str:
+        return str(Path(path))
+
     def execute_cell(
         self,
         source: str,
@@ -176,9 +179,9 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 
-_AUTOVIBE_WORKSPACE = Path({str(self.workspace_dir)!r})
-train_df = pd.read_csv(Path({str(train_csv)!r}))
-val_df = pd.read_csv(Path({str(val_csv)!r}))
+_AUTOVIBE_WORKSPACE = Path({self.kernel_visible_path(self.workspace_dir)!r})
+train_df = pd.read_csv(Path({self.kernel_visible_path(train_csv)!r}))
+val_df = pd.read_csv(Path({self.kernel_visible_path(val_csv)!r}))
 target_col = {target_col!r}
 """.strip()
         result = self.execute_cell(source, store_history=False)
@@ -197,7 +200,7 @@ from pathlib import Path as _AutovibePath
 if {variable_name!r} not in globals():
     raise NameError("Variable not found: {variable_name}")
 
-with open(_AutovibePath({str(output_path)!r}), "wb") as _autovibe_file:
+with open(_AutovibePath({self.kernel_visible_path(output_path)!r}), "wb") as _autovibe_file:
     _autovibe_pickle.dump(globals()[{variable_name!r}], _autovibe_file)
 """.strip()
         result = self.execute_cell(source, store_history=False)
@@ -406,7 +409,7 @@ class ContainerJupyterKernelSession(_KernelClientMixin):
             "--network", self.network_name,
         ]
         for port in ports:
-            command.extend(["-p", f"{port}:{port}"])
+            command.extend(["-p", f"127.0.0.1:{port}:{port}"])
         command.extend([
             "--env", "PYTHONIOENCODING=utf-8",
             "--env", "PYTHONUTF8=1",
@@ -416,6 +419,18 @@ class ContainerJupyterKernelSession(_KernelClientMixin):
             "python", "-m", "ipykernel_launcher", "-f", f"/workspace/{self._CONN_FILE}",
         ])
         return command
+
+    def kernel_visible_path(self, path: str | Path) -> str:
+        resolved = Path(path).resolve()
+        try:
+            relative = resolved.relative_to(self.workspace_dir)
+        except ValueError as exc:
+            raise ValueError(
+                f"Container kernel path must be inside workspace: {resolved}"
+            ) from exc
+        if str(relative) == ".":
+            return "/workspace"
+        return "/workspace/" + relative.as_posix()
 
 
 class ContainerJupyterKernelBackend:

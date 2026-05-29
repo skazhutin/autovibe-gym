@@ -134,6 +134,13 @@ def test_container_session_docker_command_includes_security_flags(monkeypatch, t
     assert "--cpus" in docker_cmd and "0.5" in joined
     # 5 ZMQ ports must be published
     assert joined.count("-p ") >= 5 or joined.count(" -p ") >= 5 or docker_cmd.count("-p") >= 5
+    published_ports = [
+        docker_cmd[index + 1]
+        for index, token in enumerate(docker_cmd)
+        if token == "-p"
+    ]
+    assert len(published_ports) == 5
+    assert all(port.startswith("127.0.0.1:") for port in published_ports)
     assert "autovibe-test-sandbox" in docker_cmd
     assert "ipykernel_launcher" in joined
 
@@ -166,6 +173,19 @@ def test_container_session_shutdown_stops_container(monkeypatch, tmp_path):
     assert session._container_id is None
 
 
+def test_container_session_translates_workspace_paths(tmp_path):
+    session = ContainerJupyterKernelSession(tmp_path, docker_image="autovibe-test-sandbox")
+    nested = tmp_path / "data" / "train.csv"
+    nested.parent.mkdir()
+    nested.write_text("x,y\n1,0\n", encoding="utf-8")
+
+    assert session.kernel_visible_path(tmp_path) == "/workspace"
+    assert session.kernel_visible_path(nested) == "/workspace/data/train.csv"
+
+    with pytest.raises(ValueError, match="inside workspace"):
+        session.kernel_visible_path(tmp_path.parent / "outside.pkl")
+
+
 def test_container_session_raises_if_docker_unavailable(monkeypatch, tmp_path):
     def fake_run(command, **kwargs):
         raise FileNotFoundError("docker not found")
@@ -192,6 +212,9 @@ def test_container_backend_ensure_network_called_on_init(monkeypatch):
         "network" in " ".join(str(t) for t in cmd) and "test-net" in " ".join(str(t) for t in cmd)
         for cmd in calls
     ), f"Expected docker network create in calls, got: {calls}"
+    network_cmd = calls[0]
+    assert "--internal" in network_cmd
+    assert "--driver" in network_cmd and "bridge" in network_cmd
 
 
 def test_container_backend_raises_if_docker_missing(monkeypatch):
@@ -210,6 +233,28 @@ def test_find_free_ports_returns_distinct_ports():
     assert len(set(ports)) == 5
     for port in ports:
         assert 1024 <= port <= 65535
+
+
+def test_local_kernel_env_strips_common_secret_variables(monkeypatch, tmp_path):
+    secret_names = [
+        "OPENAI_API_KEY",
+        "GOOGLE_API_KEY",
+        "GEMINI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "LLM_API_KEY",
+        "MLFLOW_TRACKING_URI",
+        "SERVICE_TOKEN",
+        "PRIVATE_SECRET",
+        "DB_PASSWORD",
+    ]
+    for name in secret_names:
+        monkeypatch.setenv(name, f"secret-{name}")
+
+    session = JupyterKernelSession(tmp_path)
+
+    for name in secret_names:
+        assert name not in session.env
+    assert session.env["AUTOVIBE_JUPYTER_KERNEL"] == "1"
 
 
 # ---------------------------------------------------------------------------

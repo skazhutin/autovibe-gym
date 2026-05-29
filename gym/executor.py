@@ -192,6 +192,15 @@ class CodeExecutor:
             "disable_network": self.disable_network,
             "memory_limit_mb": self.memory_limit_mb,
             "cpu_time_limit_seconds": max(int(self.timeout), 1),
+            "python_path_entries": sorted(
+                str(Path(path).resolve())
+                for path in sys.path
+                if path
+                and (
+                    "site-packages" in Path(path).parts
+                    or "dist-packages" in Path(path).parts
+                )
+            ),
         }
 
     def _docker_policy(self) -> dict:
@@ -208,6 +217,7 @@ class CodeExecutor:
             "disable_network": self.disable_network,
             "memory_limit_mb": None,
             "cpu_time_limit_seconds": max(int(self.timeout), 1),
+            "python_path_entries": [],
         }
 
     @staticmethod
@@ -249,6 +259,10 @@ import pickle
 import sys
 
 _POLICY = {policy!r}
+
+for _entry in _POLICY.get("python_path_entries", []):
+    if _entry and _entry not in sys.path:
+        sys.path.insert(0, _entry)
 
 
 def _path(value):

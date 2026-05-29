@@ -36,6 +36,9 @@ jobs:
           python scripts/prepare_datasets.py --suite example_datasets
           python scripts/prepare_datasets.py --list
 
+      - name: Build Jupyter sandbox image
+        run: docker build -f Dockerfile.sandbox -t autovibe-gym-sandbox:latest .
+
       - name: Run tests with coverage
         run: |
           python -m pytest \
@@ -47,6 +50,7 @@ jobs:
             --cov-fail-under=70
 
       - name: Upload coverage report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: coverage-xml

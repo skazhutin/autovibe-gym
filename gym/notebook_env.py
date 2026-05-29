@@ -91,6 +91,7 @@ class NotebookGymEnv:
         metric_name: str = "score",
         max_steps: int = 20,
         workspace_dir: str | Path | None = None,
+        private_dir: str | Path | None = None,
         mode: str | EpisodeMode | None = None,
         backend: KernelExecutionBackend | None = None,
         kernel_timeout: int = 60,
@@ -107,6 +108,9 @@ class NotebookGymEnv:
         self.mode = resolve_episode_mode(mode)
         self.workspace_dir = Path(workspace_dir).resolve() if workspace_dir else Path(
             tempfile.mkdtemp(prefix="autovibe_episode_")
+        ).resolve()
+        self.private_dir = Path(private_dir).resolve() if private_dir else Path(
+            tempfile.mkdtemp(prefix="autovibe_private_")
         ).resolve()
         self.backend = backend or _default_kernel_backend()
         self.kernel_timeout = kernel_timeout
@@ -134,7 +138,9 @@ class NotebookGymEnv:
 
     def reset(self) -> dict:
         self.close()
+        self._clear_generated_artifacts()
         self.workspace_dir.mkdir(parents=True, exist_ok=True)
+        self.private_dir.mkdir(parents=True, exist_ok=True)
         data_dir = self.workspace_dir / "data"
         data_dir.mkdir(parents=True, exist_ok=True)
         self.state.train.to_csv(data_dir / "train.csv", index=False)
@@ -189,6 +195,22 @@ class NotebookGymEnv:
         if self.state.submitted:
             raise RuntimeError("Environment already finalized via submit().")
         parsed = coerce_action(action)
+        if self.state.step >= self.state.max_steps and parsed.type != "submit":
+            observation = self._observation(
+                action=parsed.type,
+                feedback_items=[
+                    self._contract_feedback(
+                        "step_budget_exhausted",
+                        "Step budget exhausted. Submit an already validated candidate.",
+                        severity="blocker",
+                    )
+                ],
+                done=True,
+                model_var=parsed.model_var if parsed.type == "validate" else None,
+                cell_id=parsed.cell_id,
+            )
+            self._record_event(action=parsed.type, blocked="step_budget_exhausted")
+            return self._record_observation(observation)
         self._consume_step(parsed)
 
         if parsed.type == "code":
@@ -217,9 +239,8 @@ class NotebookGymEnv:
         return max(self.state.max_steps - self.state.step, 0)
 
     def _consume_step(self, action: Action) -> None:
-        if self.state.step >= self.state.max_steps and action.type not in {"submit"}:
-            return
-        self.state.step += 1
+        if action.type != "submit":
+            self.state.step += 1
 
     def restart_and_run_all(self) -> Observation:
         self.kernel.restart()
@@ -364,7 +385,7 @@ class NotebookGymEnv:
             return self._record_observation(observation)
 
         candidate_id = str(uuid.uuid4())
-        artifact_path = self.workspace_dir / "artifacts" / f"{candidate_id}.pkl"
+        artifact_path = self.private_dir / "artifacts" / f"{candidate_id}.pkl"
         artifact_path.parent.mkdir(parents=True, exist_ok=True)
         with artifact_path.open("wb") as fh:
             pickle.dump(model, fh)
@@ -521,6 +542,7 @@ class NotebookGymEnv:
             "checklist_version": self.checklist_version,
             "feedback_policy_version": self.feedback_policy_version,
             "episode_workspace": str(self.workspace_dir),
+            "private_episode_dir": str(self.private_dir),
         }
         summary.update(self.private_summary)
         return summary
@@ -735,22 +757,66 @@ class NotebookGymEnv:
 
     def _save_artifacts(self) -> None:
         self.workspace_dir.mkdir(parents=True, exist_ok=True)
+        self.private_dir.mkdir(parents=True, exist_ok=True)
         self.notebook.save()
         final_ipynb = self.workspace_dir / "final_notebook.ipynb"
         shutil.copyfile(self.notebook.path, final_ipynb)
         self.notebook.export_python(self.workspace_dir / "final_notebook.py")
-        _write_json(self.workspace_dir / "notebook_events.json", self.events)
+        _write_json(
+            self.workspace_dir / "notebook_events.json",
+            [self._public_event(event) for event in self.events],
+        )
         _write_json(self.workspace_dir / "feedback_trace.json", self.feedback_trace)
         _write_json(
             self.workspace_dir / "validation_trajectory.json",
+            [self._public_candidate_record(record) for record in self.validation_trajectory],
+        )
+        _write_json(self.workspace_dir / "episode_summary.json", self.get_public_summary())
+        _write_json(self.private_dir / "notebook_events_private.json", self.events)
+        _write_json(
+            self.private_dir / "feedback_trace_private.json",
+            [observation.to_private_dict() for observation in self.state.history],
+        )
+        _write_json(
+            self.private_dir / "validation_trajectory_private.json",
             self.validation_trajectory,
         )
-        _write_json(self.workspace_dir / "episode_summary.json", self.get_summary())
+        _write_json(self.private_dir / "episode_summary.json", self.get_summary())
 
     def _visible_observation_dict(self, observation: Observation) -> dict[str, Any]:
         data = observation.to_dict()
         data.pop("test_metric", None)
+        data.pop("checklist_coverage", None)
         return _json_safe(data)
+
+    def get_public_summary(self) -> dict:
+        private_keys = {
+            "checklist_coverage",
+            "private_checklist_coverage",
+            "test_metric",
+            "final_test_metric",
+            "valid_submit",
+            "submit_failure_type",
+            "private_episode_dir",
+        }
+        return {
+            key: value
+            for key, value in self.get_summary().items()
+            if key not in private_keys
+        }
+
+    def _public_candidate_record(self, record: dict[str, Any]) -> dict[str, Any]:
+        public = dict(record)
+        public.pop("artifact_path", None)
+        return public
+
+    def _public_event(self, event: dict[str, Any]) -> dict[str, Any]:
+        public = copy.deepcopy(event)
+        public.pop("private", None)
+        candidate = public.get("candidate")
+        if isinstance(candidate, dict):
+            candidate.pop("artifact_path", None)
+        return public
 
     def _mark_dirty(self) -> None:
         self.dirty_since_clean_run = True
@@ -790,7 +856,9 @@ class NotebookGymEnv:
         )
 
     def _load_candidate_from_kernel(self, model_var: str) -> Any:
-        tmp_path = self.workspace_dir / f"_candidate_{uuid.uuid4().hex}.pkl"
+        tmp_dir = self.workspace_dir / ".autovibe_tmp"
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        tmp_path = tmp_dir / f"candidate_{uuid.uuid4().hex}.pkl"
         self.kernel.dump_variable_to_file(model_var, tmp_path)
         with tmp_path.open("rb") as fh:
             model = pickle.load(fh)
@@ -799,6 +867,32 @@ class NotebookGymEnv:
         except OSError:
             pass
         return model
+
+    def _clear_generated_artifacts(self) -> None:
+        for path in (
+            self.workspace_dir / "data",
+            self.workspace_dir / "artifacts",
+            self.workspace_dir / ".autovibe_tmp",
+        ):
+            if path.exists():
+                shutil.rmtree(path, ignore_errors=True)
+        for filename in (
+            "solution.ipynb",
+            "final_notebook.ipynb",
+            "final_notebook.py",
+            "notebook_events.json",
+            "feedback_trace.json",
+            "validation_trajectory.json",
+            "episode_summary.json",
+        ):
+            path = self.workspace_dir / filename
+            if path.exists():
+                try:
+                    path.unlink()
+                except OSError:
+                    pass
+        if self.private_dir.exists():
+            shutil.rmtree(self.private_dir, ignore_errors=True)
 
     def _notebook_status(self) -> dict[str, Any]:
         return {
