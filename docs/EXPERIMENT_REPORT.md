@@ -1,7 +1,7 @@
 # AutoML Gym — Experiment Report
 
 **Model:** deepseek-v4-flash  
-**Date:** 2026-05-28  
+**Date:** 2026-05-28 .. 2026-05-29  
 **Metric:** f1_macro (all datasets use macro-averaged F1)
 
 ---
@@ -95,6 +95,8 @@ The validation score is computed by agent code inside the sandbox (agent uses
 `val_df` directly). The final test score is computed by `env.submit()` once,
 on the hidden test split.
 
+### student_dropout
+
 | Mode | best val (agent-reported) | test_metric | gap |
 |------|:-------------------------:|:-----------:|:---:|
 | repeated single-shot | 0.690 | 0.740 | −0.050 |
@@ -106,9 +108,29 @@ on the hidden test split.
 agent's internal val evaluation was conservative (or used a different split).
 No evidence of val-set overfitting: test score is consistently ≥ val score.
 
+### room_occupancy
+
+| Mode | best val (agent-reported) | test_metric | gap |
+|------|:-------------------------:|:-----------:|:---:|
+| single-shot (baseline) | ~1.000 | 1.000 | ≈0 |
+| repeated single-shot | ~1.000 | 1.000 | ≈0 |
+| gym (flexible) | ~0.99* | null† | — |
+| fixed transitions | ~0.99* | null† | — |
+
+*val score from agent stdout on derived temporal features.
+†submit blocked — pre-flight validation found model incompatible with raw test rows.
+
+**Observation:** For room_occupancy, modes that produced a submittable model show
+essentially zero val-final gap (task is trivially solved by sensor features). The
+gym/fixed modes report high val scores on derived features but cannot submit — the
+pre-flight check catches the Pipeline-encapsulation failure before consuming the
+one-time test evaluation.
+
 ---
 
 ## 4. Cost-Quality Analysis
+
+### student_dropout
 
 | Mode | test_metric | input tokens | tokens / point | elapsed |
 |------|:-----------:|:------------:|:--------------:|:-------:|
@@ -122,6 +144,22 @@ No evidence of val-set overfitting: test score is consistently ≥ val score.
 Single-shot is **65× cheaper per performance point** than gym. Gym's diagnostic value
 (checklist, trajectory, failure analysis) must justify this overhead — which it does
 for environment evaluation purposes, but not for raw task performance.
+
+### room_occupancy (submitted modes only)
+
+| Mode | test_metric | input tokens | tokens / point | elapsed |
+|------|:-----------:|:------------:|:--------------:|:-------:|
+| single-shot | 1.000 | 1 126 | 1 126 | 30s |
+| repeated SS | 1.000 | 12 600 | 12 600 | 315s |
+| gym | null† | 186 822 | — | 143s |
+| fixed | null† | 335 131 | — | 207s |
+
+†No submittable model produced — tokens / point undefined.
+
+**Observation:** For a trivially solvable task, the one-shot baseline achieves perfect
+score with ~11× fewer tokens than repeated SS. The interactive modes spent far more
+tokens exploring temporal feature engineering that ultimately could not be submitted.
+Cost-quality efficiency strongly favours single-shot when the task difficulty is low.
 
 ---
 
@@ -157,16 +195,27 @@ This exception was raised **before** the try/except block in `submit()`, crashin
 entire gym run and logging it as FAILED in MLflow with no metrics.
 
 **Environment response:**
-1. First observation: `model.predict()` was not wrapped — environment was NOT robust to
-   schema mismatches, only to label-type mismatches.
-2. Fix applied to `gym/env.py:submit()` (2026-05-29): `model.predict(X_test)` is now
-   wrapped in a separate try/except. On failure: reset `submitted=False`, return an
-   error observation with diagnostic message instructing the agent to use a Pipeline.
+1. Initial state: `model.predict()` ran unprotected at submit time — schema mismatches
+   crashed the whole run with no recovery path.
+2. Fix applied (2026-05-29, ADR-010): **pre-flight model validation** introduced via
+   `_model_validation_hints()` in `gym/env.py`. After every code step, the environment
+   calls `model.predict(X_val[:32])` on 32 raw validation rows. If this raises any
+   exception, the agent immediately receives a `[MODEL CHECK]` hint naming the
+   variable and the exact error — *before the submit is ever attempted*.
+3. At submit time, `submit_by_name()` runs the same pre-flight check once more. If
+   pre-flight fails: the submit is **blocked** (`submitted=False` is preserved) and the
+   agent gets another `[MODEL CHECK]` hint. The agent can then fix the pipeline and
+   re-submit within the remaining step budget.
 
-This robustness fix means the gym run will now:
-- Return an error observation instead of crashing
-- Keep `submitted=False` so the fallback scanner can try another workspace variable
-- Log the failure as a **submission failure** in the trajectory, not a crash
+This design is superior to a try/except inside `submit()` because:
+- The agent is warned **during training**, not only when the budget is exhausted
+- The one-time test evaluation is not consumed on a structurally broken model
+- `submitted=False` stays open so the forced-submit fallback can find a valid model
+- The trajectory records `[MODEL CHECK]` as a diagnostic signal, not a crash
+
+In the recorded room_occupancy gym run, the agent exhausted its step budget before
+correcting the pipeline, so no submittable model was found and test_metric remained null.
+The environment handled this gracefully: no crash, full trajectory logged to MLflow.
 
 Both robustness failures are logged in the failure taxonomy (Section 6).
 
@@ -196,8 +245,11 @@ The environment exposes failures across 5 categories (per TZ):
   int predictions. Environment not robust. Fixed in `env.py:submit()` — coercion chain.
 - Gym (room_occupancy): agent extracted temporal features without sklearn Pipeline wrapper.
   `model.predict(X_test)` raised `ValueError: columns are missing: {'hour', 'minute', ...}`.
-  Environment was NOT robust to prediction schema errors. Fixed in `env.py:submit()` —
-  predict() now wrapped in try/except; returns error observation and allows retry.
+  Fixed via pre-flight validation (ADR-010): `_model_validation_hints()` runs
+  `model.predict(X_val[:32])` after every code step and emits `[MODEL CHECK]` hints so
+  the agent can correct the pipeline before submitting. Submit is additionally blocked at
+  `submit_by_name()` if pre-flight still fails. Agent exhausted budget without fixing the
+  pipeline → test_metric=null, full trajectory logged, no crash.
 
 ### Reproducibility failures
 - dry_bean: `openpyxl` not in Docker image → Excel file unreadable.

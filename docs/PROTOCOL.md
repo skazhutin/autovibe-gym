@@ -150,6 +150,7 @@ after every code action. No stage structure imposed.
 | Code execution stdout | ❌ | ❌ | ✅ | ✅ |
 | Code execution stderr | ❌ | ❌ | ✅ | ✅ |
 | Checklist hints | ❌ | ❌ | ✅ | ✅ |
+| `[MODEL CHECK]` pre-flight hint | ❌ | ❌ | ✅ | ✅ |
 | Stage goal announcement | ❌ | ❌ | ✅ | ❌ |
 | Notebook context (prior cells) | ❌ | ❌ | ✅ | ✅ |
 | Private test score | ❌ | ❌ | ❌ | ❌ |
@@ -198,4 +199,16 @@ Every run produces the following MLflow artifacts:
 2. **Single final evaluation:** `env.submit()` raises `RuntimeError` on second call.
 3. **Reproducible splits:** fixed seed, deterministic stratified split via `sklearn.train_test_split`.
 4. **Sandbox timeout:** each code step has a configurable timeout (default 60s local, 30s cloud).
-5. **Predict robustness:** `model.predict(X_test)` is wrapped in try/except. Schema errors (missing columns, wrong dtype) reset `submitted=False` and return an error observation instead of crashing. Three-stage coercion also handles label-type mismatches.
+5. **Label-type robustness:** `env.submit()` applies a three-stage coercion chain to
+   handle prediction/label dtype mismatches (e.g. agent returns int predictions for
+   string labels): (a) cast to `y_test.dtype`, (b) map int indices to sorted class
+   labels, (c) raise descriptive error. This makes the final evaluation robust to
+   common label-encoding patterns without silently altering predictions.
+6. **Pre-flight model validation (ADR-010):** After every code step in interactive modes,
+   the environment calls `model.predict(X_val[:32])` on raw validation rows for each
+   model variable in the workspace (`model`, `best_model`). Failures return a
+   `[MODEL CHECK]` hint identifying the variable and error before any submit is attempted.
+   `submit_by_name()` repeats the same check at submit time: if pre-flight fails, the
+   submit is **blocked** (`submitted=False` preserved) and the agent can correct the
+   pipeline within the remaining budget. This guarantees the one-time hidden test
+   evaluation is never consumed by a structurally broken model.
