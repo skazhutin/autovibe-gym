@@ -4,8 +4,15 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from ..config import get_settings
+from ..services import model_store
 
 router = APIRouter(tags=["health"])
+
+
+@router.get("/server-health")
+def server_health() -> dict:
+    """Reachability of the configured LLM server(s) — powers the header pill."""
+    return model_store.server_health()
 
 
 @router.get("/health")

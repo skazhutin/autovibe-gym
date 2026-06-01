@@ -29,12 +29,18 @@ const META: { match: (p: string) => boolean; title: string; sub: string }[] = [
 ];
 
 function HeaderStatus() {
-  const { data } = useAsync(() => api.health(), [], 15000);
-  const online = data?.status === "online";
+  // Reflects whether the LLM server (gemma/deepseek host) is reachable.
+  const { data, error } = useAsync(() => api.serverHealth(), [], 15000);
+  const online = !error && data?.online;
+  const title = error
+    ? "Дашборд-бэкенд недоступен"
+    : !data?.configured
+    ? "LLM-сервер не настроен (добавьте модель)"
+    : data.servers.map((s) => `${s.baseUrl} — ${s.online ? "онлайн" : s.error ?? s.status ?? "офлайн"}`).join("\n");
   return (
-    <span className="status-pill">
-      <Dot tone={online ? "green" : "gray"} />
-      {online ? "Бэкенд онлайн" : "Бэкенд офлайн"}
+    <span className="status-pill" title={title}>
+      <Dot tone={online ? "green" : "red"} pulse={false} />
+      {online ? "Сервер онлайн" : "Сервер офлайн"}
     </span>
   );
 }

@@ -177,8 +177,15 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export interface ServerHealth {
+  online: boolean;
+  configured: boolean;
+  servers: { baseUrl: string; online: boolean; status?: number; error?: string }[];
+}
+
 export const api = {
   health: () => req<Health>("/health"),
+  serverHealth: () => req<ServerHealth>("/server-health"),
 
   getSettings: () => req<Settings>("/settings"),
   saveSettings: (s: Partial<Settings>) =>
