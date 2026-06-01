@@ -30,7 +30,7 @@ function ChipMetric({ label, value, ring }: { label: string; value: React.ReactN
 
 /* ---- tabs ---- */
 function NotebookTab({ id, live }: { id: string; live: boolean }) {
-  const { data, loading } = useAsync(() => api.notebook(id), [id], live ? 4000 : 0);
+  const { data, loading } = useAsync(() => api.notebook(id), [id], live ? 2500 : 0);
   if (loading && !data) return <Skeleton h={300} />;
   const cells = data?.cells ?? [];
   if (!cells.length) return <EmptyState icon="notebook" title="Ноутбук пуст" text="Решение ещё не сформировано или артефакт недоступен." />;
@@ -61,7 +61,7 @@ function NotebookTab({ id, live }: { id: string; live: boolean }) {
 }
 
 function TrajectoryTab({ id, live }: { id: string; live: boolean }) {
-  const { data, loading } = useAsync(() => api.trajectory(id), [id], live ? 4000 : 0);
+  const { data, loading } = useAsync(() => api.trajectory(id), [id], live ? 2500 : 0);
   if (loading && !data) return <Skeleton h={300} />;
   const steps = data ?? [];
   if (!steps.length) return <EmptyState icon="route" title="Нет траектории" text="Шаги агента появятся здесь." />;
@@ -93,8 +93,8 @@ function TrajectoryTab({ id, live }: { id: string; live: boolean }) {
   );
 }
 
-function ChecklistTab({ id }: { id: string }) {
-  const { data, loading } = useAsync(() => api.checklist(id), [id]);
+function ChecklistTab({ id, live }: { id: string; live: boolean }) {
+  const { data, loading } = useAsync(() => api.checklist(id), [id], live ? 2500 : 0);
   if (loading && !data) return <Skeleton h={300} />;
   if (!data) return <EmptyState icon="check2" title="Нет данных чеклиста" />;
   return (
@@ -125,8 +125,8 @@ function ChecklistTab({ id }: { id: string }) {
   );
 }
 
-function ErrorsTab({ id }: { id: string }) {
-  const { data, loading } = useAsync(() => api.errors(id), [id]);
+function ErrorsTab({ id, live }: { id: string; live: boolean }) {
+  const { data, loading } = useAsync(() => api.errors(id), [id], live ? 3000 : 0);
   if (loading && !data) return <Skeleton h={200} />;
   const errs = data ?? [];
   if (!errs.length) return <EmptyState icon="check2" title="Ошибок нет" text="Ни на одном шаге не было исключений." />;
@@ -143,7 +143,7 @@ function ErrorsTab({ id }: { id: string }) {
 }
 
 function LogsTab({ id, live }: { id: string; live: boolean }) {
-  const { data, loading } = useAsync(() => api.logs(id), [id], live ? 3000 : 0);
+  const { data, loading } = useAsync(() => api.logs(id), [id], live ? 2500 : 0);
   if (loading && !data) return <Skeleton h={300} />;
   const msgs = data?.messages ?? [];
   return (
@@ -174,7 +174,7 @@ export default function RunDetail() {
   const { id = "" } = useParams();
   const nav = useNavigate();
   const [tab, setTab] = useState("notebook");
-  const { data: run, loading, reload } = useAsync(() => api.getRun(id), [id], 3000);
+  const { data: run, loading, reload } = useAsync(() => api.getRun(id), [id], 2500);
 
   if (loading && !run) return <Skeleton h={400} />;
   if (!run) return <EmptyState icon="alert" title="Прогон не найден" action={<Button onClick={() => nav("/runs")}>К прогонам</Button>} />;
@@ -250,8 +250,8 @@ export default function RunDetail() {
         <Tabs tabs={TABS} active={tab} onChange={setTab} />
         {tab === "notebook" && <NotebookTab id={id} live={live} />}
         {tab === "trajectory" && <TrajectoryTab id={id} live={live} />}
-        {tab === "checklist" && <ChecklistTab id={id} />}
-        {tab === "errors" && <ErrorsTab id={id} />}
+        {tab === "checklist" && <ChecklistTab id={id} live={live} />}
+        {tab === "errors" && <ErrorsTab id={id} live={live} />}
         {tab === "logs" && <LogsTab id={id} live={live} />}
       </div>
     </div>

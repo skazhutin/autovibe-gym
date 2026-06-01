@@ -74,6 +74,10 @@ def _build_command(cfg: dict[str, Any]) -> list[str]:
         cmd += ["--episode-mode", episode]
         if cfg.get("maxSteps"):
             cmd += ["--max-steps", str(cfg["maxSteps"])]
+        # Notebook modes flush artifacts after every step into this dir, so the
+        # dashboard can read the in-flight notebook/trajectory/checklist live.
+        if cfg.get("workspaceDir"):
+            cmd += ["--workspace-dir", cfg["workspaceDir"]]
     if mode == "repeated" and cfg.get("shots"):
         cmd += ["--shots", str(cfg["shots"])]
     cmd += ["--experiment-name", cfg.get("experimentName", "autovibe-dashboard")]
@@ -111,6 +115,9 @@ def launch(cfg: dict[str, Any]) -> dict[str, Any]:
     cfg["runName"] = f"dash_{local_id}"
     run_dir = _run_dir(local_id)
     log_path = run_dir / "process.log"
+    workspace = run_dir / "workspace"
+    workspace.mkdir(parents=True, exist_ok=True)
+    cfg["workspaceDir"] = str(workspace)
 
     model = model_store.get_model(cfg["modelId"]) if cfg.get("modelId") else None
     meta = {
@@ -137,6 +144,7 @@ def launch(cfg: dict[str, Any]) -> dict[str, Any]:
         "seed": cfg.get("seed"),
         "temp": cfg.get("temp"),
         "budgetMode": cfg.get("budgetMode", "local"),
+        "workspaceDir": str(workspace),
         "source": "live",
         "mlflowId": None,
     }
@@ -231,6 +239,13 @@ def get_live(local_id: str) -> dict[str, Any] | None:
     if local_id in _ACTIVE:
         return _refresh(local_id)
     return _read_meta(local_id)
+
+
+def workspace_dir(local_id: str) -> "Path | None":
+    meta = get_live(local_id)
+    wd = (meta or {}).get("workspaceDir")
+    p = Path(wd) if wd else None
+    return p if p and p.exists() else None
 
 
 def read_log(local_id: str, tail: int = 400) -> str:

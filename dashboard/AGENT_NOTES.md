@@ -110,7 +110,12 @@ GET  /runs/{id}/events (SSE/poll for live)
 - [done] docs/STATUS.md updated
 - gotchas: python-multipart needed for uploads (installed in venv). data/ gitignored (has API keys).
   checklist tab coverage = replay (self-consistent) vs header chip uses MLflow metric (can differ slightly).
-  live tabs only populate after episode end (artifacts flushed on close) — documented as known limitation.
+  LIVE UPDATES (done): launcher passes --workspace-dir data/runs/<id>/workspace; gym's
+  _record_observation already calls _save_artifacts() per step → artifacts flush live there.
+  mlflow_store parsing is now dir-based (episode_dir arg, no lru_cache); runs router _episode_dir()
+  uses live workspace while running else mlflow .../artifacts/episode; _enrich_live() folds
+  episode_progress (step/checklist/errors via replay) into running runs (list + detail).
+  Frontend polls detail+tabs every 2.5s. Tokens still only at end (in agent, logged to mlflow).
 - next ideas: open draft PR; optional gym-side incremental artifact flush for true live streaming;
   run a real end-to-end launch once an LLM endpoint is reachable.
 </content>

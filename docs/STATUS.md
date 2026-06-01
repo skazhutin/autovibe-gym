@@ -160,12 +160,15 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 - **Frontend** (`dashboard/web`, Vite+React+TS): all 8 screens built to the
   T-Bank design tokens — Dashboard, New Run, Runs, Run Detail (5 tabs), Compare,
   Datasets (+detail/upload/delete), Models, Settings. Light/dark theme + accent.
+- **Live updates:** runs launch into a known `data/runs/<id>/workspace` dir; the
+  gym already flushes public artifacts after every step, so while a run is in
+  progress the dashboard reads that dir directly — step counter, checklist
+  coverage, notebook cells, trajectory and logs all advance live (detail polls
+  every 2.5s, running runs enriched via `episode_progress`). MLflow is used for
+  finished runs.
 - **Verified:** `npm run build` clean; FastAPI serves over HTTP; Vite dev proxies
-  `/api`; real MLflow runs/datasets render; launcher builds correct commands.
-- **Known limitation:** the gym writes episode artifacts only at episode end, so
-  live view streams the process log + status; full notebook/trajectory tabs
-  populate once the run completes. Cell-by-cell live streaming would need a small
-  gym-side incremental artifact flush (future enhancement).
+  `/api`; real MLflow runs/datasets render; launcher builds correct commands;
+  simulated mid-run workspace confirms live step/checklist/notebook/logs reads.
 - **Run:** `dashboard/server/run.sh` (API :8000) + `cd dashboard/web && npm i && npm run dev` (:5173).
 
 ## Blocked / Needs Decision

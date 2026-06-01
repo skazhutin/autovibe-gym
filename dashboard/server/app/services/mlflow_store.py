@@ -1,25 +1,25 @@
-"""Read completed/finished runs from the project's MLflow tracking store and
-map them to the dashboard's Run shape + per-tab detail (notebook, trajectory,
-checklist, errors, logs).
+"""Read runs from the project's MLflow store and parse episode artifacts into
+the dashboard's Run shape + per-tab detail (notebook, trajectory, checklist,
+errors, logs).
 
-The gym writes episode artifacts under the MLflow run:
-  episode/solution.ipynb, episode/final_notebook.ipynb,
-  episode/notebook_events.json, episode/feedback_trace.json,
-  episode/validation_trajectory.json, episode/episode_summary.json
-We parse those into the UI contract. Per-item checklist closure is reconstructed
-by replaying the public notebook events through the gym's own NotebookChecklist,
-which keeps this dashboard faithful to the real environment logic.
+Artifact parsing is **directory-based**: every function takes the episode dir
+that holds solution.ipynb / notebook_events.json / feedback_trace.json / ... .
+That dir is `mlruns/<exp>/<run>/artifacts/episode` for a finished MLflow run, or
+the live `data/runs/<id>/workspace` dir for a run that is still in progress — so
+the same parsing powers both live and historical views.
+
+Per-item checklist closure is reconstructed by replaying public notebook events
+through the gym's own NotebookChecklist (keeps this faithful to env logic).
+No caching: live runs rewrite these files after every step.
 """
 from __future__ import annotations
 
 import json
-from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 from ..config import get_settings
 
-# UI mode <- gym param value.
 _MODE_MAP = {
     "gym_with_checklist": "gym",
     "iterative_no_checklist": "iterative",
@@ -28,7 +28,6 @@ _MODE_MAP = {
     "fixed_transitions": "iterative",
 }
 
-# Russian labels for the 12 mandatory checklist keys (generic, dataset-agnostic).
 _CHECK_LABELS: dict[str, str] = {
     "task_understanding": "Понимание задачи",
     "schema_review": "Обзор схемы данных",
@@ -43,13 +42,13 @@ _CHECK_LABELS: dict[str, str] = {
     "reproducible_solution": "Воспроизводимость (clean run)",
     "submit_ready_artifact": "Готовность к сабмиту",
 }
+CHECK_TOTAL = len(_CHECK_LABELS)
 
 
 def _client():
     from mlflow.tracking import MlflowClient
 
-    s = get_settings()
-    return MlflowClient(tracking_uri=s.mlflow_tracking_uri)
+    return MlflowClient(tracking_uri=get_settings().mlflow_tracking_uri)
 
 
 def _f(metrics: dict, *keys: str) -> float | None:
@@ -62,10 +61,10 @@ def _f(metrics: dict, *keys: str) -> float | None:
 def _derive_status(info_status: str, metrics: dict) -> str:
     if info_status in ("RUNNING", "SCHEDULED"):
         return "running"
-    has_test = _f(metrics, "has_test_metric") or 0
     test_metric = _f(metrics, "final_test_metric", "test_metric")
     valid_submit = _f(metrics, "valid_submit") or 0
     submit_failed = _f(metrics, "submit_failed") or 0
+    has_test = _f(metrics, "has_test_metric") or 0
     if test_metric is not None and (valid_submit or has_test):
         return "success"
     if submit_failed or info_status == "FAILED":
@@ -77,8 +76,8 @@ def _run_record(run) -> dict[str, Any]:
     params = run.data.params or {}
     metrics = run.data.metrics or {}
     info = run.info
-    mode_param = params.get("experiment_type") or params.get("episode_mode") or params.get("mode_kind") or ""
-    ui_mode = _MODE_MAP.get(mode_param, _MODE_MAP.get(params.get("episode_mode", ""), "gym"))
+    mode_param = params.get("experiment_type") or params.get("episode_mode") or ""
+    ui_mode = _MODE_MAP.get(mode_param, "gym")
     coverage = _f(metrics, "checklist_coverage")
     max_steps = params.get("max_steps") or params.get("max_agent_turns")
     started_ms = info.start_time or 0
@@ -97,8 +96,8 @@ def _run_record(run) -> dict[str, Any]:
         "score": _f(metrics, "final_test_metric", "test_metric"),
         "metric": params.get("metric_name") or params.get("metric"),
         "baseline": _f(metrics, "best_validation_metric"),
-        "checklistTotal": len(_CHECK_LABELS),
-        "checklist": round((coverage or 0) * len(_CHECK_LABELS)),
+        "checklistTotal": CHECK_TOTAL,
+        "checklist": round((coverage or 0) * CHECK_TOTAL),
         "checklistCoverage": coverage,
         "errors": int(_f(metrics, "error_count", "errors_count") or 0),
         "step": int(_f(metrics, "steps_used") or 0),
@@ -137,24 +136,21 @@ def list_runs() -> list[dict[str, Any]]:
 
 
 def get_run(run_id: str) -> dict[str, Any] | None:
-    client = _client()
     try:
-        run = client.get_run(run_id)
+        return _run_record(_client().get_run(run_id))
     except Exception:
         return None
-    return _run_record(run)
 
 
-# --- artifacts -------------------------------------------------------------
+# --- artifact directory resolution ---------------------------------------
 
-def _artifact_dir(run_id: str) -> Path | None:
-    """Resolve the local artifact root for a run (file-backed store)."""
-    s = get_settings()
-    base = s.mlruns_dir
+def mlflow_episode_dir(run_id: str) -> Path | None:
+    """Resolve the local `.../artifacts/episode` dir for a finished MLflow run."""
+    base = get_settings().mlruns_dir
     if not base.exists():
         return None
     for exp_dir in base.iterdir():
-        cand = exp_dir / run_id / "artifacts"
+        cand = exp_dir / run_id / "artifacts" / "episode"
         if cand.exists():
             return cand
     return None
@@ -167,32 +163,29 @@ def _read_json(path: Path) -> Any:
         return None
 
 
-@lru_cache(maxsize=64)
-def _events(run_id: str) -> list[dict]:
-    d = _artifact_dir(run_id)
-    if not d:
+def _events(episode_dir: Path | None) -> list[dict]:
+    if not episode_dir:
         return []
-    return _read_json(d / "episode" / "notebook_events.json") or []
+    return _read_json(episode_dir / "notebook_events.json") or []
 
 
-@lru_cache(maxsize=64)
-def _feedback_trace(run_id: str) -> list[dict]:
-    d = _artifact_dir(run_id)
-    if not d:
+def _feedback_trace(episode_dir: Path | None) -> list[dict]:
+    if not episode_dir:
         return []
-    return _read_json(d / "episode" / "feedback_trace.json") or []
+    return _read_json(episode_dir / "feedback_trace.json") or []
 
 
-def _notebook_path(run_id: str) -> Path | None:
-    d = _artifact_dir(run_id)
-    if not d:
+def _notebook_path(episode_dir: Path | None) -> Path | None:
+    if not episode_dir:
         return None
     for name in ("solution.ipynb", "final_notebook.ipynb"):
-        p = d / "episode" / name
+        p = episode_dir / name
         if p.exists():
             return p
     return None
 
+
+# --- parsing ---------------------------------------------------------------
 
 def _map_output(out: dict) -> dict | None:
     otype = out.get("output_type")
@@ -212,11 +205,8 @@ def _map_output(out: dict) -> dict | None:
     return None
 
 
-def notebook(run_id: str) -> dict[str, Any]:
-    path = _notebook_path(run_id)
-    if not path:
-        return {"cells": []}
-    nb = _read_json(path)
+def notebook(episode_dir: Path | None) -> dict[str, Any]:
+    nb = _read_json(_notebook_path(episode_dir)) if _notebook_path(episode_dir) else None
     if not nb:
         return {"cells": []}
     cells: list[dict] = []
@@ -237,84 +227,57 @@ def notebook(run_id: str) -> dict[str, Any]:
             mapped = _map_output(out)
             if mapped:
                 outs.append(mapped)
-        cells.append(
-            {
-                "type": "code",
-                "n": cell.get("execution_count") or n,
-                "code": src,
-                "outputs": outs,
-            }
-        )
+        cells.append({"type": "code", "n": cell.get("execution_count") or n, "code": src, "outputs": outs})
     return {"cells": cells}
 
 
 def _channel(item: dict) -> str:
     ch = item.get("channel", "runtime")
-    # A visible checklist nudge is a "hint"; structural checklist notes stay "checklist".
     if ch == "checklist" and item.get("visible_to_agent", True) and item.get("severity") == "info":
         return "checklist-hint"
     return ch
 
 
-def trajectory(run_id: str) -> list[dict[str, Any]]:
-    trace = _feedback_trace(run_id)
+def trajectory(episode_dir: Path | None) -> list[dict[str, Any]]:
     steps: list[dict] = []
-    for entry in trace:
+    for entry in _feedback_trace(episode_dir):
         action = entry.get("action", "code")
         title = {
-            "add_cell": "Добавлена ячейка",
-            "edit_cell": "Изменена ячейка",
-            "delete_cell": "Удалена ячейка",
-            "run_cell": "Выполнена ячейка",
-            "restart_and_run_all": "Чистый перезапуск",
-            "validate": "Валидация кандидата",
-            "submit": "Финальный сабмит",
+            "add_cell": "Добавлена ячейка", "edit_cell": "Изменена ячейка",
+            "update_cell": "Изменена ячейка", "delete_cell": "Удалена ячейка",
+            "run_cell": "Выполнена ячейка", "restart_and_run_all": "Чистый перезапуск",
+            "validate": "Валидация кандидата", "submit": "Финальный сабмит",
         }.get(action, action)
-        feedback = [
-            {"ch": _channel(it), "text": it.get("message", "")}
-            for it in (entry.get("feedback_items") or [])
-        ]
-        # surface runtime stderr as a runtime feedback item when present
+        feedback = [{"ch": _channel(it), "text": it.get("message", "")} for it in (entry.get("feedback_items") or [])]
         if entry.get("stderr"):
             feedback.append({"ch": "runtime", "text": entry["stderr"].strip()[:2000]})
         ui_action = "submit" if action == "submit" else ("validate" if action == "validate" else "code")
-        steps.append(
-            {
-                "step": entry.get("step"),
-                "action": ui_action,
-                "title": title,
-                "code": entry.get("code") or "",
-                "budgetRemaining": entry.get("budget_remaining"),
-                "feedback": feedback,
-            }
-        )
+        steps.append({
+            "step": entry.get("step"), "action": ui_action, "title": title,
+            "code": entry.get("code") or "", "budgetRemaining": entry.get("budget_remaining"),
+            "feedback": feedback,
+        })
     return steps
 
 
-def errors(run_id: str) -> list[dict[str, Any]]:
+def errors(episode_dir: Path | None) -> list[dict[str, Any]]:
     out: list[dict] = []
-    for ev in _events(run_id):
+    for ev in _events(episode_dir):
         res = ev.get("execution_result") or {}
         if res.get("error_name") or (res.get("success") is False):
             tb = res.get("traceback") or []
-            out.append(
-                {
-                    "step": ev.get("step"),
-                    "cellId": ev.get("cell_id"),
-                    "type": res.get("error_name") or "Error",
-                    "value": res.get("error_value") or "",
-                    "traceback": "\n".join(tb) if isinstance(tb, list) else str(tb),
-                    "stderr": res.get("stderr", ""),
-                }
-            )
+            out.append({
+                "step": ev.get("step"), "cellId": ev.get("cell_id"),
+                "type": res.get("error_name") or "Error", "value": res.get("error_value") or "",
+                "traceback": "\n".join(tb) if isinstance(tb, list) else str(tb),
+                "stderr": res.get("stderr", ""),
+            })
     return out
 
 
-def logs(run_id: str) -> list[dict[str, Any]]:
-    """Reconstruct an agent<->env dialogue from the public feedback trace."""
-    trace = _feedback_trace(run_id)
+def logs(episode_dir: Path | None) -> list[dict[str, Any]]:
     msgs: list[dict] = []
-    for entry in trace:
+    for entry in _feedback_trace(episode_dir):
         code = entry.get("code") or ""
         if code:
             msgs.append({"role": "assistant", "text": code, "action": entry.get("action")})
@@ -330,50 +293,64 @@ def logs(run_id: str) -> list[dict[str, Any]]:
     return msgs
 
 
-def checklist(run_id: str, target_col: str = "") -> dict[str, Any]:
-    """Replay public notebook events through the gym's NotebookChecklist to get
-    exact per-item closure + the step each item was first covered."""
-    items_meta = [{"id": k, "label": _CHECK_LABELS.get(k, k), "desc": ""} for k in _CHECK_LABELS]
+def _replay_checklist(episode_dir: Path | None, target_col: str = "") -> tuple[dict[str, int | None], float | None]:
+    """Return ({key: closed_step|None}, coverage) by replaying events through
+    the gym's NotebookChecklist."""
     closed_step: dict[str, int | None] = {k: None for k in _CHECK_LABELS}
-    coverage = None
+    coverage: float | None = None
     try:
-        from gym.feedback import GENERIC_CHECKLIST_HINTS, NotebookChecklist
-
-        for it in items_meta:
-            it["desc"] = GENERIC_CHECKLIST_HINTS.get(it["id"], "")
+        from gym.feedback import NotebookChecklist
 
         cl = NotebookChecklist(target_col=target_col or "target")
-        prev_covered: set[str] = set()
-        for ev in _events(run_id):
+        prev: set[str] = set()
+        for ev in _events(episode_dir):
             res = ev.get("execution_result") or {}
-            src = ev.get("source_after") or ""
             cl.record_execution(
-                source=src,
-                stdout=res.get("stdout", ""),
-                cell_id=ev.get("cell_id"),
-                step=ev.get("step", 0),
+                source=ev.get("source_after") or "", stdout=res.get("stdout", ""),
+                cell_id=ev.get("cell_id"), step=ev.get("step", 0),
                 execution_success=bool(res.get("success", True)),
             )
-            newly = set(cl.covered) - prev_covered
-            for key in newly:
+            for key in set(cl.covered) - prev:
                 if key in closed_step and closed_step[key] is None:
                     closed_step[key] = ev.get("step")
-            prev_covered = set(cl.covered)
+            prev = set(cl.covered)
         coverage = cl.coverage()
     except Exception:
         pass
+    return closed_step, coverage
 
-    summary = get_run(run_id) or {}
+
+def checklist(episode_dir: Path | None, target_col: str = "", fallback_coverage: float | None = None) -> dict[str, Any]:
+    closed_step, coverage = _replay_checklist(episode_dir, target_col)
     if coverage is None:
-        coverage = summary.get("checklistCoverage")
+        coverage = fallback_coverage
+    items_meta = [{"id": k, "label": _CHECK_LABELS[k], "desc": ""} for k in _CHECK_LABELS]
+    try:
+        from gym.feedback import GENERIC_CHECKLIST_HINTS
 
-    items = [
-        {**meta, "closed": closed_step[meta["id"]] is not None, "closedStep": closed_step[meta["id"]]}
-        for meta in items_meta
-    ]
+        for it in items_meta:
+            it["desc"] = GENERIC_CHECKLIST_HINTS.get(it["id"], "")
+    except Exception:
+        pass
+    items = [{**m, "closed": closed_step[m["id"]] is not None, "closedStep": closed_step[m["id"]]} for m in items_meta]
+    return {"items": items, "coverage": coverage, "closed": sum(1 for i in items if i["closed"]), "total": len(items)}
+
+
+def episode_progress(episode_dir: Path | None, target_col: str = "") -> dict[str, Any]:
+    """Live progress derived from in-flight artifacts: current step, error count,
+    checklist closed/coverage, and notebook cell count. Used to keep a running
+    run's header/chips/ring moving before MLflow metrics exist."""
+    events = _events(episode_dir)
+    step = max((e.get("step", 0) for e in events), default=0)
+    err = sum(1 for e in events if (e.get("execution_result") or {}).get("error_name") or (e.get("execution_result") or {}).get("success") is False)
+    closed_step, coverage = _replay_checklist(episode_dir, target_col)
+    closed = sum(1 for v in closed_step.values() if v is not None)
+    nb = notebook(episode_dir)
     return {
-        "items": items,
-        "coverage": coverage,
-        "closed": sum(1 for i in items if i["closed"]),
-        "total": len(items),
+        "step": step,
+        "errors": err,
+        "checklist": closed,
+        "checklistTotal": CHECK_TOTAL,
+        "checklistCoverage": coverage,
+        "notebookCells": len([c for c in nb["cells"] if c["type"] == "code"]),
     }
