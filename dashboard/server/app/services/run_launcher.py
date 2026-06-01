@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from ..config import get_settings
-from . import model_store
+from . import model_store, remote_exec
 
 # local_id -> {"proc": Popen, "meta": dict}
 _ACTIVE: dict[str, dict[str, Any]] = {}
@@ -58,31 +58,60 @@ def _read_meta(local_id: str) -> dict[str, Any] | None:
         return None
 
 
-def _build_command(cfg: dict[str, Any]) -> list[str]:
-    s = get_settings()
+def _runner_args(cfg: dict[str, Any]) -> list[str]:
+    """Runner args shared by local and remote launches (without python binary,
+    --dataset-dir and --workspace-dir, which are added per environment)."""
     mode = cfg["mode"]
     module, episode = _MODE_TO_RUNNER[mode]
-    cmd = [s.python_bin, "-m", module, "--dataset-dir", cfg["datasetDir"]]
-    cmd += ["--mode", cfg.get("budgetMode", "local")]
+    args = ["-m", module, "--mode", cfg.get("budgetMode", "local")]
     if cfg.get("model"):
-        cmd += ["--model", cfg["model"]]
+        args += ["--model", cfg["model"]]
     if cfg.get("maxTokens"):
-        cmd += ["--max-tokens", str(cfg["maxTokens"])]
+        args += ["--max-tokens", str(cfg["maxTokens"])]
     if cfg.get("seed") is not None:
-        cmd += ["--seed", str(cfg["seed"])]
+        args += ["--seed", str(cfg["seed"])]
     if episode:
-        cmd += ["--episode-mode", episode]
+        args += ["--episode-mode", episode]
         if cfg.get("maxSteps"):
-            cmd += ["--max-steps", str(cfg["maxSteps"])]
-        # Notebook modes flush artifacts after every step into this dir, so the
-        # dashboard can read the in-flight notebook/trajectory/checklist live.
-        if cfg.get("workspaceDir"):
-            cmd += ["--workspace-dir", cfg["workspaceDir"]]
+            args += ["--max-steps", str(cfg["maxSteps"])]
     if mode == "repeated" and cfg.get("shots"):
-        cmd += ["--shots", str(cfg["shots"])]
-    cmd += ["--experiment-name", cfg.get("experimentName", "autovibe-dashboard")]
-    cmd += ["--run-name", cfg["runName"]]
+        args += ["--shots", str(cfg["shots"])]
+    args += ["--experiment-name", cfg.get("experimentName", "autovibe-dashboard")]
+    args += ["--run-name", cfg["runName"]]
+    return args
+
+
+def _build_command(cfg: dict[str, Any]) -> list[str]:
+    s = get_settings()
+    cmd = [s.python_bin, *_runner_args(cfg), "--dataset-dir", cfg["datasetDir"]]
+    # Notebook modes flush artifacts after each step here so the dashboard can
+    # read the in-flight notebook/trajectory/checklist live.
+    if _MODE_TO_RUNNER[cfg["mode"]][1] and cfg.get("workspaceDir"):
+        cmd += ["--workspace-dir", cfg["workspaceDir"]]
     return cmd
+
+
+def _llm_env(cfg: dict[str, Any]) -> dict[str, str]:
+    """LLM connection + thread caps for the selected model (used by both envs)."""
+    out: dict[str, str] = {
+        "PYTHONUNBUFFERED": "1",
+        "OMP_NUM_THREADS": _THREADS, "OPENBLAS_NUM_THREADS": _THREADS,
+        "MKL_NUM_THREADS": _THREADS, "NUMEXPR_NUM_THREADS": _THREADS,
+        "VECLIB_MAXIMUM_THREADS": _THREADS, "AUTOVIBE_SANDBOX_THREADS": _THREADS,
+        "JOBLIB_MULTIPROCESSING": "0", "LOKY_MAX_CPU_COUNT": _THREADS,
+    }
+    model = model_store.get_model(cfg["modelId"]) if cfg.get("modelId") else None
+    if model:
+        if model.get("name"):
+            out["LLM_MODEL"] = model["name"]
+        if model.get("baseUrl"):
+            out["LLM_BASE_URL"] = model["baseUrl"]
+        key = model.get("apiKey") or os.getenv(model.get("apiKeyEnv") or "LLM_API_KEY", "")
+        if key:
+            out["LLM_API_KEY"] = key
+    if cfg.get("temp") is not None:
+        out["LLM_TEMPERATURE"] = str(cfg["temp"])
+    return out
 
 
 # Keep local model training (xgboost/sklearn/BLAS) from pegging every core and
@@ -95,27 +124,8 @@ def _build_env(cfg: dict[str, Any]) -> dict[str, str]:
     env = dict(os.environ)
     env["PYTHONPATH"] = str(s.repo_root) + os.pathsep + env.get("PYTHONPATH", "")
     env["MLFLOW_TRACKING_URI"] = s.mlflow_tracking_uri
-    env["PYTHONUNBUFFERED"] = "1"
-    # Thread / parallelism caps (CPU + fan control).
-    for var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
-                "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS"):
-        env[var] = _THREADS
-    env["AUTOVIBE_SANDBOX_THREADS"] = _THREADS   # gym kernel thread_limit_env() lever
-    env["JOBLIB_MULTIPROCESSING"] = "0"
-    env["LOKY_MAX_CPU_COUNT"] = _THREADS
-    # Override LLM connection from the selected model (load_dotenv won't override
-    # vars we set explicitly here).
-    model = model_store.get_model(cfg["modelId"]) if cfg.get("modelId") else None
-    if model:
-        if model.get("name"):
-            env["LLM_MODEL"] = model["name"]
-        if model.get("baseUrl"):
-            env["LLM_BASE_URL"] = model["baseUrl"]
-        api_key = model.get("apiKey") or os.getenv(model.get("apiKeyEnv") or "LLM_API_KEY", "")
-        if api_key:
-            env["LLM_API_KEY"] = api_key
-    if cfg.get("temp") is not None:
-        env["LLM_TEMPERATURE"] = str(cfg["temp"])
+    # LLM connection + thread caps (load_dotenv won't override these explicit vars).
+    env.update(_llm_env(cfg))
     return env
 
 
@@ -160,6 +170,11 @@ def launch(cfg: dict[str, Any]) -> dict[str, Any]:
         "source": "live",
         "mlflowId": None,
     }
+
+    # Remote mode: run the gym on the server over SSH; the Mac only syncs results.
+    if remote_exec.is_enabled():
+        return _launch_remote(cfg, meta, run_dir)
+
     cmd = _build_command(cfg)
     meta["command"] = " ".join(cmd)
     env = _build_env(cfg)
@@ -230,6 +245,90 @@ def _now_ms() -> int:
     return int(time.time() * 1000)
 
 
+# --- remote (SSH) execution -----------------------------------------------
+
+_REMOTE_SYNC_AT: dict[str, float] = {}
+
+
+def _launch_remote(cfg: dict[str, Any], meta: dict[str, Any], run_dir: Path) -> dict[str, Any]:
+    rc = remote_exec.config()
+    runs_dir = rc["runs_dir"].rstrip("/")
+    ws_remote = f"{runs_dir}/{meta['id']}/workspace"
+    log_remote = f"{runs_dir}/{meta['id']}/process.log"
+    dataset_rel = f"datasets/{Path(cfg['datasetDir']).name}"
+    args = _runner_args(cfg)
+    env = _llm_env(cfg)
+    meta.update({
+        "remote": True, "remoteSsh": rc["ssh"], "wsRemote": ws_remote, "logRemote": log_remote,
+        "command": f"ssh {rc['ssh']} :: {rc['python']} {' '.join(args)} --dataset-dir {dataset_rel}",
+    })
+    res = remote_exec.launch(
+        rc, run_id=meta["id"], runner_args=args, env=env,
+        dataset_rel=dataset_rel, workspace_remote=ws_remote, log_remote=log_remote,
+    )
+    if "error" in res:
+        meta["status"] = "failed"
+        meta["failReason"] = f"Не удалось запустить на сервере: {res['error']}"
+        meta["endedMs"] = _now_ms()
+        _write_meta(meta)
+        return meta
+    meta["remotePid"] = res["pid"]
+    _write_meta(meta)
+    return meta
+
+
+def _apply_summary(meta: dict[str, Any], summary: dict[str, Any] | None) -> None:
+    if not summary:
+        meta["status"] = "failed"
+        meta.setdefault("failReason", "Прогон на сервере завершился без итоговой сводки. См. «Логи».")
+        return
+    score = summary.get("final_test_metric", summary.get("test_metric"))
+    cov = summary.get("checklist_coverage")
+    meta["score"] = score
+    if cov is not None:
+        meta["checklistCoverage"] = cov
+        meta["checklist"] = round(cov * meta.get("checklistTotal", 12))
+    if summary.get("steps_used") is not None:
+        meta["step"] = int(summary["steps_used"])
+    if summary.get("error_count") is not None:
+        meta["errors"] = int(summary["error_count"])
+    meta["tokIn"] = int(summary.get("input_tokens", meta.get("tokIn", 0)) or 0)
+    meta["tokOut"] = int(summary.get("output_tokens", meta.get("tokOut", 0)) or 0)
+    meta["metric"] = meta.get("metric") or summary.get("metric_name")
+    if score is not None and summary.get("valid_submit"):
+        meta["status"] = "success"
+    else:
+        meta["status"] = "null"
+        meta["failReason"] = "Агент не дошёл до валидного сабмита (см. «Траектория»/«Логи»)."
+
+
+def _refresh_remote(meta: dict[str, Any]) -> dict[str, Any]:
+    """Sync the remote workspace/log to the local mirror and reconcile status."""
+    if meta.get("status") != "running":
+        return meta
+    rc = remote_exec.config()
+    if not rc["ssh"]:
+        return meta
+    run_id = meta["id"]
+    meta["dur"] = round((_now_ms() - meta.get("startedMs", _now_ms())) / 1000)
+    # Throttle remote sync to at most ~ every 2.5s across concurrent polls.
+    now = time.time()
+    if now - _REMOTE_SYNC_AT.get(run_id, 0) >= 2.5:
+        _REMOTE_SYNC_AT[run_id] = now
+        try:
+            remote_exec.sync(rc, workspace_remote=meta["wsRemote"], log_remote=meta["logRemote"],
+                             local_dir=get_settings().runs_dir / run_id)
+        except Exception:
+            pass
+        if not remote_exec.alive(rc, meta.get("remotePid", "")):
+            summary = remote_exec.parse_summary(read_log(run_id))
+            _apply_summary(meta, summary)
+            meta["endedMs"] = _now_ms()
+            meta["dur"] = round((meta["endedMs"] - meta["startedMs"]) / 1000)
+        _write_meta(meta)
+    return meta
+
+
 def _reconcile_orphan(meta: dict[str, Any]) -> dict[str, Any]:
     """A meta still marked 'running' but no longer in this process's registry —
     typically the server was reloaded/restarted mid-run. Reconcile it against
@@ -271,7 +370,7 @@ def list_live() -> list[dict[str, Any]]:
                 continue
             m = _read_meta(d.name)
             if m:
-                out.append(_reconcile_orphan(m))
+                out.append(_refresh_remote(m) if m.get("remote") else _reconcile_orphan(m))
     out.sort(key=lambda r: r.get("startedMs", 0), reverse=True)
     return out
 
@@ -280,7 +379,11 @@ def get_live(local_id: str) -> dict[str, Any] | None:
     if local_id in _ACTIVE:
         return _refresh(local_id)
     meta = _read_meta(local_id)
-    return _reconcile_orphan(meta) if meta else None
+    if not meta:
+        return None
+    if meta.get("remote"):
+        return _refresh_remote(meta)
+    return _reconcile_orphan(meta)
 
 
 def workspace_dir(local_id: str) -> "Path | None":
@@ -301,6 +404,20 @@ def read_log(local_id: str, tail: int = 400) -> str:
 def stop(local_id: str) -> bool:
     entry = _ACTIVE.get(local_id)
     if entry is None:
+        # Remote run (or orphaned): kill over SSH if applicable, mark stopped.
+        meta = _read_meta(local_id)
+        if not meta or meta.get("status") != "running":
+            return False
+        if meta.get("remote"):
+            try:
+                remote_exec.kill(remote_exec.config(), meta.get("remotePid", ""))
+            except Exception:
+                pass
+            meta["status"] = "failed"
+            meta["failReason"] = "Прогон остановлен пользователем."
+            meta["endedMs"] = int(time.time() * 1000)
+            _write_meta(meta)
+            return True
         return False
     proc: subprocess.Popen = entry["proc"]
     if proc.poll() is None:

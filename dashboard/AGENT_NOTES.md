@@ -122,6 +122,15 @@ GET  /runs/{id}/events (SSE/poll for live)
   SPA (main.py: mounts /assets + SPA catch-all when web/dist exists) → one process. serve.sh
   (HOST=0.0.0.0 PORT=8011 BUILD=1) for server. Deploy steps in dashboard/README.md. Server venv
   needs `pip install -r dashboard/server/requirements.txt` (fastapi/uvicorn/multipart) + current gym.
+  REMOTE-EXEC (SSH) mode (done): site stays local, gym runs on server over SSH. services/remote_exec.py
+  (ssh/rsync, key-auth default + optional password via expect). run_launcher branches in launch() when
+  remote_exec.is_enabled(); _launch_remote nohups runner on server (workspace+log under remote_runs_dir),
+  _refresh_remote rsyncs remote workspace→data/runs/<id>/ (throttled 2.5s) + checks pid alive; on finish
+  parses run_gym's stdout "=== Run Summary ===" JSON (final_test_metric/valid_submit/...) for the result
+  (no server MLflow needed). dataset passed as relative datasets/<id>. Config in Settings screen
+  (remote_* keys in settings.json, password masked in GET, never wiped by masked PUT). POST
+  /api/settings/remote-check probes ssh+repo+gym. NOTE: couldn't test against real server — 10.8.52.11
+  unreachable from agent sandbox (only user's Mac has VPN). Needs user testing + ssh key.
 - next ideas: open draft PR; optional gym-side incremental artifact flush for true live streaming;
   run a real end-to-end launch once an LLM endpoint is reachable.
 </content>

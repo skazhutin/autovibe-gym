@@ -22,6 +22,14 @@ DEFAULTS = {
     "theme": "light",
     "accent": "#FFDD2D",
     "radius": 18,
+    # Remote execution: run the gym ON the server over SSH (site stays local).
+    "remote_enabled": False,
+    "remote_ssh": "",          # user@host  (e.g. booml@10.8.52.11)
+    "remote_ssh_opts": "",     # extra ssh opts, e.g. "-p 2222"
+    "remote_repo": "",         # server repo path, e.g. /home/booml/autovibe-gym-current
+    "remote_python": "",       # server venv python, e.g. /home/booml/autovibe-gym/.venv/bin/python
+    "remote_runs_dir": "",     # server scratch dir for run workspaces, e.g. /home/booml/dash_runs
+    "remote_password": "",     # optional; prefer an SSH key. Stored only in local data/.
 }
 
 
@@ -33,6 +41,13 @@ class SettingsPayload(BaseModel):
     theme: str | None = None
     accent: str | None = None
     radius: int | None = None
+    remote_enabled: bool | None = None
+    remote_ssh: str | None = None
+    remote_ssh_opts: str | None = None
+    remote_repo: str | None = None
+    remote_python: str | None = None
+    remote_runs_dir: str | None = None
+    remote_password: str | None = None
 
 
 def _load() -> dict:
@@ -56,12 +71,29 @@ def _save(data: dict) -> None:
 
 @router.get("/settings")
 def read_settings() -> dict:
-    return _load()
+    data = _load()
+    if data.get("remote_password"):
+        data = {**data, "remote_password": "********", "remote_has_password": True}
+    else:
+        data["remote_has_password"] = False
+    return data
+
+
+@router.post("/settings/remote-check")
+def remote_check() -> dict:
+    """Probe SSH connectivity + that the server repo/gym are usable."""
+    from ..services import remote_exec
+
+    return remote_exec.check()
 
 
 @router.put("/settings")
 def update_settings(payload: SettingsPayload) -> dict:
     data = _load()
-    data.update({k: v for k, v in payload.model_dump().items() if v is not None})
+    updates = {k: v for k, v in payload.model_dump().items() if v is not None}
+    # Never overwrite the stored password with the masked placeholder.
+    if updates.get("remote_password") == "********":
+        updates.pop("remote_password")
+    data.update(updates)
     _save(data)
-    return data
+    return read_settings()

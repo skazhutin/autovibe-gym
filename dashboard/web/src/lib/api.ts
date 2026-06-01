@@ -143,6 +143,14 @@ export interface Settings {
   theme: string;
   accent: string;
   radius: number;
+  remote_enabled: boolean;
+  remote_ssh: string;
+  remote_ssh_opts: string;
+  remote_repo: string;
+  remote_python: string;
+  remote_runs_dir: string;
+  remote_password?: string;
+  remote_has_password?: boolean;
 }
 
 export interface LaunchPayload {
@@ -190,6 +198,11 @@ export const api = {
   getSettings: () => req<Settings>("/settings"),
   saveSettings: (s: Partial<Settings>) =>
     req<Settings>("/settings", { method: "PUT", body: JSON.stringify(s) }),
+  remoteCheck: () =>
+    req<{ ok: boolean; repo?: boolean; gym?: boolean; output?: string; error?: string }>(
+      "/settings/remote-check",
+      { method: "POST" }
+    ),
 
   listRuns: () => req<Run[]>("/runs"),
   getRun: (id: string) => req<Run>(`/runs/${id}`),
