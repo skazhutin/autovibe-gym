@@ -46,6 +46,42 @@ namespace are returned to the agent.
 **Submit action:** Evaluates the named workspace variable on the private test set.
 Closes the environment. Only one submit is allowed per session.
 
+### Gym Tool Actions
+
+The gym still has exactly four product modes; these are actions inside the
+existing flexible/fixed gym protocol, not new modes.
+
+```json
+{"type": "validate", "model_var": "auto"}
+{"type": "submit", "model_var": "auto"}
+{"type": "finalize", "model_var": "auto"}
+{"type": "inspect_data"}
+{"type": "profile_data", "profile": "compact"}
+{"type": "profile_data", "profile": "ydata"}
+{"type": "list_candidates"}
+{"type": "check_candidate", "model_var": "auto"}
+{"type": "quick_validate", "model_var": "auto"}
+{"type": "cleanlab_diagnose", "model_var": "auto", "source": "validation_or_cv", "max_issues": 20}
+{"type": "tune_hyperparameters", "model_var": "model", "search_space": {}, "n_trials": 10, "timeout_sec": 60}
+```
+
+`model_var="auto"` discovers live predict-capable variables in priority order
+and selects the first candidate that passes raw-validation and serialization
+checks. `quick_validate` scores validation only and does not create a clean
+submit-ready candidate. `finalize` is host-controlled best effort: it reuses a
+validated clean candidate, tries a live raw-row-ready candidate, or performs a
+clean replay before submit. If no candidate can be submitted, the terminal
+summary uses `test_metric=null` plus machine-readable `final_status` and
+`null_reason`; missing scores are never converted to `0.000`.
+
+`inspect_data` and `profile_data` use train/validation only and return compact
+summaries. Full ydata JSON/HTML and cleanlab issue tables, when produced, are
+private developer artifacts only.
+
+Data/candidate tools increment a separate tool-call counter instead of the
+normal code-step budget; notebook-editing actions, `restart_and_run_all`, and
+environment validation still consume the normal episode step budget.
+
 ---
 
 ## Candidate Lifecycle
@@ -219,3 +255,12 @@ Every run produces the following MLflow artifacts:
    submit is **blocked** (`submitted=False` preserved) and the agent can correct the
    pipeline within the remaining budget. This guarantees the one-time hidden test
    evaluation is never consumed by a structurally broken model.
+7. **Notebook candidate diagnostics:** `NotebookGymEnv` also discovers nonstandard
+   candidate variable names, checks raw validation inference after successful
+   code cells, verifies prediction length/non-null output, and requires
+   cloudpickle serialization before a candidate is accepted.
+8. **Private/public boundary:** public workspace artifacts never contain hidden
+   rows, labels, hidden score, private artifact paths, private candidate pickle
+   paths, full ydata JSON/HTML, cleanlab issue tables, or private checklist
+   coverage. Private MLflow artifacts may contain full debug traces and hidden
+   scores for evaluators.

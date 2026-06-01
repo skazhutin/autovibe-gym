@@ -20,6 +20,7 @@ except ImportError:
     load_dotenv = None
 
 from experiments.mlflow_config import configure_mlflow_tracking
+from gym.data_profile import build_dataset_card
 from gym.datasets import load_dataset_splits, resolve_metric
 from gym.executor import CodeExecutor
 from gym.llm import default_model_name, make_llm_client
@@ -91,13 +92,12 @@ def main():
     model_name = args.model or default_model_name()
     run_name = args.run_name or f"baseline_{dataset_name}_{model_name.split('/')[-1]}"
 
+    dataset_card = build_dataset_card(train, val, target_col, metric_name, max_chars=4500)
     task_prompt = (
         f"Solve a supervised ML task.\n"
         f"Target column: '{target_col}'\n"
         f"Metric: {metric_name}\n\n"
-        f"Training data shape: {train.shape}\n"
-        f"Validation data shape: {val.shape}\n\n"
-        f"Dataset statistics:\n{train.describe(include='all').to_string()}\n\n"
+        f"{dataset_card}\n\n"
         "Variables available: train_df, val_df, target_col, pd, np\n"
         "Assign your best trained model to: model"
     )
@@ -144,6 +144,9 @@ def main():
         stdout, stderr, namespace = executor.run(code, namespace)
 
         test_metric = None
+        final_status = "no_candidate_found"
+        null_reason = "No predict-capable model variable was produced."
+        submit_error = ""
         model_obj = namespace.get("model") or namespace.get("best_model")
         if model_obj is None:
             for value in namespace.values():
@@ -152,12 +155,26 @@ def main():
                     break
         if model_obj is not None:
             try:
-                X_test = test.drop(columns=[target_col])
-                y_test = test[target_col]
-                preds = model_obj.predict(X_test)
-                test_metric = score_with_coercion(metric_fn, y_test, preds)
+                X_val = val.drop(columns=[target_col]).head(32)
+                model_obj.predict(X_val)
             except Exception as exc:
-                stderr += f"\n[submit error] {exc}"
+                final_status = "submit_blocked_preflight"
+                null_reason = f"{type(exc).__name__}: {exc}"
+                submit_error = null_reason
+                stderr += f"\n[submit preflight error] {submit_error}"
+            else:
+                try:
+                    X_test = test.drop(columns=[target_col])
+                    y_test = test[target_col]
+                    preds = model_obj.predict(X_test)
+                    test_metric = score_with_coercion(metric_fn, y_test, preds)
+                    final_status = "submitted_clean"
+                    null_reason = None
+                except Exception as exc:
+                    final_status = "hidden_submit_failed"
+                    null_reason = f"{type(exc).__name__}: {exc}"
+                    submit_error = null_reason
+                    stderr += f"\n[submit error] {submit_error}"
 
         elapsed = round(time.time() - started, 1)
         summary = {
@@ -167,6 +184,9 @@ def main():
             "test_metric": test_metric,
             "has_test_metric": test_metric is not None,
             "submit_failed": test_metric is None,
+            "valid_submit": test_metric is not None,
+            "final_status": final_status,
+            "null_reason": null_reason,
             "input_tokens": response.input_tokens,
             "output_tokens": response.output_tokens,
             "elapsed_seconds": elapsed,
@@ -176,14 +196,24 @@ def main():
 
         metrics = {
             "has_test_metric": int(test_metric is not None),
+            "valid_submit": int(test_metric is not None),
             "submit_failed": int(test_metric is None),
             "input_tokens": summary["input_tokens"],
             "output_tokens": summary["output_tokens"],
             "elapsed_seconds": elapsed,
         }
+        mlflow.set_tags({
+            "final_status": final_status,
+            "null_reason": null_reason or "",
+        })
         if test_metric is not None:
             metrics["test_metric"] = test_metric
         mlflow.log_metrics(metrics)
+        mlflow.log_text(code, "generated_solution.py")
+        mlflow.log_text(stdout, "stdout.txt")
+        mlflow.log_text(stderr, "stderr.txt")
+        mlflow.log_text(submit_error, "submit_error.txt")
+        mlflow.log_text(json.dumps(summary, indent=2), "summary.json")
 
     print("\n=== Baseline Summary ===")
     print(json.dumps(summary, indent=2))

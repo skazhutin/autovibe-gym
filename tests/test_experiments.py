@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 from experiments import compare, mlflow_config, run_baseline, run_fixed, run_gym, run_multishot
+from experiments import run_all_modes_matrix
 from experiments import run_matrix
 
 
@@ -174,7 +175,8 @@ def test_compare_prints_sorted_table_and_writes_csv(monkeypatch, tmp_path, capsy
     assert "Experiment: autovibe-gym" in printed
     assert output.exists()
     saved = pd.read_csv(output)
-    assert list(saved["test_metric"]) == [0.8, 0.2]
+    assert list(saved["model"]) == ["m1", "m2"]
+    assert list(saved["test_metric"]) == [0.2, 0.8]
 
 
 def test_compare_handles_runs_without_test_metric(monkeypatch, capsys):
@@ -264,5 +266,28 @@ def test_run_matrix_exits_when_no_datasets(tmp_path, monkeypatch, capsys):
         run_matrix.main()
 
     assert exc.value.code == 1
+
+
+def test_run_all_modes_matrix_dry_run_lists_exact_four_modes(monkeypatch, capsys):
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "run_all_modes_matrix",
+            "--datasets",
+            "datasets/demo/prepared",
+            "--models",
+            "fake-model",
+            "--dry-run",
+        ],
+    )
+
+    run_all_modes_matrix.main()
+
+    out = capsys.readouterr().out
+    assert "single-shot" in out
+    assert "repeated single-shot" in out
+    assert "flexible gym" in out
+    assert "fixed transitions" in out
+    assert out.count("fake-model") >= 4
 
 

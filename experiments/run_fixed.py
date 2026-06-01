@@ -180,6 +180,8 @@ class FixedTransitionsAgent:
 
         stage_steps = 0
         stage_errors = 0
+        last_action = None
+        last_error_type = None
 
         while stage_steps < budget and not self.env.state.submitted:
             response = self.client.complete(
@@ -206,6 +208,7 @@ class FixedTransitionsAgent:
                 continue
 
             observation = self.env.step(action)
+            last_action = action.type
             feedback = observation.to_feedback_message()
 
             # Inject notebook context (last 3 cells) — same as GymAgent
@@ -230,6 +233,7 @@ class FixedTransitionsAgent:
                 stage_steps += 1
             if observation.stderr.strip():
                 stage_errors += 1
+                last_error_type = observation.stderr.strip().split(":", 1)[0][:80]
                 # If more than half of stage budget consumed by errors, nudge
                 # agent to fall back to a simpler approach.
                 if stage_errors >= budget // 2 and stage_remaining > 0:
@@ -248,6 +252,10 @@ class FixedTransitionsAgent:
             "stage": stage_name,
             "steps": stage_steps,
             "errors": stage_errors,
+            "last_action": last_action,
+            "last_error_type": last_error_type,
+            "candidate_vars_seen": self.env._candidate_var_order() if hasattr(self.env, "_candidate_var_order") else [],
+            "model_check_failures": getattr(self.env, "model_check_failure_count", 0),
             "checklist_coverage": self.env.checklist.coverage(),
         })
 
@@ -284,6 +292,8 @@ def _summary_metrics(summary: dict) -> dict:
         "checklist_coverage": summary["checklist_coverage"],
         "steps_used": summary["steps_used"],
         "error_count": summary.get("error_count", summary.get("errors_count", 0)),
+        "valid_submit": int(bool(summary.get("valid_submit"))),
+        "model_check_failure_count": summary.get("model_check_failure_count", 0),
         "input_tokens": summary.get("input_tokens", 0),
         "output_tokens": summary.get("output_tokens", 0),
         "elapsed_seconds": summary.get("elapsed_seconds", 0),
@@ -399,6 +409,10 @@ def main():
         )
 
         mlflow.log_metrics(_summary_metrics(summary))
+        mlflow.set_tags({
+            "final_status": summary.get("final_status") or "",
+            "null_reason": summary.get("null_reason") or "",
+        })
 
     print("\n=== Run Summary ===")
     stage_log = summary.pop("stage_log", [])
