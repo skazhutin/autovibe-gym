@@ -21,8 +21,11 @@ from typing import Any
 from ..config import get_settings
 
 _MODE_MAP = {
+    "baseline": "single",
+    "baseline_single_shot": "single",
     "gym_with_checklist": "gym",
     "iterative_no_checklist": "iterative",
+    "multishot": "repeated",
     "single_shot": "single",
     "repeated_single_shot": "repeated",
     "fixed_transitions": "iterative",
@@ -58,15 +61,36 @@ def _f(metrics: dict, *keys: str) -> float | None:
     return None
 
 
+def _bool_metric(metrics: dict, key: str) -> bool | None:
+    if key not in metrics or metrics[key] is None:
+        return None
+    return bool(float(metrics[key]))
+
+
+def _has_real_test_metric(metrics: dict) -> bool:
+    test_metric = _f(metrics, "final_test_metric", "test_metric")
+    if test_metric is None:
+        return False
+    valid_submit = _bool_metric(metrics, "valid_submit")
+    has_test = _bool_metric(metrics, "has_test_metric")
+    submit_failed = _bool_metric(metrics, "submit_failed")
+    if valid_submit is not None or has_test is not None:
+        return bool(valid_submit or has_test)
+    return submit_failed is not True
+
+
+def _score(metrics: dict) -> float | None:
+    if not _has_real_test_metric(metrics):
+        return None
+    return _f(metrics, "final_test_metric", "test_metric")
+
+
 def _derive_status(info_status: str, metrics: dict) -> str:
     if info_status in ("RUNNING", "SCHEDULED"):
         return "running"
-    test_metric = _f(metrics, "final_test_metric", "test_metric")
-    valid_submit = _f(metrics, "valid_submit") or 0
-    submit_failed = _f(metrics, "submit_failed") or 0
-    has_test = _f(metrics, "has_test_metric") or 0
-    if test_metric is not None and (valid_submit or has_test):
+    if _has_real_test_metric(metrics):
         return "success"
+    submit_failed = _bool_metric(metrics, "submit_failed")
     if submit_failed or info_status == "FAILED":
         return "failed"
     return "null"
@@ -79,7 +103,15 @@ def _run_record(run) -> dict[str, Any]:
     mode_param = params.get("experiment_type") or params.get("episode_mode") or ""
     ui_mode = _MODE_MAP.get(mode_param, "gym")
     coverage = _f(metrics, "checklist_coverage")
-    max_steps = params.get("max_steps") or params.get("max_agent_turns")
+    max_steps = (
+        params.get("max_steps")
+        or params.get("max_agent_turns")
+        or params.get("max_attempts")
+    )
+    step = _f(metrics, "steps_used", "attempts_used")
+    if step is None and ui_mode == "single" and info.status not in ("RUNNING", "SCHEDULED"):
+        step = 1
+        max_steps = max_steps or 1
     started_ms = info.start_time or 0
     ended_ms = info.end_time or 0
     dur = _f(metrics, "elapsed_seconds")
@@ -93,14 +125,14 @@ def _run_record(run) -> dict[str, Any]:
         "mode": ui_mode,
         "dataset": params.get("dataset", "—"),
         "status": _derive_status(info.status, metrics),
-        "score": _f(metrics, "final_test_metric", "test_metric"),
+        "score": _score(metrics),
         "metric": params.get("metric_name") or params.get("metric"),
         "baseline": _f(metrics, "best_validation_metric"),
         "checklistTotal": CHECK_TOTAL,
         "checklist": round((coverage or 0) * CHECK_TOTAL),
         "checklistCoverage": coverage,
         "errors": int(_f(metrics, "error_count", "errors_count") or 0),
-        "step": int(_f(metrics, "steps_used") or 0),
+        "step": int(step or 0),
         "steps": int(max_steps) if max_steps else None,
         "tokIn": int(_f(metrics, "input_tokens") or 0),
         "tokOut": int(_f(metrics, "output_tokens") or 0),
@@ -301,9 +333,12 @@ def _replay_checklist(episode_dir: Path | None, target_col: str = "") -> tuple[d
     try:
         from gym.feedback import NotebookChecklist
 
+        events = _events(episode_dir)
+        if not events:
+            return closed_step, None
         cl = NotebookChecklist(target_col=target_col or "target")
         prev: set[str] = set()
-        for ev in _events(episode_dir):
+        for ev in events:
             res = ev.get("execution_result") or {}
             cl.record_execution(
                 source=ev.get("source_after") or "", stdout=res.get("stdout", ""),
@@ -322,7 +357,8 @@ def _replay_checklist(episode_dir: Path | None, target_col: str = "") -> tuple[d
 
 def checklist(episode_dir: Path | None, target_col: str = "", fallback_coverage: float | None = None) -> dict[str, Any]:
     closed_step, coverage = _replay_checklist(episode_dir, target_col)
-    if coverage is None:
+    replay_closed = sum(1 for step in closed_step.values() if step is not None)
+    if fallback_coverage is not None and (coverage is None or replay_closed == 0):
         coverage = fallback_coverage
     items_meta = [{"id": k, "label": _CHECK_LABELS[k], "desc": ""} for k in _CHECK_LABELS]
     try:
@@ -333,7 +369,6 @@ def checklist(episode_dir: Path | None, target_col: str = "", fallback_coverage:
     except Exception:
         pass
     items = [{**m, "closed": closed_step[m["id"]] is not None, "closedStep": closed_step[m["id"]]} for m in items_meta]
-    replay_closed = sum(1 for i in items if i["closed"])
     # Use the env's authoritative coverage metric for the count so it matches the
     # run header; fall back to the per-item replay count only when unavailable.
     closed = round(coverage * len(items)) if coverage is not None else replay_closed

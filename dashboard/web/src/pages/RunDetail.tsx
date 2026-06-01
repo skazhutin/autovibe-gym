@@ -100,7 +100,7 @@ function ChecklistTab({ id, live }: { id: string; live: boolean }) {
   return (
     <div>
       <div className="cl-summary">
-        <Donut value={data.closed} total={data.total} size={104} />
+        <Donut value={data.closed} total={data.total} size={104} percent={data.coverage} />
         <div>
           <div style={{ fontWeight: 700, fontSize: 16 }}>Покрытие DS-пайплайна</div>
           <div className="muted" style={{ maxWidth: 460, marginTop: 4, fontSize: 13.5 }}>

@@ -4,6 +4,7 @@
 .app {
   display: flex;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 .sidebar {
   width: var(--sidebar-w);
@@ -141,6 +142,101 @@
   max-width: var(--content-max);
   width: 100%;
   margin: 0 auto;
+}
+
+@media (max-width: 760px) {
+  .app {
+    display: block;
+  }
+
+  .sidebar {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    width: 100%;
+    height: auto;
+    flex: none;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  .sidebar-logo {
+    flex: 0 0 auto;
+    gap: 8px;
+    padding: 2px 4px 2px 0;
+    font-size: 15px;
+    white-space: nowrap;
+  }
+
+  .sidebar-logo .mark {
+    width: 28px;
+    height: 28px;
+  }
+
+  .nav {
+    min-width: 0;
+    flex: 1 1 auto;
+    flex-direction: row;
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .nav-item {
+    width: auto;
+    flex: 0 0 auto;
+    gap: 7px;
+    padding: 8px 10px;
+    white-space: nowrap;
+  }
+
+  .nav-item.active::before,
+  .sidebar-foot {
+    display: none;
+  }
+
+  .main {
+    width: 100%;
+  }
+
+  .header {
+    position: static;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px 16px;
+  }
+
+  .header h1 {
+    font-size: 20px;
+  }
+
+  .header-right {
+    width: 100%;
+    align-items: stretch;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .header-right .btn {
+    flex: 1 1 150px;
+  }
+
+  .status-pill {
+    flex: 1 1 150px;
+    justify-content: center;
+  }
+
+  .content {
+    max-width: 100%;
+    padding: 18px 14px 44px;
+  }
 }
 .status-pill {
   display: inline-flex;
@@ -774,6 +870,12 @@ table.data tbody tr.clickable:hover {
 }
 @media (max-width: 720px) {
   .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 760px) {
+  .dash-bottom {
+    grid-template-columns: 1fr !important;
+  }
 }
 
 /* ============ Metric card ============ */
