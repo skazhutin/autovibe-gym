@@ -1,0 +1,177 @@
+/* AutoVibe Gym — design tokens (transcribed from design/README.md).
+   Theme is switched via <html data-theme="light|dark">. Accent and radius are
+   overridable inline on :root from the Settings screen. */
+
+:root {
+  /* Brand */
+  --accent: #ffdd2d;
+  --accent-ink: #8f7400;
+  --accent-soft: rgba(255, 221, 45, 0.22);
+  --accent-wash: rgba(255, 221, 45, 0.1);
+
+  /* Neutrals (light) */
+  --ink: #333333;
+  --text: #262626;
+  --text-dim: #6c6c6c;
+  --text-faint: #a0a0a0;
+  --bg: #f5f5f5;
+  --surface: #ffffff;
+  --surface-2: #f1f1f1;
+  --border: #eaeaea;
+  --code-bg: #f7f7f5;
+
+  /* Semantic (light) */
+  --green: #1f9d62;
+  --green-bg: #e8f5ee;
+  --green-border: #c2e5d2;
+  --red: #d14848;
+  --red-bg: #fbeded;
+  --red-border: #f1cbcb;
+  --orange: #dd8a1e;
+  --blue: #3b6cc7;
+
+  /* Radius (radius tunable 8–24, default 18) */
+  --radius: 18px;
+  --r-lg: var(--radius);
+  --r-md: calc(var(--radius) * 0.7);
+  --r-sm: calc(var(--radius) * 0.55);
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.03);
+  --shadow-md: 0 6px 22px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 18px 50px rgba(0, 0, 0, 0.18);
+
+  /* Typography */
+  --font-ui: "Helvetica Neue", Helvetica, "Segoe UI", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* Syntax highlight (light) */
+  --syn-comment: #9aa0a6;
+  --syn-string: #2e8b57;
+  --syn-number: #c76e00;
+  --syn-keyword: #9b4dca;
+  --syn-function: #3b6cc7;
+  --syn-identifier: #363636;
+  --syn-operator: #888888;
+
+  /* Layout */
+  --sidebar-w: 248px;
+  --content-max: 1400px;
+}
+
+:root[data-theme="dark"] {
+  --accent-ink: #ffe87a;
+  --ink: #1e1e1e;
+  --text: #f0f0f0;
+  --text-dim: #a6a6a6;
+  --text-faint: #777777;
+  --bg: #262626;
+  --surface: #333333;
+  --surface-2: #3e3e3e;
+  --border: #474747;
+  --code-bg: #2b2b2b;
+
+  --green: #4bbe85;
+  --green-bg: rgba(75, 190, 133, 0.14);
+  --green-border: rgba(75, 190, 133, 0.32);
+  --red: #e57373;
+  --red-bg: rgba(229, 115, 115, 0.13);
+  --red-border: rgba(229, 115, 115, 0.32);
+  --orange: #e8a552;
+  --blue: #6f9be8;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 6px 22px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 18px 50px rgba(0, 0, 0, 0.55);
+
+  --syn-comment: #7c8590;
+  --syn-string: #98c379;
+  --syn-number: #d19a66;
+  --syn-keyword: #c678dd;
+  --syn-function: #61afef;
+  --syn-identifier: #d4d4d4;
+  --syn-operator: #abb2bf;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-faint);
+}
+
+/* Shared animations */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.82);
+  }
+}
+@keyframes barshine {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(420%);
+  }
+}
+@keyframes shimmer {
+  0% {
+    background-position: -468px 0;
+  }
+  100% {
+    background-position: 468px 0;
+  }
+}
