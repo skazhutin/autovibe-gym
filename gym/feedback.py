@@ -68,7 +68,7 @@ GENERIC_CHECKLIST_HINTS: dict[str, str] = {
         "Make sure the target column is not included in the model features."
     ),
     "baseline_candidate_created": (
-        "Create a reproducible candidate model before spending budget on refinements."
+        "Before complex tuning, it is safer to create one simple candidate that can already validate and submit on raw rows."
     ),
     "reproducible_solution": (
         "The current solution should reproduce after a clean kernel restart; run "
@@ -81,6 +81,30 @@ GENERIC_CHECKLIST_HINTS: dict[str, str] = {
     "submit_ready_artifact": (
         "Before final submission, make sure the selected candidate can predict raw "
         "validation features."
+    ),
+    "baseline_first": (
+        "Before complex tuning, it is safer to create one simple candidate that can already validate and submit on raw rows."
+    ),
+    "raw_row_inference_ready": (
+        "The final candidate should accept raw validation/test rows directly in predict()."
+    ),
+    "derived_features_inside_pipeline": (
+        "If you derive new columns during training, make sure the final candidate can create the same columns inside predict() when it receives raw validation or hidden-test rows."
+    ),
+    "serialization_reproducibility": (
+        "Before final submission, check that the candidate can be serialized and reloaded without relying on live-kernel-only state."
+    ),
+    "finalization_planning": (
+        "Keep enough budget to validate or finalize a raw-row-ready candidate before the episode ends."
+    ),
+    "high_cardinality_handling": (
+        "High-cardinality columns should be handled deliberately; avoid relying on identifiers that may not generalize."
+    ),
+    "unseen_categories_handling": (
+        "Categorical encoders should handle categories that appear in validation/test but were not present during fitting."
+    ),
+    "candidate_validation_before_submit": (
+        "Use check_candidate or validate before submit so raw-row and serialization failures are caught early."
     ),
 }
 
@@ -95,6 +119,14 @@ MANDATORY_CHECKS: tuple[str, ...] = (
     "suspicious_columns_audit",
     "target_exclusion",
     "baseline_candidate_created",
+    "baseline_first",
+    "raw_row_inference_ready",
+    "derived_features_inside_pipeline",
+    "serialization_reproducibility",
+    "finalization_planning",
+    "high_cardinality_handling",
+    "unseen_categories_handling",
+    "candidate_validation_before_submit",
     "validation_evaluated",
     "reproducible_solution",
     "submit_ready_artifact",

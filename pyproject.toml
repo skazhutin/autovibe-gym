@@ -20,6 +20,7 @@ dependencies = [
   "PyYAML>=6.0.0",
   "pandas>=2.0.0",
   "numpy>=1.26.0",
+  "cloudpickle>=3.0",
   "scikit-learn>=1.4.0",
   "xgboost>=2.0.0",
   "lightgbm>=4.0.0",
@@ -38,6 +39,11 @@ test = [
 ]
 server = [
   "vllm>=0.5.0",
+]
+diagnostics = [
+  "ydata-profiling>=4.8",
+  "cleanlab>=2.7",
+  "optuna>=3.0",
 ]
 
 [tool.setuptools.packages.find]

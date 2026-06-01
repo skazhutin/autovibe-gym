@@ -167,3 +167,33 @@ def test_notebook_actions_parse_from_json_payloads():
 
     assert Action.from_payload({"type": "restart_and_run_all"}).type == "restart_and_run_all"
     assert Action.from_payload({"type": "validate"}).model_var == "model"
+
+
+def test_new_gym_tool_actions_parse_and_round_trip():
+    payloads = [
+        {"type": "inspect_data"},
+        {"type": "profile_data", "profile": "ydata"},
+        {"type": "list_candidates"},
+        {"type": "check_candidate", "model_var": "auto"},
+        {"type": "quick_validate", "model_var": "auto"},
+        {"type": "cleanlab_diagnose", "model_var": "auto", "source": "validation_or_cv", "max_issues": 5},
+        {
+            "type": "tune_hyperparameters",
+            "model_var": "model",
+            "search_space": {"clf__max_depth": {"type": "int", "low": 1, "high": 3}},
+            "n_trials": 2,
+            "timeout_sec": 5,
+            "scoring": "metric",
+        },
+        {"type": "finalize", "model_var": "auto"},
+    ]
+
+    for payload in payloads:
+        action = Action.from_payload(payload)
+        assert action.to_dict()["type"] == payload["type"]
+
+
+def test_validate_submit_finalize_accept_auto_model_var():
+    for action_type in ("validate", "submit", "finalize"):
+        action = Action.from_payload({"type": action_type, "model_var": "auto"})
+        assert action.model_var == "auto"

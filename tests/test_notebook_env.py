@@ -497,3 +497,227 @@ def test_finalize_submits_live_kernel_model_without_clean_run(tmp_path):
         assert summary.get("final_test_metric") is not None
     finally:
         env.close()
+
+
+def test_finalize_action_auto_discovers_nonstandard_candidate_name(tmp_path):
+    env = _make_env(tmp_path)
+    try:
+        cell = (
+            "from sklearn.pipeline import Pipeline\n"
+            "from sklearn.compose import ColumnTransformer\n"
+            "from sklearn.dummy import DummyClassifier\n"
+            "X = train_df.drop(columns=[target_col])\n"
+            "y = train_df[target_col]\n"
+            "pre = ColumnTransformer([('num', 'passthrough', ['x'])], remainder='drop')\n"
+            "my_best_pipe = Pipeline([('pre', pre), ('clf', DummyClassifier(strategy='constant', constant=0))])\n"
+            "my_best_pipe.fit(X, y)\n"
+        )
+        env.step(Action.add_cell_action(cell, cell_type="code", execute=True))
+
+        observation = env.step({"type": "finalize", "model_var": "auto"})
+
+        assert observation.submitted is True
+        assert env.get_summary()["valid_submit"] is True
+        assert "my_best_pipe" in env.get_summary()["finalize_attempted_vars"]
+    finally:
+        env.close()
+
+
+def test_model_check_warns_after_broken_code_cell(tmp_path):
+    env = _make_env(tmp_path)
+    try:
+        broken = """
+from sklearn.linear_model import LogisticRegression
+X = pd.get_dummies(train_df.drop(columns=[target_col]))
+y = train_df[target_col]
+best_model = LogisticRegression(max_iter=200).fit(X, y)
+""".strip()
+
+        observation = env.step(Action.add_cell_action(broken, cell_type="code", execute=True))
+
+        assert "[MODEL CHECK]" in observation.stderr
+        assert "best_model" in observation.stderr
+        assert "raw validation" in observation.stderr
+        assert "ValueError" in observation.stderr or "could not" in observation.stderr
+
+        repeated = env.step({"type": "run_cell", "cell_id": observation.cell_id})
+        assert repeated.stderr.count("[MODEL CHECK]") <= 1
+
+        private_dir = Path(env.get_summary()["private_episode_dir"])
+        diag_text = (private_dir / "candidate_diagnostics_private.jsonl").read_text(encoding="utf-8")
+        assert "best_model" in diag_text
+    finally:
+        env.close()
+
+
+def test_validate_raw_error_includes_exception_details(tmp_path):
+    env = _make_env(tmp_path)
+    try:
+        env.step(
+            Action.add_cell_action(
+                """
+from sklearn.linear_model import LogisticRegression
+X = pd.get_dummies(train_df.drop(columns=[target_col]))
+y = train_df[target_col]
+model = LogisticRegression(max_iter=200).fit(X, y)
+""".strip(),
+                cell_type="code",
+                execute=False,
+            )
+        )
+        env.step({"type": "restart_and_run_all"})
+
+        observation = env.step({"type": "validate", "model_var": "model"})
+
+        assert "[MODEL CHECK]" in observation.stderr
+        assert "model" in observation.stderr
+        assert "ValueError" in observation.stderr or "could not" in observation.stderr
+        assert "hidden-test rows" in observation.stderr
+    finally:
+        env.close()
+
+
+def test_cloudpickle_serializes_function_transformer_candidate(tmp_path):
+    env = _make_env(tmp_path)
+    try:
+        source = """
+from sklearn.dummy import DummyClassifier
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import FunctionTransformer
+
+X = train_df.drop(columns=[target_col])
+y = train_df[target_col]
+model = Pipeline([
+    ('select_x', FunctionTransformer(lambda df: df[['x']], validate=False)),
+    ('clf', DummyClassifier(strategy='constant', constant=0)),
+])
+model.fit(X, y)
+""".strip()
+        env.step(Action.add_cell_action(source, cell_type="code", execute=False))
+        env.step({"type": "restart_and_run_all"})
+
+        observation = env.step({"type": "validate", "model_var": "model"})
+
+        assert observation.validation_metric == 0.5
+        assert observation.stderr == ""
+    finally:
+        env.close()
+
+
+def test_inspect_and_profile_are_compact_and_do_not_include_hidden_test(tmp_path):
+    env = _make_env(tmp_path, hidden_green=True)
+    try:
+        inspect_obs = env.step({"type": "inspect_data"})
+        profile_obs = env.step({"type": "profile_data", "profile": "compact"})
+
+        assert "[DATA INSPECTION]" in inspect_obs.stdout
+        assert "[DATA PROFILE]" in profile_obs.stdout
+        assert "green" not in inspect_obs.stdout
+        assert "green" not in profile_obs.stdout
+        assert "<html" not in profile_obs.stdout.lower()
+        assert len(profile_obs.stdout) <= 6000
+
+        private_dir = Path(env.get_summary()["private_episode_dir"])
+        assert (private_dir / "data_inspection_private.json").exists()
+        assert (private_dir / "data_profile_private.json").exists()
+        assert not (tmp_path / "data_profile_private.json").exists()
+    finally:
+        env.close()
+
+
+def test_check_list_and_quick_validate_candidate_tools(tmp_path):
+    env = _make_env(tmp_path)
+    try:
+        env.step(
+            Action.add_cell_action(
+                """
+from sklearn.dummy import DummyClassifier
+X_train = train_df.drop(columns=[target_col])
+y_train = train_df[target_col]
+alt_model = DummyClassifier(strategy='constant', constant=0)
+alt_model.fit(X_train, y_train)
+""".strip(),
+                cell_type="code",
+                execute=True,
+            )
+        )
+        listed = env.step({"type": "list_candidates"})
+        checked = env.step({"type": "check_candidate", "model_var": "auto"})
+        quick = env.step({"type": "quick_validate", "model_var": "auto"})
+
+        assert "alt_model" in listed.stdout
+        assert "alt_model" in checked.stdout
+        assert quick.validation_metric == 0.5
+        assert env.candidates.latest() is None
+        assert "artifacts" not in listed.stdout
+    finally:
+        env.close()
+
+
+def test_cleanlab_diagnose_disabled_fallback(tmp_path, monkeypatch):
+    monkeypatch.delenv("AUTOVIBE_ENABLE_CLEANLAB", raising=False)
+    env = _make_env(tmp_path)
+    try:
+        observation = env.step({"type": "cleanlab_diagnose", "model_var": "auto"})
+
+        assert "[CLEANLAB DIAGNOSTIC]" in observation.stdout
+        assert "disabled" in observation.stdout
+    finally:
+        env.close()
+
+
+def test_tune_hyperparameters_caps_and_injects_tuned_model(tmp_path):
+    env = _make_env(tmp_path)
+    try:
+        source = """
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.tree import DecisionTreeClassifier
+X = train_df.drop(columns=[target_col])
+y = train_df[target_col]
+model = Pipeline([
+    ('pre', ColumnTransformer([('num', 'passthrough', ['x'])], remainder='drop')),
+    ('clf', DecisionTreeClassifier(random_state=0)),
+])
+model.fit(X, y)
+""".strip()
+        env.step(Action.add_cell_action(source, cell_type="code", execute=True))
+
+        observation = env.step(
+            {
+                "type": "tune_hyperparameters",
+                "model_var": "model",
+                "search_space": {"clf__max_depth": {"type": "int", "low": 1, "high": 2}},
+                "n_trials": 3,
+                "timeout_sec": 10,
+            }
+        )
+
+        assert "[TUNING]" in observation.stdout
+        assert "new_model_var=tuned_model" in observation.stdout
+        listed = env.step({"type": "list_candidates"})
+        assert "tuned_model" in listed.stdout
+    finally:
+        env.close()
+
+
+def test_context_pack_preserves_model_check_and_finalization_state(tmp_path):
+    env = _make_env(tmp_path)
+    try:
+        env.state.max_steps = 5
+        broken = """
+from sklearn.linear_model import LogisticRegression
+X = pd.get_dummies(train_df.drop(columns=[target_col]))
+y = train_df[target_col]
+best_model = LogisticRegression(max_iter=200).fit(X, y)
+""".strip()
+        env.step(Action.add_cell_action(broken, cell_type="code", execute=True))
+
+        pack = env.build_context_pack()
+
+        assert pack["budget_remaining"] == 4
+        assert "best_model" in pack["candidate_vars_seen"]
+        assert pack["model_check_failures"]
+        assert "finalize" in pack["finalization_requirements"]
+    finally:
+        env.close()
