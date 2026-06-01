@@ -85,12 +85,24 @@ def _build_command(cfg: dict[str, Any]) -> list[str]:
     return cmd
 
 
+# Keep local model training (xgboost/sklearn/BLAS) from pegging every core and
+# spinning the laptop fans. Overridable via AUTOVIBE_DASHBOARD_THREADS.
+_THREADS = os.getenv("AUTOVIBE_DASHBOARD_THREADS", "2")
+
+
 def _build_env(cfg: dict[str, Any]) -> dict[str, str]:
     s = get_settings()
     env = dict(os.environ)
     env["PYTHONPATH"] = str(s.repo_root) + os.pathsep + env.get("PYTHONPATH", "")
     env["MLFLOW_TRACKING_URI"] = s.mlflow_tracking_uri
     env["PYTHONUNBUFFERED"] = "1"
+    # Thread / parallelism caps (CPU + fan control).
+    for var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS",
+                "NUMEXPR_NUM_THREADS", "VECLIB_MAXIMUM_THREADS"):
+        env[var] = _THREADS
+    env["AUTOVIBE_SANDBOX_THREADS"] = _THREADS   # gym kernel thread_limit_env() lever
+    env["JOBLIB_MULTIPROCESSING"] = "0"
+    env["LOKY_MAX_CPU_COUNT"] = _THREADS
     # Override LLM connection from the selected model (load_dotenv won't override
     # vars we set explicitly here).
     model = model_store.get_model(cfg["modelId"]) if cfg.get("modelId") else None
@@ -214,6 +226,36 @@ def _refresh(local_id: str) -> dict[str, Any] | None:
     return meta
 
 
+def _now_ms() -> int:
+    return int(time.time() * 1000)
+
+
+def _reconcile_orphan(meta: dict[str, Any]) -> dict[str, Any]:
+    """A meta still marked 'running' but no longer in this process's registry —
+    typically the server was reloaded/restarted mid-run. Reconcile it against
+    the MLflow run it produced; if that finished, adopt the final result, else
+    keep it running but advance the live duration."""
+    if meta.get("status") != "running":
+        return meta
+    mlflow_id = meta.get("mlflowId") or _resolve_mlflow_id(meta.get("runName", ""))
+    if mlflow_id:
+        meta["mlflowId"] = mlflow_id
+        from . import mlflow_store
+
+        rec = mlflow_store.get_run(mlflow_id)
+        if rec and rec.get("status") != "running":
+            for key in ("status", "score", "metric", "checklist", "checklistCoverage",
+                        "checklistTotal", "errors", "step", "steps", "tokIn", "tokOut", "dur"):
+                if rec.get(key) is not None:
+                    meta[key] = rec[key]
+            meta["endedMs"] = meta.get("endedMs") or _now_ms()
+            _write_meta(meta)
+            return meta
+    # still running (or MLflow run not yet created): keep the clock moving
+    meta["dur"] = round((_now_ms() - meta.get("startedMs", _now_ms())) / 1000)
+    return meta
+
+
 def list_live() -> list[dict[str, Any]]:
     s = get_settings()
     out: list[dict[str, Any]] = []
@@ -223,14 +265,13 @@ def list_live() -> list[dict[str, Any]]:
         if m:
             out.append(m)
             seen.add(local_id)
-    # finished live runs persisted on disk (process registry lost on restart)
     if s.runs_dir.exists():
         for d in s.runs_dir.iterdir():
             if d.name in seen:
                 continue
             m = _read_meta(d.name)
             if m:
-                out.append(m)
+                out.append(_reconcile_orphan(m))
     out.sort(key=lambda r: r.get("startedMs", 0), reverse=True)
     return out
 
@@ -238,7 +279,8 @@ def list_live() -> list[dict[str, Any]]:
 def get_live(local_id: str) -> dict[str, Any] | None:
     if local_id in _ACTIVE:
         return _refresh(local_id)
-    return _read_meta(local_id)
+    meta = _read_meta(local_id)
+    return _reconcile_orphan(meta) if meta else None
 
 
 def workspace_dir(local_id: str) -> "Path | None":

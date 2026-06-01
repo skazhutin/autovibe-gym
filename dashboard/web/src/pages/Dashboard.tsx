@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { api, type Run } from "../lib/api";
 import { useAsync } from "../lib/hooks";
 import { MODE_SHORT, formatScore, formatTokens, timeAgo } from "../lib/format";
-import { Button, Card, EmptyState, ProgressBar, ProgressRing, Skeleton, StatusBadge } from "../components/ui";
+import { Button, Card, EmptyState, LiveDuration, ProgressBar, ProgressRing, Skeleton, StatusBadge } from "../components/ui";
 import { Icon } from "../components/Icon";
 import { BarChart, Sparkline } from "../components/charts";
 import { ModeTag, ScoreCell } from "../components/runbits";
@@ -46,7 +46,7 @@ function ActiveRunCard({ run }: { run: Run }) {
           <ProgressBar pct={pct} animated />
           <div className="meta" style={{ marginTop: 10 }}>
             <span>{formatTokens(run.tokIn + run.tokOut)} токенов</span>
-            <span>{run.dur ? `${run.dur} с` : "запуск…"}</span>
+            <span><LiveDuration startedMs={run.startedMs} running dur={run.dur} /></span>
           </div>
         </div>
       </div>

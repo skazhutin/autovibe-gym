@@ -2,8 +2,8 @@ import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { useAsync } from "../lib/hooks";
-import { MODE_LABELS, formatDuration, formatScore, formatTokens, improvementPct } from "../lib/format";
-import { Button, Card, EmptyState, ProgressBar, ProgressRing, Skeleton, Spinner, StatusBadge, Tabs, Tag } from "../components/ui";
+import { MODE_LABELS, formatScore, formatTokens, improvementPct } from "../lib/format";
+import { Button, Card, EmptyState, LiveDuration, ProgressBar, ProgressRing, Skeleton, Spinner, StatusBadge, Tabs, Tag } from "../components/ui";
 import { Icon } from "../components/Icon";
 import { CodeBlock } from "../components/CodeBlock";
 import { Donut } from "../components/charts";
@@ -199,6 +199,7 @@ export default function RunDetail() {
           <span className="lb-status">{run.command ? `выполняется: ${run.model}` : "агент работает…"}</span>
           <ProgressBar pct={pct} animated />
           <span className="mono" style={{ fontSize: 13 }}>шаг {run.step}{run.steps ? `/${run.steps}` : ""}</span>
+          <span className="mono" style={{ fontSize: 13, opacity: 0.8 }}><LiveDuration startedMs={run.startedMs} running dur={run.dur} /></span>
           <Button variant="danger" size="sm" icon="stop" onClick={stop}>Остановить</Button>
         </div>
       )}
@@ -225,7 +226,7 @@ export default function RunDetail() {
             <span className="vline" />
             <ChipMetric label="токены (in+out)" value={`${formatTokens(run.tokIn)} + ${formatTokens(run.tokOut)}`} />
             <span className="vline" />
-            <ChipMetric label="время" value={formatDuration(run.dur)} />
+            <ChipMetric label="время" value={<LiveDuration startedMs={run.startedMs} running={live} dur={run.dur} />} />
           </div>
         </div>
 

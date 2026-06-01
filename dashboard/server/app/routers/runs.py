@@ -80,8 +80,14 @@ def _enrich_live(meta: dict) -> dict:
 @router.get("")
 def list_runs() -> list[dict]:
     live = [_enrich_live(m) for m in run_launcher.list_live()]
+    # Hide the MLflow run each live launch produces (matched by id or run-name),
+    # so a dashboard launch never shows up twice — including while it runs.
     live_mlflow_ids = {m["mlflowId"] for m in live if m.get("mlflowId")}
-    history = [r for r in mlflow_store.list_runs() if r["id"] not in live_mlflow_ids]
+    live_run_names = {m.get("runName") for m in live if m.get("runName")}
+    history = [
+        r for r in mlflow_store.list_runs()
+        if r["id"] not in live_mlflow_ids and r.get("runName") not in live_run_names
+    ]
     return live + history
 
 

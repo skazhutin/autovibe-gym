@@ -1,7 +1,19 @@
-import type { CSSProperties, ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { Icon } from "./Icon";
 import type { RunStatus } from "../lib/api";
-import { STATUS_LABELS } from "../lib/format";
+import { STATUS_LABELS, formatDuration } from "../lib/format";
+
+/* Ticks every second while a run is in progress; otherwise shows final dur. */
+export function LiveDuration({ startedMs, running, dur }: { startedMs?: number; running: boolean; dur: number | null | undefined }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!running) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [running]);
+  const sec = running && startedMs ? Math.max(0, (now - startedMs) / 1000) : dur;
+  return <>{formatDuration(sec)}</>;
+}
 
 /* ---------------- Button ---------------- */
 type BtnVariant = "primary" | "secondary" | "ghost" | "danger";
