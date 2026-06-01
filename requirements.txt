@@ -8,7 +8,11 @@ PyYAML>=6.0.0
 openpyxl>=3.1.0
 pandas>=2.0.0
 numpy>=1.26.0
-scikit-learn>=1.4.0
+# Pinned: candidate models are pickled inside the sandbox and unpickled on the
+# host for replay/submit. A version skew (e.g. 1.7 image vs 1.8 host) triggers
+# sklearn InconsistentVersionWarning and risks invalid replay. Keep this exact
+# pin identical in the sandbox image (Dockerfile.sandbox installs this file).
+scikit-learn==1.7.2
 xgboost>=2.0.0
 lightgbm>=4.0.0
 

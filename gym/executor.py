@@ -244,6 +244,7 @@ class CodeExecutor:
             "XDG_CACHE_HOME": tmpdir,
             "AUTOVIBE_SANDBOX": "1",
         })
+        env.update(thread_limit_env())
         return env
 
     @staticmethod
@@ -375,6 +376,27 @@ def _int_env(name: str, explicit: int | None, default: int) -> int:
     if raw is None or raw == "":
         return default
     return int(raw)
+
+
+# Native math-library thread-pool caps. On many-core hosts (e.g. the H200
+# server) the default per-thread buffer allocation in OpenBLAS/OpenMP can
+# exhaust memory and abort sandboxed model training with errors such as
+# "OpenBLAS: Memory allocation failed" or xgboost ctypes DataIter crashes.
+# Each value is overridable from the parent environment; set
+# AUTOVIBE_SANDBOX_THREADS to raise the default for all of them at once.
+_THREAD_LIMIT_VARS = (
+    "OMP_NUM_THREADS",
+    "OPENBLAS_NUM_THREADS",
+    "MKL_NUM_THREADS",
+    "NUMEXPR_NUM_THREADS",
+    "VECLIB_MAXIMUM_THREADS",
+)
+
+
+def thread_limit_env() -> dict[str, str]:
+    """Return thread-cap env vars, respecting any explicit parent override."""
+    limit = os.getenv("AUTOVIBE_SANDBOX_THREADS", "1")
+    return {var: os.getenv(var, limit) for var in _THREAD_LIMIT_VARS}
 
 
 def _docker_missing_message(exc: FileNotFoundError) -> str:
