@@ -6,6 +6,7 @@ import nbformat
 import pandas as pd
 import pytest
 
+from gym import GymAgent, LLMResponse
 from gym.jupyter_kernel import ContainerJupyterKernelBackend
 from gym.notebook_env import NotebookGymEnv
 from gym.protocol import Action
@@ -329,6 +330,90 @@ def test_submit_is_allowed_after_budget_exhaustion_for_validated_candidate(tmp_p
         env.close()
 
 
+def test_agent_forced_submit_replays_validates_and_submits_current_notebook(tmp_path):
+    env = _make_env(tmp_path)
+    env.close()
+    env = NotebookGymEnv(
+        train=env.state.train,
+        val=env.state.val,
+        test=env.state.test,
+        target_col=env.state.target_col,
+        metric_fn=_accuracy,
+        metric_name="accuracy",
+        max_steps=1,
+        workspace_dir=tmp_path,
+        mode="gym_with_checklist",
+    )
+    try:
+        agent = GymAgent(
+            env=env,
+            model="fake-model",
+            max_tokens=128,
+            client=_ScriptedClient(
+                [
+                    {
+                        "type": "add_cell",
+                        "cell_type": "code",
+                        "source": _constant_model_source(),
+                        "execute": False,
+                    }
+                ]
+            ),
+        )
+
+        summary = agent.run()
+
+        assert summary["forced_submit"] is True
+        assert summary["valid_submit"] is True
+        assert summary["final_test_metric"] == 1.0
+        assert summary["finalization_status"] == "valid_submit"
+        assert summary["clean_runs_total"] == 1
+        assert summary["validation_calls_total"] == 2
+    finally:
+        env.close()
+
+
+def test_forced_submit_discovers_nonstandard_candidate_name(tmp_path):
+    env = _make_env(tmp_path)
+    env.close()
+    env = NotebookGymEnv(
+        train=env.state.train,
+        val=env.state.val,
+        test=env.state.test,
+        target_col=env.state.target_col,
+        metric_fn=_accuracy,
+        metric_name="accuracy",
+        max_steps=1,
+        workspace_dir=tmp_path,
+        mode="gym_with_checklist",
+    )
+    try:
+        agent = GymAgent(
+            env=env,
+            model="fake-model",
+            max_tokens=128,
+            client=_ScriptedClient(
+                [
+                    {
+                        "type": "add_cell",
+                        "cell_type": "code",
+                        "source": _alternate_candidate_source(),
+                        "execute": False,
+                    }
+                ]
+            ),
+        )
+
+        summary = agent.run()
+
+        assert summary["forced_submit"] is True
+        assert summary["valid_submit"] is True
+        assert summary["final_test_metric"] == 1.0
+        assert env.candidates.latest().model_var == "pipeline_candidate"
+    finally:
+        env.close()
+
+
 def _docker_available() -> bool:
     try:
         result = subprocess.run(["docker", "info"], capture_output=True, timeout=5)
@@ -426,6 +511,17 @@ model.fit(X_train, y_train)
 """.strip()
 
 
+def _alternate_candidate_source():
+    return """
+from sklearn.dummy import DummyClassifier
+
+X_train = train_df.drop(columns=[target_col])
+y_train = train_df[target_col]
+pipeline_candidate = DummyClassifier(strategy='constant', constant=0)
+pipeline_candidate.fit(X_train, y_train)
+""".strip()
+
+
 def _workspace_probe_source():
     return """
 import json
@@ -453,3 +549,13 @@ for path in sorted(Path(".").rglob("*")):
                 hits.append(rel)
 print("\\n".join(hits))
 """.strip()
+
+
+class _ScriptedClient:
+    def __init__(self, actions):
+        self.actions = list(actions)
+
+    def complete(self, *, system, messages, model, max_tokens):
+        if not self.actions:
+            return LLMResponse('{"type": "inspect_notebook"}')
+        return LLMResponse(json.dumps(self.actions.pop(0)), input_tokens=1, output_tokens=1)

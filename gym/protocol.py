@@ -184,7 +184,7 @@ class Action:
     @classmethod
     def from_json(cls, text: str) -> "Action":
         try:
-            payload = json.loads(text)
+            payload = json.loads(text, strict=False)
         except json.JSONDecodeError as exc:
             raise ActionParseError(f"Invalid action JSON: {exc}") from exc
         if not isinstance(payload, dict):
@@ -280,6 +280,21 @@ class Observation:
             )
             parts.append(f"[NOTEBOOK STATUS]\n{status_text}")
         parts.append(f"[BUDGET] {self.budget_remaining} code steps remaining.")
+        if not self.submitted and not self.done and self.budget_remaining <= 3:
+            if self.notebook_status.get("validated_candidate_available"):
+                parts.append(
+                    "[FINALIZE NOW] A validated candidate is available; submit it now."
+                )
+            elif self.notebook_status.get("clean_run_available"):
+                parts.append(
+                    "[FINALIZE NOW] Run validate next, then submit. Do not add "
+                    "exploratory cells."
+                )
+            else:
+                parts.append(
+                    "[FINALIZE NOW] Stop exploration. Run restart_and_run_all, "
+                    "then validate, then submit."
+                )
 
         if self.submitted:
             parts.append("[SUBMITTED] Final candidate accepted. Episode finished.")
@@ -347,17 +362,23 @@ def _normalize_action_type(raw_type: Any) -> str:
 
 def _extract_json_block(text: str) -> str | None:
     stripped = text.strip()
-    if stripped.startswith("{") and stripped.endswith("}"):
+    if _looks_like_action_json(stripped):
         return stripped
 
     match = re.search(r"```json\s*(.*?)\s*```", text, flags=re.DOTALL | re.IGNORECASE)
     if match:
-        return match.group(1).strip()
+        candidate = match.group(1).strip()
+        if _looks_like_action_json(candidate):
+            return candidate
 
     match = re.search(r"```\s*(.*?)\s*```", text, flags=re.DOTALL)
     if match:
         candidate = match.group(1).strip()
-        if candidate.startswith("{") and candidate.endswith("}"):
+        if _looks_like_action_json(candidate):
+            return candidate
+
+    for candidate in _iter_json_object_candidates(text):
+        if _looks_like_action_json(candidate):
             return candidate
 
     return None
@@ -373,3 +394,41 @@ def _extract_code_block(text: str) -> str:
         if match:
             return match.group(1).strip()
     return text.strip()
+
+
+def _looks_like_action_json(text: str) -> bool:
+    if not (text.startswith("{") and text.endswith("}")):
+        return False
+    try:
+        payload = json.loads(text, strict=False)
+    except json.JSONDecodeError:
+        return False
+    return isinstance(payload, dict) and ("type" in payload or "action" in payload)
+
+
+def _iter_json_object_candidates(text: str):
+    """Yield balanced JSON-looking objects embedded in LLM prose."""
+    starts = [idx for idx, char in enumerate(text) if char == "{"]
+    for start in starts:
+        depth = 0
+        in_string = False
+        escape = False
+        for idx in range(start, len(text)):
+            char = text[idx]
+            if in_string:
+                if escape:
+                    escape = False
+                elif char == "\\":
+                    escape = True
+                elif char == '"':
+                    in_string = False
+                continue
+            if char == '"':
+                in_string = True
+            elif char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+                if depth == 0:
+                    yield text[start : idx + 1].strip()
+                    break

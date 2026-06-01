@@ -25,6 +25,25 @@ def test_action_parses_json_and_markdown_json_blocks():
     assert action == Action.code_action("x = 1")
 
 
+def test_action_parses_embedded_json_with_surrounding_text():
+    action = Action.from_llm_response(
+        'I will finalize now:\n{"type": "submit", "model_var": "best_model"}\nDone.'
+    )
+
+    assert action == Action.submit_action("best_model")
+
+
+def test_action_parses_tool_call_json_with_raw_newlines_in_string():
+    action = Action.from_llm_response(
+        '<|tool_call|>call:{"type": "add_cell", "cell_type": "code", '
+        '"source": "x = 1\nprint(x)", "execute": true}<|/tool_call|>'
+    )
+
+    assert action.type == "add_cell"
+    assert action.source == "x = 1\nprint(x)"
+    assert action.execute is True
+
+
 def test_action_rejects_malformed_or_non_object_json():
     with pytest.raises(ActionParseError, match="Invalid action JSON"):
         Action.from_json('{"type": "code",')
@@ -111,6 +130,18 @@ def test_observation_feedback_marks_budget_exhaustion_without_submission():
     ).to_feedback_message()
 
     assert "[DONE] Step budget exhausted." in feedback
+
+
+def test_observation_feedback_warns_to_finalize_on_low_budget():
+    feedback = Observation(
+        action="add_cell",
+        step=7,
+        budget_remaining=2,
+        notebook_status={"clean_run_available": True},
+    ).to_feedback_message()
+
+    assert "[FINALIZE NOW]" in feedback
+    assert "Run validate next, then submit" in feedback
 
 
 def test_notebook_actions_parse_from_json_payloads():

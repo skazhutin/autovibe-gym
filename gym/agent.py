@@ -31,13 +31,16 @@ CRITICAL RULES:
 - The kernel is persistent, but final acceptance depends on a clean
   restart_and_run_all of the current notebook.
 - Before validate or submit, run restart_and_run_all successfully.
+- Reserve your final steps for the acceptance lifecycle: restart_and_run_all,
+  validate, then submit. A high validation printout is not a submission.
 - The candidate must reproduce all preprocessing when predict() is called on
   raw validation or hidden-test rows.
 - If you receive [MODEL CHECK] feedback, fix the candidate artifact before
   trying to submit.
 - Use validation data for model selection.
-- Assign your best trained candidate to a variable called `model`, or pass its
-  variable name in validate/submit.
+- Assign your best trained candidate to a top-level variable called exactly
+  `model`. If you wrap preprocessing, set `model = YourWrapper(...)`; do not
+  leave the final artifact only in a local variable or under an arbitrary name.
 - Submit only after validate succeeds on the same clean notebook revision.
 - Return JSON only. Do not wrap it in markdown or add explanation.
 
@@ -157,8 +160,51 @@ class GymAgent:
                 return None
             return self.env.step(Action.submit_action(model_var))
 
+        if isinstance(self.env, NotebookGymEnv):
+            return self._try_forced_notebook_submit()
+
         candidates = getattr(self.env, "candidates", None)
         latest = candidates.latest() if candidates is not None else None
         if latest is not None:
             return self.env.step(Action.submit_action(latest.model_var))
         return None
+
+    def _try_forced_notebook_submit(self) -> Observation | None:
+        """Finalize the current notebook without allowing more generated code.
+
+        NotebookGymEnv intentionally requires clean replay and host validation
+        before hidden-test submit. At budget exhaustion the agent cannot add or
+        edit cells, but the host can still replay the notebook, validate an
+        existing candidate, and submit it once. This turns "forgot to call
+        submit" into an auditable finalization attempt instead of a silent null
+        score, while preserving the hidden split gate.
+        """
+        env = self.env
+        candidates = env.candidates
+        latest = candidates.latest()
+        if latest is not None:
+            return env.submit_by_name(latest.model_var)
+
+        if env.dirty_since_clean_run or env.last_clean_run_id is None:
+            clean = env.restart_and_run_all()
+            if clean.stderr.strip():
+                return clean
+
+        model_vars = self._notebook_candidate_names()
+        last_observation: Observation | None = None
+        for model_var in model_vars:
+            validated = env.validate_candidate(model_var)
+            last_observation = validated
+            if validated.validation_metric is None or validated.stderr.strip():
+                continue
+            return env.submit_by_name(model_var)
+        return last_observation
+
+    def _notebook_candidate_names(self) -> list[str]:
+        env = self.env
+        discovered = env.candidate_variable_names()
+        ordered: list[str] = []
+        for name in ("best_model", "model", *discovered):
+            if name not in ordered:
+                ordered.append(name)
+        return ordered

@@ -170,7 +170,9 @@ def main():
             "error_count": summary.get("error_count", summary.get("errors_count", 0)),
             "has_test_metric": int(has_test_metric),
             "valid_submit": int(bool(summary.get("valid_submit"))),
-            "submit_failed": int(summary.get("submitted") and not has_test_metric),
+            "submit_failed": int(not has_test_metric),
+            "submitted": int(bool(summary.get("submitted"))),
+            "forced_submit": int(bool(summary.get("forced_submit"))),
             "input_tokens": summary.get("input_tokens", 0),
             "output_tokens": summary.get("output_tokens", 0),
             "elapsed_seconds": summary.get("elapsed_seconds", 0),
@@ -191,6 +193,8 @@ def main():
             metrics["final_test_metric"] = summary["final_test_metric"]
             metrics["test_metric"] = summary["final_test_metric"]
         mlflow.log_metrics(metrics)
+        if summary.get("finalization_status"):
+            mlflow.set_tag("finalization_status", summary["finalization_status"])
         mlflow.log_artifacts(summary["episode_workspace"], artifact_path="episode")
         if summary.get("private_episode_dir"):
             mlflow.log_artifacts(

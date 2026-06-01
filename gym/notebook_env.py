@@ -42,7 +42,10 @@ MODEL_INTERFACE_MESSAGE = (
 MODEL_RAW_INPUT_MESSAGE = (
     "[MODEL CHECK] The saved candidate cannot predict raw validation features. "
     "The submitted artifact must reproduce all required preprocessing when "
-    "called on new raw rows."
+    "called on new raw rows. If you selected columns, engineered features, "
+    "scaled values, or encoded target labels, wrap that logic inside the "
+    "candidate so model.predict(raw_features) returns labels in the original "
+    "target format."
 )
 
 NEEDS_CLEAN_RUN_MESSAGE = (
@@ -514,6 +517,7 @@ class NotebookGymEnv:
 
     def get_summary(self) -> dict:
         error_count = sum(1 for observation in self.state.history if observation.stderr.strip())
+        submit_failure_type = self.private_summary.get("submit_failure_type")
         summary = {
             "steps_used": self.state.step,
             "checklist_coverage": self.checklist.coverage(),
@@ -524,7 +528,8 @@ class NotebookGymEnv:
             "valid_submit": bool(self.private_summary.get("valid_submit", False)),
             "test_metric": self.private_summary.get("final_test_metric"),
             "final_test_metric": self.private_summary.get("final_test_metric"),
-            "submit_failure_type": self.private_summary.get("submit_failure_type"),
+            "submit_failure_type": submit_failure_type,
+            "finalization_status": self._finalization_status(submit_failure_type),
             "elapsed_seconds": round(time.time() - self._start_time, 1),
             "notebook_cells_final": len(self.notebook.notebook.cells),
             "notebook_revisions_total": self.notebook.revision,
@@ -868,6 +873,50 @@ class NotebookGymEnv:
             pass
         return model
 
+    def candidate_variable_names(self) -> list[str]:
+        """Return clean-kernel globals that look like submit candidates.
+
+        This is intentionally based only on public kernel state after a clean
+        run. It does not inspect hidden test data or score anything; it just
+        helps the host recover when an LLM creates a submit-ready object under
+        a name other than the documented `model` / `best_model`.
+        """
+        source = """
+import inspect as _autovibe_inspect
+import json as _autovibe_json
+import types as _autovibe_types
+
+_autovibe_skip = {
+    "train_df", "val_df", "target_col", "pd", "np",
+}
+_autovibe_names = []
+for _autovibe_name, _autovibe_value in list(globals().items()):
+    if _autovibe_name.startswith("_") or _autovibe_name in _autovibe_skip:
+        continue
+    if _autovibe_inspect.isclass(_autovibe_value):
+        continue
+    if isinstance(_autovibe_value, _autovibe_types.ModuleType):
+        continue
+    _autovibe_predict = getattr(_autovibe_value, "predict", None)
+    if callable(_autovibe_predict):
+        _autovibe_names.append(_autovibe_name)
+print(_autovibe_json.dumps(sorted(set(_autovibe_names))))
+""".strip()
+        result = self.kernel.execute_cell(
+            source,
+            timeout=min(self.kernel_timeout, 10),
+            store_history=False,
+        )
+        if not result.success:
+            return []
+        try:
+            parsed = json.loads(result.stdout.strip().splitlines()[-1])
+        except (IndexError, json.JSONDecodeError, TypeError):
+            return []
+        if not isinstance(parsed, list):
+            return []
+        return [str(name) for name in parsed if str(name).strip()]
+
     def _clear_generated_artifacts(self) -> None:
         for path in (
             self.workspace_dir / "data",
@@ -921,7 +970,9 @@ class NotebookGymEnv:
                 "Hidden test data is not available in the kernel or workspace. "
                 "Interactive state is not enough for final acceptance: run "
                 "restart_and_run_all, then validate, then submit. The final candidate "
-                "must be available after the clean run in model or the model_var you name.\n\n"
+                "must be assigned after the clean run to a top-level variable named "
+                "exactly model; if preprocessing or label decoding is needed, wrap it "
+                "inside that model object so model.predict(raw_features) works.\n\n"
                 "Return exactly one JSON action per turn."
             )
         }
@@ -935,6 +986,20 @@ class NotebookGymEnv:
         if not metrics:
             return None
         return max(metrics)
+
+    def _finalization_status(self, submit_failure_type: str | None = None) -> str:
+        if self.private_summary.get("valid_submit", False):
+            return "valid_submit"
+        if self.state.submitted and submit_failure_type:
+            return f"hidden_submit_failed:{submit_failure_type}"
+        if self.state.submitted:
+            return "submitted_without_metric"
+        latest = self.candidates.latest()
+        if latest is not None and latest.validation_success:
+            return "validated_not_submitted"
+        if not self.dirty_since_clean_run and self.last_clean_run_id is not None:
+            return "clean_run_not_validated"
+        return "no_clean_run"
 
 
 def _write_json(path: Path, data: Any) -> None:

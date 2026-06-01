@@ -1,7 +1,7 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-05-29 (docs sync: TZ.md, PROTOCOL.md fallback contract, EXPERIMENT_REPORT)
-**Phase:** COMPLETE. All infrastructure merged (PR #13). 158 tests passing. Awaiting notebook-era experiment runs on H200.
+**Last updated:** 2026-06-01 (Codex H200 trace debug + submit finalization hardening)
+**Phase:** COMPLETE. Infrastructure merged; H200 trace debugging exposed submit-lifecycle and small-model calibration gaps.
 
 ---
 
@@ -10,6 +10,10 @@
 Harden the merged real Jupyter + Docker-backed kernel environment with
 behavioral privacy tests, deterministic PR CI, and minimal fixes for discovered
 test, sandbox, and logging gaps.
+
+Current PR focus: make failed/missing submit outcomes diagnosable and reduce
+avoidable null metrics by forcing clean replay + validate + one submit attempt
+for the current notebook when the agent exhausts its budget without finalizing.
 
 ---
 
@@ -65,6 +69,17 @@ test, sandbox, and logging gaps.
 | Docker kernel integration | Runs in GitHub Actions after sandbox image build |
 | Step-budget semantics | Passing |
 
+### H200 Trace Findings (2026-06-01)
+
+| Finding | Status | Notes |
+|---------|--------|-------|
+| Agents often print validation scores but do not call `validate`/`submit` before budget exhaustion | In Progress | `GymAgent` now attempts host-side finalization at budget exhaustion without allowing new generated code |
+| Some LLM responses wrap JSON actions in prose | In Progress | Action parser now accepts balanced embedded action JSON in addition to exact/fenced JSON |
+| Agents create valid candidates under nonstandard variable names | In Progress | Forced finalization now discovers clean-kernel globals with `predict()` and validates them after trying `best_model`/`model` |
+| MLflow `submit_failed` did not distinguish missing submit from successful no-op | In Progress | `run_gym` now logs `submit_failed=1` whenever no hidden test metric exists and tags `finalization_status` |
+| Submit-ready contract failures remain common on small models | In Progress | Latest H200 run reached clean replay and candidate discovery, but final candidate failed raw validation; model-check feedback now calls out label decoding / feature selection wrappers |
+| Long multi-step DeepSeek conversations can hang on an OpenAI-compatible request | TODO | Add configurable OpenAI client timeout/retry policy before large matrix runs |
+
 ---
 
 ## Current Verification
@@ -98,8 +113,12 @@ Windows environment because Docker CLI is unavailable; GitHub Actions now builds
 
 1. [x] Все PR смержены в main
 2. [x] TZ.md, PROTOCOL.md, EXPERIMENT_REPORT.md синхронизированы
-3. [ ] Запустить `python -m experiments.run_matrix --mode local` на H200 → получить notebook-era experiment results
-4. [ ] Обновить EXPERIMENT_REPORT.md с новыми результатами после п.3
+3. [x] Проведён H200 smoke/debug run на `example_dry_bean` (`deepseek-v4-flash`, `gemma-4-26b`) и изучены trace artifacts
+4. [x] Проверен submit-finalization branch на H200: forced finalization срабатывает, clean replay запускается, nonstandard candidates обнаруживаются
+5. [ ] Добавить configurable OpenAI-compatible request timeout для зависающих long-context запросов
+6. [ ] Добить small-model submit readiness: candidate must wrap feature selection and label decoding before hidden-test submit
+7. [ ] Запустить `python -m experiments.run_matrix --mode local` на H200 → получить notebook-era experiment results
+8. [ ] Обновить EXPERIMENT_REPORT.md с новыми результатами после matrix run
 
 ---
 
@@ -107,6 +126,8 @@ Windows environment because Docker CLI is unavailable; GitHub Actions now builds
 
 | Date | Change |
 |------|--------|
+| 2026-06-01 | Added budget-exhaustion notebook finalization, clean-kernel candidate discovery, embedded JSON action parsing, low-budget finalization feedback, and finalization status logging |
+| 2026-06-01 | H200 debug run found that agents can build good validation models but miss clean-run/validate/submit before budget exhaustion |
 | 2026-05-29 | Hardened notebook privacy artifacts, Docker kernel path/port handling, step-budget blocking, and deterministic CI sandbox image build |
 | 2026-05-29 | Implemented ContainerJupyterKernelBackend: Docker sandbox with internal network, read-only rootfs, and dropped capabilities |
 | 2026-05-29 | Rebasing Jupyter branch on updated `origin/main` and preserving LiteLLM/Groq provider support |
