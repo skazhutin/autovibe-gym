@@ -16,6 +16,11 @@ scikit-learn==1.7.2
 xgboost>=2.0.0
 lightgbm>=4.0.0
 
+# Visualisation — agents routinely import these for EDA cells; a missing import
+# aborts the whole restart_and_run_all clean run, so keep them installed.
+matplotlib>=3.7.0
+seaborn>=0.13.0
+
 # Experiment tracking (local MLflow server)
 mlflow>=2.14.0
 
