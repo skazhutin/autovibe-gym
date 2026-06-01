@@ -82,12 +82,12 @@ $DOCKER -m experiments.run_gym --dataset-dir $DS --mode cloud
 $DOCKER -m experiments.run_fixed --dataset-dir $DS --mode cloud
 ```
 
-Or run everything in one command with the batch runner:
+Or run the four product modes in one command with the batch runner:
 
 ```bash
-$DOCKER -m experiments.run_matrix \
+$DOCKER -m experiments.run_all_modes_matrix \
   --datasets /autovibe/datasets/student_dropout/prepared \
-  --episode-modes gym_with_checklist iterative_no_checklist \
+  --models $LLM_MODEL \
   --mode cloud
 ```
 
@@ -109,13 +109,14 @@ Mode                  test_metric  steps  tokens   elapsed
 baseline_single_shot        0.747      1    2 120      12s
 repeated_single_shot        0.730      5   11 228     110s
 gym (flexible)              0.745     14  146 013     111s
-fixed_transitions           0.000     17  218 322     218s
+fixed_transitions            null     17  218 322     218s
 ```
 
 > The single-shot baseline wins on score **and** cost.
 > The gym reveals what the agent did (checklist coverage, failure types).
 > Fixed transitions with rigid stage order performs worst when the agent
 > exhausts its preprocessing budget before finding good features.
+> `null` means no valid hidden-test submission, not a score of zero.
 
 ---
 
@@ -165,6 +166,25 @@ cell-oriented:
 {"type": "submit", "model_var": "model"}
 ```
 
+Useful gym tools are also JSON actions:
+
+```json
+{"type": "inspect_data"}
+{"type": "profile_data", "profile": "compact"}
+{"type": "list_candidates"}
+{"type": "check_candidate", "model_var": "auto"}
+{"type": "quick_validate", "model_var": "auto"}
+{"type": "finalize", "model_var": "auto"}
+```
+
+Optional diagnostics are available when configured/installed:
+
+```json
+{"type": "profile_data", "profile": "ydata"}
+{"type": "cleanlab_diagnose", "model_var": "auto"}
+{"type": "tune_hyperparameters", "model_var": "model", "search_space": {}, "n_trials": 10}
+```
+
 Each episode creates `solution.ipynb` and treats it as the source of truth.
 The LLM can add, update, delete, move, run, and inspect real notebook cells.
 The kernel is persistent during interactive work, so variables survive between
@@ -202,6 +222,10 @@ episode_summary.json
 feedback_trace_private.json
 notebook_events_private.json
 validation_trajectory_private.json
+agent_trace_private.jsonl
+cell_executions_private.jsonl
+candidate_diagnostics_private.jsonl
+data_profile_private.json
 artifacts/*.pkl
 ```
 

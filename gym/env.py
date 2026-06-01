@@ -1,11 +1,13 @@
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable
+import inspect
 
 import pandas as pd
 
 from .cell_history import CellHistory
 from .checklist import Checklist
+from .data_profile import build_dataset_card, format_profile_for_agent, build_compact_profile
 from .executor import CodeExecutor
 from .protocol import Action, Observation, StepResult, coerce_action
 from .workspace import Workspace
@@ -91,6 +93,9 @@ class GymEnv:
         )
         self.checklist = Checklist(target_col=target_col)
         self.model_validation_rows = model_validation_rows
+        self.model_check_failure_count = 0
+        self.final_status: str | None = None
+        self.null_reason: str | None = None
         self._start_time = time.time()
 
     def reset(self) -> dict:
@@ -100,6 +105,9 @@ class GymEnv:
         self.state.cell_history.reset()
         self.state.workspace.reset()
         self.checklist = Checklist(target_col=self.state.target_col)
+        self.model_check_failure_count = 0
+        self.final_status = None
+        self.null_reason = None
         self._start_time = time.time()
         return self._build_context_prompt()
 
@@ -111,13 +119,78 @@ class GymEnv:
         parsed = coerce_action(action)
         if parsed.type == "submit":
             return self.submit_by_name(parsed.model_var)
+        if parsed.type == "validate":
+            return self._check_or_quick_validate(parsed.model_var, quick=True)
+        if parsed.type == "finalize":
+            return self.submit_by_name(parsed.model_var)
+        if parsed.type == "inspect_data":
+            card = build_dataset_card(
+                self.state.train,
+                self.state.val,
+                self.state.target_col,
+                self.state.metric_name,
+            )
+            return self._record_observation(
+                Observation(
+                    action="inspect_data",
+                    step=self.state.step,
+                    budget_remaining=self.budget_remaining(),
+                    stdout=card,
+                    checklist_coverage=self.checklist.coverage(),
+                )
+            )
+        if parsed.type == "profile_data":
+            profile = build_compact_profile(
+                self.state.train,
+                self.state.val,
+                self.state.target_col,
+                self.state.metric_name,
+            )
+            return self._record_observation(
+                Observation(
+                    action="profile_data",
+                    step=self.state.step,
+                    budget_remaining=self.budget_remaining(),
+                    stdout=format_profile_for_agent(profile),
+                    checklist_coverage=self.checklist.coverage(),
+                )
+            )
+        if parsed.type == "list_candidates":
+            names = self._candidate_var_order()
+            text = "[CANDIDATES]\n" + ("\n".join(f"- {n}" for n in names) if names else "No predict-capable candidate variables were discovered.")
+            return self._record_observation(
+                Observation(
+                    action="list_candidates",
+                    step=self.state.step,
+                    budget_remaining=self.budget_remaining(),
+                    stdout=text,
+                    checklist_coverage=self.checklist.coverage(),
+                )
+            )
+        if parsed.type in {"check_candidate", "quick_validate"}:
+            return self._check_or_quick_validate(parsed.model_var, quick=parsed.type == "quick_validate")
+        if parsed.type in {"cleanlab_diagnose", "tune_hyperparameters"}:
+            return self._record_observation(
+                Observation(
+                    action=parsed.type,
+                    step=self.state.step,
+                    budget_remaining=self.budget_remaining(),
+                    stdout=f"[{parsed.type.upper()}] This tool is available in NotebookGymEnv.",
+                    checklist_coverage=self.checklist.coverage(),
+                    model_var=parsed.model_var,
+                )
+            )
 
         return self._run_code(parsed)
 
     def submit_by_name(self, model_var: str = "model") -> Observation:
         """Submit a model stored in the workspace by variable name."""
+        if model_var == "auto":
+            model_var = self._candidate_var_order()[0] if self._candidate_var_order() else "model"
         model = self.state.workspace.get(model_var)
         if model is None:
+            self.final_status = "no_candidate_found"
+            self.null_reason = f"No variable named '{model_var}' found in workspace."
             observation = Observation(
                 action="submit",
                 step=self.state.step,
@@ -133,6 +206,8 @@ class GymEnv:
 
         validation_hint = self._raw_validation_hint(model, model_var)
         if validation_hint:
+            self.final_status = "submit_blocked_preflight"
+            self.null_reason = validation_hint
             observation = Observation(
                 action="submit",
                 step=self.state.step,
@@ -182,6 +257,8 @@ class GymEnv:
                     ) from e
 
         self.state.submitted = True
+        self.final_status = "submitted_clean"
+        self.null_reason = None
         observation = Observation(
             action="submit",
             step=self.state.step,
@@ -241,17 +318,21 @@ class GymEnv:
         return self._record_observation(observation)
 
     def _build_context_prompt(self) -> dict:
-        train_info = self.state.train.describe(include="all").to_string()
         visible_symbols = ", ".join(self.state.workspace.visible_symbols())
+        dataset_card = build_dataset_card(
+            self.state.train,
+            self.state.val,
+            self.state.target_col,
+            self.state.metric_name,
+            max_chars=4500,
+        )
         return {
             "task": (
                 "You are solving a supervised ML task in an iterative AutoML Gym.\n"
                 f"Target column: '{self.state.target_col}'\n"
                 f"Metric: {self.state.metric_name}\n"
                 f"Max code steps: {self.state.max_steps}\n\n"
-                f"Training data shape: {self.state.train.shape}\n"
-                f"Validation data shape: {self.state.val.shape}\n\n"
-                f"Dataset statistics:\n{train_info}\n\n"
+                f"{dataset_card}\n\n"
                 "Workspace variables available to your code:\n"
                 f"  {visible_symbols}\n"
                 "Hidden variables:\n"
@@ -280,7 +361,7 @@ class GymEnv:
     def _model_validation_hints(self) -> list[str]:
         hints = []
         seen_ids = set()
-        for model_var in ("best_model", "model"):
+        for model_var in self._candidate_var_order() or ["best_model", "model"]:
             model = self.state.workspace.get(model_var)
             if model is None:
                 continue
@@ -292,8 +373,84 @@ class GymEnv:
                 hints.append(hint)
         return hints
 
+    def _candidate_var_order(self) -> list[str]:
+        priority = [
+            "model",
+            "best_model",
+            "final_model",
+            "pipeline",
+            "best_pipeline",
+            "best_estimator",
+            "estimator",
+            "clf",
+            "classifier",
+            "best_clf",
+            "best_classifier",
+            "rf_model",
+            "lgb_model",
+            "xgb_model",
+            "catboost_model",
+            "trained_model",
+            "final_pipeline_model",
+            "reg",
+            "regressor",
+        ]
+        discovered = [
+            name
+            for name, value in self.state.workspace.namespace.items()
+            if not name.startswith("_")
+            and not inspect.isclass(value)
+            and callable(getattr(value, "predict", None))
+        ]
+        ordered: list[str] = []
+        for name in priority + discovered:
+            if name in self.state.workspace.namespace and name not in ordered:
+                ordered.append(name)
+        return ordered
+
+    def _check_or_quick_validate(self, model_var: str, *, quick: bool) -> Observation:
+        names = self._candidate_var_order() if model_var == "auto" else [model_var]
+        lines = ["[QUICK VALIDATE]" if quick else "[CANDIDATE CHECK]"]
+        selected_metric = None
+        selected_name = model_var
+        for name in names:
+            model = self.state.workspace.get(name)
+            if model is None:
+                lines.append(f"- {name}: exists=false")
+                continue
+            hint = self._raw_validation_hint(model, name)
+            if hint:
+                lines.append(f"- {name}: raw_validation_ready=false issue={hint}")
+                continue
+            if quick:
+                try:
+                    X_val = self.state.val.drop(columns=[self.state.target_col])
+                    y_val = self.state.val[self.state.target_col]
+                    metric = float(self.metric_fn(y_val, model.predict(X_val)))
+                    selected_metric = metric
+                    selected_name = name
+                    lines.append(f"- {name}: validation_{self.state.metric_name}={metric:.6f}")
+                    break
+                except Exception as exc:
+                    lines.append(f"- {name}: validation_failed={type(exc).__name__}: {_clip(str(exc), 200)}")
+            else:
+                selected_name = name
+                lines.append(f"- {name}: raw_validation_ready=true serializable=not_checked")
+        return self._record_observation(
+            Observation(
+                action="quick_validate" if quick else "check_candidate",
+                step=self.state.step,
+                budget_remaining=self.budget_remaining(),
+                stdout="\n".join(lines),
+                checklist_coverage=self.checklist.coverage(),
+                validation_metric=selected_metric,
+                model_var=selected_name,
+            )
+        )
+
     def _raw_validation_hint(self, model: Any, model_var: str) -> str | None:
         if not hasattr(model, "predict"):
+            self.model_check_failure_count += 1
             return MODEL_INTERFACE_HINT.format(model_var=model_var)
 
         X_val = self.state.val.drop(columns=[self.state.target_col])
@@ -305,6 +462,7 @@ class GymEnv:
         try:
             model.predict(X_val)
         except Exception as exc:
+            self.model_check_failure_count += 1
             return MODEL_VALIDATION_HINT.format(
                 model_var=model_var,
                 error_type=type(exc).__name__,
@@ -318,6 +476,8 @@ class GymEnv:
         exc: Exception,
     ) -> Observation:
         self.state.submitted = True
+        self.final_status = "hidden_submit_failed"
+        self.null_reason = "Candidate passed validation preflight but failed on hidden test."
         observation = Observation(
             action="submit",
             step=self.state.step,
@@ -347,6 +507,10 @@ class GymEnv:
             "cells_used": len(self.state.cell_history),
             "submitted": self.state.submitted or final is not None,
             "test_metric": final.test_metric if final else None,
+            "valid_submit": bool(final and final.test_metric is not None),
+            "final_status": self.final_status,
+            "null_reason": self.null_reason,
+            "model_check_failure_count": self.model_check_failure_count,
             "elapsed_seconds": round(time.time() - self._start_time, 1),
         }
 

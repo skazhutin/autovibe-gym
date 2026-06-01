@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+import os
+
 from .env import GymEnv
 from .llm import LLMClient, default_model_name, make_llm_client
 from .notebook_env import NotebookGymEnv
@@ -33,18 +36,45 @@ CRITICAL RULES:
 - Before validate or submit, run restart_and_run_all successfully.
 - The candidate must reproduce all preprocessing when predict() is called on
   raw validation or hidden-test rows.
+- First create a simple robust candidate that can validate and submit on raw
+  rows. Only after that, spend remaining steps on improvements. Never leave
+  the episode without at least one raw-inference-ready candidate.
+- If you create derived features from existing columns, the derivation must be
+  inside the final model object. Do not train on X_train_processed and then
+  submit a model that expects processed columns. Use sklearn Pipeline,
+  ColumnTransformer, FunctionTransformer, or a custom sklearn-compatible
+  transformer so model.predict(raw_df) works. This applies to date/time
+  parsing, text/string features, target encoding, scaling, imputation, and
+  column dropping.
 - If you receive [MODEL CHECK] feedback, fix the candidate artifact before
   trying to submit.
 - Use validation data for model selection.
 - Assign your best trained candidate to a variable called `model`, or pass its
-  variable name in validate/submit.
+  variable name in validate/submit. Use model_var="auto" if unsure.
 - Submit only after validate succeeds on the same clean notebook revision.
 - Return JSON only. Do not wrap it in markdown or add explanation.
+
+PREFER ENVIRONMENT TOOLS WHEN HELPFUL:
+- inspect_data for compact EDA.
+- profile_data for deeper data quality signals.
+- check_candidate before finalizing.
+- quick_validate for exploratory validation.
+- list_candidates if unsure what model variables exist.
+- cleanlab_diagnose for optional label-quality diagnostics in classification.
+- tune_hyperparameters for bounded tuning of an existing candidate.
+- finalize when ready or when budget is low.
+
+AVOID COMMON FAILURE PATTERNS:
+- fitting encoders/scalers outside the submitted model.
+- creating train-only columns and submitting a model expecting those columns.
+- using lambdas/local functions that cannot be serialized.
+- relying on variables created only in the live kernel but not in the notebook.
+- running large grid searches before a validated baseline exists.
 
 FINALIZE EARLY — DO NOT RUN OUT OF STEPS:
 - The single most important thing is to SUBMIT a validated candidate. As soon
   as you have a trained `model`, finalize immediately:
-  restart_and_run_all -> validate -> submit. Budget a few steps for this.
+  restart_and_run_all -> validate/finalize -> submit. Budget a few steps for this.
 - Do not spend steps polishing, re-running EDA, or deleting cells one by one.
   Prefer not to add throwaway cells rather than deleting them later.
 - If you run out of steps, the environment will auto-finalize your latest
@@ -58,9 +88,8 @@ KEEP THE CLEAN RUN FAST AND ROBUST:
 - Only import libraries you actually use; a single failed import anywhere
   aborts the entire clean run.
 - Keep hyperparameter search small enough to finish well within the time
-  limit: prefer a tiny grid or RandomizedSearchCV with few iterations and
-  cv<=3. A large GridSearchCV will time out and fail the clean run. Use
-  n_jobs=-1 so search runs in parallel.
+  limit: prefer tune_hyperparameters, a tiny grid, or RandomizedSearchCV with
+  few iterations and cv<=3. Use n_jobs=-1 where safe.
 
 {ACTION_JSON_SCHEMA}
 """
@@ -94,12 +123,12 @@ class GymAgent:
         self.messages = [{"role": "user", "content": context["task"]}]
         max_agent_turns = max(self.env.state.max_steps * 2 + 5, 10)
 
-        for _ in range(max_agent_turns):
+        for turn in range(max_agent_turns):
             response = self.client.complete(
                 model=self.model,
                 max_tokens=self.max_tokens,
                 system=SYSTEM_PROMPT,
-                messages=self.messages,
+                messages=self._messages_for_llm(),
             )
             self.total_input_tokens += response.input_tokens
             self.total_output_tokens += response.output_tokens
@@ -108,6 +137,20 @@ class GymAgent:
             try:
                 action = Action.from_llm_response(response.text)
             except ActionParseError as exc:
+                self._record_agent_trace(
+                    {
+                        "turn": turn + 1,
+                        "input_tokens": response.input_tokens,
+                        "output_tokens": response.output_tokens,
+                        "raw_response": response.text,
+                        "parse_status": "error",
+                        "parse_error": str(exc),
+                        "parsed_action": None,
+                        "observation_action": None,
+                        "done": False,
+                        "submitted": False,
+                    }
+                )
                 self.messages.append(
                     {
                         "role": "user",
@@ -120,6 +163,20 @@ class GymAgent:
                 continue
 
             observation = self.env.step(action)
+            self._record_agent_trace(
+                {
+                    "turn": turn + 1,
+                    "input_tokens": response.input_tokens,
+                    "output_tokens": response.output_tokens,
+                    "raw_response": response.text,
+                    "parse_status": "ok",
+                    "parse_error": None,
+                    "parsed_action": action.to_dict(),
+                    "observation_action": observation.action,
+                    "done": observation.done,
+                    "submitted": observation.submitted,
+                }
+            )
             self.messages.append(
                 {"role": "user", "content": self._build_feedback(observation)}
             )
@@ -164,6 +221,40 @@ class GymAgent:
         if notebook_context:
             feedback = f"{feedback}\n\n{notebook_context}"
         return feedback
+
+    def _messages_for_llm(self) -> list[dict]:
+        if os.getenv("AUTOVIBE_CONTEXT_COMPACTION", "off").lower() != "conservative":
+            return self.messages
+        try:
+            last_turns = int(os.getenv("AUTOVIBE_CONTEXT_LAST_TURNS", "6"))
+        except ValueError:
+            last_turns = 6
+        max_chars = int(os.getenv("AUTOVIBE_CONTEXT_MAX_CHARS", "12000"))
+        context_pack = {}
+        build_context_pack = getattr(self.env, "build_context_pack", None)
+        if callable(build_context_pack):
+            context_pack = build_context_pack()
+        compact_message = {
+            "role": "user",
+            "content": "[CONTEXT PACK]\n" + json.dumps(context_pack, indent=2, ensure_ascii=False),
+        }
+        initial = self.messages[:1]
+        recent = self.messages[-last_turns:] if last_turns > 0 else []
+        packed = initial + [compact_message] + recent
+        total = 0
+        clipped: list[dict] = []
+        for message in reversed(packed):
+            content = str(message.get("content", ""))
+            total += len(content)
+            if total > max_chars and clipped:
+                break
+            clipped.append(message)
+        return list(reversed(clipped))
+
+    def _record_agent_trace(self, record: dict) -> None:
+        recorder = getattr(self.env, "record_agent_turn", None)
+        if callable(recorder):
+            recorder(record)
 
     def _try_forced_submit(self) -> Observation | None:
         # Notebook environments expose a host-controlled finalize() that runs a

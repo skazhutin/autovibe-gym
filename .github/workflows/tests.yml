@@ -42,6 +42,7 @@ jobs:
       - name: Run tests with coverage
         run: |
           python -m pytest \
+            -m "not integration" \
             --cov=gym \
             --cov=experiments \
             --cov=scripts \

@@ -76,6 +76,16 @@ python -m experiments.run_fixed \
 `--mode local` uses 30-step budget and 60s sandbox timeout.
 `--mode cloud` uses 15-step budget and 30s sandbox timeout.
 
+To run the full four-mode product matrix across datasets and models:
+
+```bash
+python -m experiments.run_all_modes_matrix \
+  --datasets datasets/student_dropout/prepared \
+  --models deepseek-v4-flash gemma-4-26b \
+  --mode cloud \
+  --experiment-name autovibe-gym
+```
+
 ### 3. Inside Docker (as used on the H200 server)
 
 ```bash
@@ -194,6 +204,12 @@ target column from `meta.json` at runtime.
   at least once on the same dataset and record all runs in MLflow.
 - The private test set is evaluated exactly once per run (enforced by `GymEnv.submit()`).
   There is no way to query the test score multiple times within a single session.
+- `null` test metrics mean no valid hidden-test submission was produced. They
+  are represented as missing metrics plus `final_status` / `null_reason`, never
+  as fake `0.000` scores.
+- Profiling and diagnostics tools are optional. `profile_data` always has a
+  compact pandas backend; ydata-profiling, cleanlab, and optuna live in the
+  `diagnostics` extra and are used only when requested/configured.
 
 ---
 
@@ -205,3 +221,14 @@ target column from `meta.json` at runtime.
 | Stage-level log (fixed mode) | `stage_log.json` |
 | Attempt-level log (repeated SS) | `attempt_log.json` |
 | MLflow run metadata | `mlruns/<experiment_id>/<run_id>/` |
+
+Private gym artifacts may also include:
+
+- `agent_trace_private.jsonl`
+- `cell_executions_private.jsonl`
+- `candidate_diagnostics_private.jsonl`
+- `data_profile_private.json`
+- `data_profile_ydata.json` / `data_profile_ydata.html`
+- `cleanlab_diagnostics_private.json`
+
+These private artifacts are not mounted into the agent-visible workspace.
