@@ -1,7 +1,7 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-01 (single-shot/repeated multishot H200 blockers addressed: raw-input pipelines, shared label coercion, sequential joblib)
-**Phase:** Hardening after first full H200 recon. All 4 run types × 2 cloud models executed on `example_student_dropout` (+ `example_room_occupancy`); fixing the blockers found and preparing the next full rerun.
+**Last updated:** 2026-06-01 (local web dashboard added: FastAPI + Vite/React/TS in `dashboard/`)
+**Phase:** Hardening after first full H200 recon + building the local control-panel dashboard for configuring/launching/inspecting runs.
 
 ---
 
@@ -146,6 +146,28 @@ Still open (need server-side iteration):
   had `autovibe-gym:latest` built, and rootless Docker can't pull from docker.io.
   Server setup task: build the image under the expected tag.
 
+## Web Dashboard (`dashboard/`, branch `dev/claude/web-dashboard`)
+
+Local control panel, separate from `gym/`. Reuses the project `.venv`.
+
+- **Backend** (`dashboard/server`, FastAPI): reads runs from MLflow and parses
+  episode artifacts into notebook/trajectory/checklist/errors/logs (per-item
+  checklist closure reconstructed by replaying public notebook events through the
+  gym's own `NotebookChecklist`); datasets CRUD + CSV upload over `datasets/`;
+  models JSON registry seeded from `.env` with OpenAI-compatible health probe;
+  run launcher spawning `run_baseline/run_multishot/run_gym` subprocesses (shared
+  MLflow store), live status + process-log tail + stop.
+- **Frontend** (`dashboard/web`, Vite+React+TS): all 8 screens built to the
+  T-Bank design tokens — Dashboard, New Run, Runs, Run Detail (5 tabs), Compare,
+  Datasets (+detail/upload/delete), Models, Settings. Light/dark theme + accent.
+- **Verified:** `npm run build` clean; FastAPI serves over HTTP; Vite dev proxies
+  `/api`; real MLflow runs/datasets render; launcher builds correct commands.
+- **Known limitation:** the gym writes episode artifacts only at episode end, so
+  live view streams the process log + status; full notebook/trajectory tabs
+  populate once the run completes. Cell-by-cell live streaming would need a small
+  gym-side incremental artifact flush (future enhancement).
+- **Run:** `dashboard/server/run.sh` (API :8000) + `cd dashboard/web && npm i && npm run dev` (:5173).
+
 ## Blocked / Needs Decision
 
 - Local Docker CLI is unavailable in this Windows workspace, so Docker kernel
@@ -171,6 +193,7 @@ Still open (need server-side iteration):
 
 | Date | Change |
 |------|--------|
+| 2026-06-01 | Added local web dashboard (`dashboard/`): FastAPI backend (MLflow runs, episode-artifact parsing, datasets/models CRUD, subprocess run launcher) + Vite/React/TS frontend with all 8 screens on the T-Bank design system |
 | 2026-06-01 | Fixed single-shot/repeated multishot H200 failure modes: raw-input pipeline prompts, shared label-coercion scoring, sequential joblib in the subprocess/Docker executor |
 | 2026-06-01 | Fixed gym `test_metric=null`: robust action parsing (tool-call tokens), host-side `finalize()` live-kernel fallback, label-encoding coercion in validate/submit, viz libs + per-cell timeout + prompt steering; verified 0.7247 on student_dropout |
 | 2026-06-01 | H200 recon: capped BLAS/OMP threads in sandbox+kernel, added `run_fixed --max-steps`, pinned scikit-learn==1.7.2; documented open gym-submit issue |

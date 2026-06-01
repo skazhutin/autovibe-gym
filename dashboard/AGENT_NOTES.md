@@ -101,7 +101,17 @@ GET  /runs/{id}/notebook ; /trajectory ; /checklist ; /errors ; /logs
 GET  /runs/{id}/events (SSE/poll for live)
 
 ## Progress log
-- [done] branch + scaffolding (this commit)
-- [todo] server endpoints, frontend foundation, screens, wiring, verify
+- [done] branch + scaffolding
+- [done] backend: datasets + models services/routers
+- [done] backend: runs (mlflow_store + run_launcher) + router; smoke-tested vs real mlruns
+- [done] frontend foundation: api client, theme, hooks, Icon, ui primitives, charts, CodeBlock, Layout shell, routing
+- [done] screens: Dashboard, Runs, NewRun, RunDetail(5 tabs), Compare, Datasets+Detail+modals, Models, Settings
+- [done] verify: build clean; uvicorn HTTP ok; vite proxy ok; launcher cmd ok
+- [done] docs/STATUS.md updated
+- gotchas: python-multipart needed for uploads (installed in venv). data/ gitignored (has API keys).
+  checklist tab coverage = replay (self-consistent) vs header chip uses MLflow metric (can differ slightly).
+  live tabs only populate after episode end (artifacts flushed on close) — documented as known limitation.
+- next ideas: open draft PR; optional gym-side incremental artifact flush for true live streaming;
+  run a real end-to-end launch once an LLM endpoint is reachable.
 </content>
 </invoke>
