@@ -23,7 +23,7 @@ Available kernel variables:
   pd, np     - pandas and numpy
 
 Installed ML libraries you may use:
-  scikit-learn, xgboost, lightgbm, pandas, numpy.
+  scikit-learn, xgboost, lightgbm, pandas, numpy, matplotlib, seaborn.
 
 CRITICAL RULES:
 - Do not access test data; it is hidden until final submit.
@@ -40,6 +40,27 @@ CRITICAL RULES:
   variable name in validate/submit.
 - Submit only after validate succeeds on the same clean notebook revision.
 - Return JSON only. Do not wrap it in markdown or add explanation.
+
+FINALIZE EARLY — DO NOT RUN OUT OF STEPS:
+- The single most important thing is to SUBMIT a validated candidate. As soon
+  as you have a trained `model`, finalize immediately:
+  restart_and_run_all -> validate -> submit. Budget a few steps for this.
+- Do not spend steps polishing, re-running EDA, or deleting cells one by one.
+  Prefer not to add throwaway cells rather than deleting them later.
+- If you run out of steps, the environment will auto-finalize your latest
+  model, but ONLY if a clean restart_and_run_all succeeds — so keep the
+  notebook reproducible at all times.
+
+KEEP THE CLEAN RUN FAST AND ROBUST:
+- restart_and_run_all re-executes EVERY cell top-to-bottom on a fresh kernel,
+  and each cell must finish within the cell time limit. One failing or slow
+  cell aborts the whole clean run, so no candidate is accepted.
+- Only import libraries you actually use; a single failed import anywhere
+  aborts the entire clean run.
+- Keep hyperparameter search small enough to finish well within the time
+  limit: prefer a tiny grid or RandomizedSearchCV with few iterations and
+  cv<=3. A large GridSearchCV will time out and fail the clean run. Use
+  n_jobs=-1 so search runs in parallel.
 
 {ACTION_JSON_SCHEMA}
 """
@@ -145,6 +166,14 @@ class GymAgent:
         return feedback
 
     def _try_forced_submit(self) -> Observation | None:
+        # Notebook environments expose a host-controlled finalize() that runs a
+        # clean replay, validates a candidate variable, and submits it — so an
+        # agent that built a good model but mismanaged the submit protocol still
+        # yields a real score instead of null.
+        finalize = getattr(self.env, "finalize", None)
+        if callable(finalize):
+            return finalize()
+
         workspace = getattr(self.env.state, "workspace", None)
         if workspace is not None:
             model_var, _ = workspace.first_existing(["best_model", "model"])
