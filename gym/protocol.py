@@ -184,7 +184,10 @@ class Action:
     @classmethod
     def from_json(cls, text: str) -> "Action":
         try:
-            payload = json.loads(text)
+            # strict=False tolerates raw control characters (e.g. literal
+            # newlines/tabs) inside string values, which models frequently
+            # emit in "code"/"source" fields instead of escaping them.
+            payload = json.loads(text, strict=False)
         except json.JSONDecodeError as exc:
             raise ActionParseError(f"Invalid action JSON: {exc}") from exc
         if not isinstance(payload, dict):
@@ -193,7 +196,13 @@ class Action:
 
     @classmethod
     def from_llm_response(cls, text: str) -> "Action":
-        """Parse the new JSON protocol, with legacy code-output fallback."""
+        """Parse the new JSON protocol, with legacy code-output fallback.
+
+        Robust to chat-template / tool-call wrapper tokens (e.g.
+        ``{...}<tool_call|>`` or ``<|tool_call>call:{...}``) and to a JSON
+        action surrounded by stray preamble/trailer text: the first balanced
+        JSON object is extracted regardless of what wraps it.
+        """
         json_text = _extract_json_block(text)
         if json_text is not None:
             return cls.from_json(json_text)
@@ -201,6 +210,15 @@ class Action:
         stripped = text.strip()
         if stripped.upper() == "SUBMIT":
             return cls.submit_action("model")
+
+        # If it looked like a JSON action but we could not recover a valid
+        # object, surface a parse error so the agent retries instead of the
+        # raw text being dumped into a notebook cell as code.
+        if "{" in text and '"type"' in text:
+            raise ActionParseError(
+                "Response looked like a JSON action but no valid JSON object "
+                "could be extracted. Return exactly one JSON object."
+            )
 
         return cls.code_action(_extract_code_block(text))
 
@@ -280,6 +298,11 @@ class Observation:
             )
             parts.append(f"[NOTEBOOK STATUS]\n{status_text}")
         parts.append(f"[BUDGET] {self.budget_remaining} code steps remaining.")
+        if not self.submitted and not self.done and 0 < self.budget_remaining <= 3:
+            parts.append(
+                "[FINALIZE NOW] Few steps left — run restart_and_run_all, then "
+                "validate, then submit your best model."
+            )
 
         if self.submitted:
             parts.append("[SUBMITTED] Final candidate accepted. Episode finished.")
@@ -345,22 +368,70 @@ def _normalize_action_type(raw_type: Any) -> str:
     return aliases.get(normalized, normalized)
 
 
+# Chat-template / tool-call scaffolding some models emit around their JSON,
+# e.g. "<tool_call|>", "<|tool_call|>", "<|im_end|>", "<|eot_id|>". These are
+# stripped before JSON extraction so a trailing token does not break parsing.
+_WRAPPER_TOKEN_RE = re.compile(
+    r"<\|?/?(?:tool_call|tool_calls|function_call|im_start|im_end|im_sep|"
+    r"start_header_id|end_header_id|eot_id|eom_id|assistant|user|system|end)"
+    r"\|?>",
+    flags=re.IGNORECASE,
+)
+
+
+def _strip_wrapper_tokens(text: str) -> str:
+    return _WRAPPER_TOKEN_RE.sub(" ", text)
+
+
+def _first_json_object(text: str) -> str | None:
+    """Return the first balanced ``{...}`` object, respecting string literals."""
+    start = text.find("{")
+    while start != -1:
+        depth = 0
+        in_str = False
+        escaped = False
+        for i in range(start, len(text)):
+            char = text[i]
+            if in_str:
+                if escaped:
+                    escaped = False
+                elif char == "\\":
+                    escaped = True
+                elif char == '"':
+                    in_str = False
+            elif char == '"':
+                in_str = True
+            elif char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[start : i + 1]
+        # Unbalanced from this opening brace; try the next candidate.
+        start = text.find("{", start + 1)
+    return None
+
+
 def _extract_json_block(text: str) -> str | None:
-    stripped = text.strip()
+    cleaned = _strip_wrapper_tokens(text)
+    stripped = cleaned.strip()
     if stripped.startswith("{") and stripped.endswith("}"):
         return stripped
 
-    match = re.search(r"```json\s*(.*?)\s*```", text, flags=re.DOTALL | re.IGNORECASE)
+    match = re.search(r"```json\s*(.*?)\s*```", cleaned, flags=re.DOTALL | re.IGNORECASE)
     if match:
-        return match.group(1).strip()
-
-    match = re.search(r"```\s*(.*?)\s*```", text, flags=re.DOTALL)
-    if match:
-        candidate = match.group(1).strip()
-        if candidate.startswith("{") and candidate.endswith("}"):
+        candidate = _first_json_object(match.group(1))
+        if candidate is not None:
             return candidate
 
-    return None
+    match = re.search(r"```\s*(.*?)\s*```", cleaned, flags=re.DOTALL)
+    if match:
+        candidate = _first_json_object(match.group(1))
+        if candidate is not None:
+            return candidate
+
+    # Fall back to the first balanced JSON object anywhere in the response.
+    return _first_json_object(cleaned)
 
 
 def _extract_code_block(text: str) -> str:

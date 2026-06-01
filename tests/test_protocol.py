@@ -42,6 +42,30 @@ def test_action_parses_legacy_submit_literal():
     assert Action.from_llm_response("SUBMIT") == Action.submit_action("model")
 
 
+def test_action_strips_trailing_tool_call_token():
+    action = Action.from_llm_response('{"type": "inspect_notebook"}<tool_call|>')
+    assert action.type == "inspect_notebook"
+
+
+def test_action_parses_json_with_tool_call_prefix():
+    action = Action.from_llm_response(
+        '<|tool_call>call:{"type": "submit", "model_var": "model"}'
+    )
+    assert action == Action.submit_action("model")
+
+
+def test_action_extracts_json_object_with_surrounding_prose():
+    action = Action.from_llm_response(
+        'Here is my action:\n{"type": "code", "code": "x = 1"}\nThanks!'
+    )
+    assert action == Action.code_action("x = 1")
+
+
+def test_action_raises_instead_of_dumping_malformed_json_as_code():
+    with pytest.raises(ActionParseError):
+        Action.from_llm_response('{"type": "code", "code": "x = 1"')
+
+
 def test_coerce_action_rejects_unknown_object_type():
     with pytest.raises(ActionParseError, match="Unsupported action object"):
         coerce_action(123)
