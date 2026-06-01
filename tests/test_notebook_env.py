@@ -1,5 +1,7 @@
 import json
 import subprocess
+import sys
+import types
 from pathlib import Path
 
 import nbformat
@@ -577,6 +579,85 @@ model = LogisticRegression(max_iter=200).fit(X, y)
         env.close()
 
 
+def test_validate_scoring_failure_returns_blocker_without_registration(tmp_path):
+    env = _make_env(tmp_path)
+
+    def bad_metric(y_true, y_pred):
+        raise ValueError("labels are incompatible")
+
+    env.metric_fn = bad_metric
+    try:
+        env.step(
+            Action.add_cell_action(
+                _constant_model_source(),
+                cell_type="code",
+                execute=False,
+            )
+        )
+        env.step({"type": "restart_and_run_all"})
+
+        before_failures = env.model_check_failure_count
+        observation = env.step({"type": "validate", "model_var": "model"})
+
+        assert observation.validation_metric is None
+        assert "[MODEL CHECK]" in observation.stderr
+        assert "validation metric could not be computed" in observation.stderr
+        assert "ValueError" in observation.stderr
+        assert env.candidates.latest() is None
+        assert env.state.submitted is False
+        assert env.get_summary()["final_test_metric"] is None
+        assert env.model_check_failure_count == before_failures + 1
+
+        diagnostic = env.candidate_diagnostics[-1]
+        assert diagnostic["source"] == "validate"
+        assert diagnostic["candidate_var"] == "model"
+        assert diagnostic["raw_val_predict_ok"] is True
+        assert diagnostic["prediction_length_ok"] is True
+        assert diagnostic["prediction_nan_free"] is True
+        assert diagnostic["validation_metric"] is None
+        assert diagnostic["error_type"] == "ValueError"
+    finally:
+        env.close()
+
+
+def test_validate_raw_failure_increments_model_check_count_once(tmp_path):
+    env = _make_env(tmp_path)
+    try:
+        env.step(
+            Action.add_cell_action(
+                """
+from sklearn.linear_model import LogisticRegression
+X = pd.get_dummies(train_df.drop(columns=[target_col]))
+y = train_df[target_col]
+model = LogisticRegression(max_iter=200).fit(X, y)
+""".strip(),
+                cell_type="code",
+                execute=False,
+            )
+        )
+        env.step({"type": "restart_and_run_all"})
+        before_failures = env.model_check_failure_count
+
+        observation = env.step({"type": "validate", "model_var": "model"})
+
+        assert "[MODEL CHECK]" in observation.stderr
+        assert env.model_check_failure_count == before_failures + 1
+        private_dir = Path(env.get_summary()["private_episode_dir"])
+        rows = [
+            json.loads(line)
+            for line in (private_dir / "candidate_diagnostics_private.jsonl").read_text(encoding="utf-8").splitlines()
+        ]
+        validate_rows = [
+            row
+            for row in rows
+            if row["source"] == "validate" and row["candidate_var"] == "model"
+        ]
+        assert len(validate_rows) == 1
+        assert validate_rows[0]["raw_val_predict_ok"] is False
+    finally:
+        env.close()
+
+
 def test_cloudpickle_serializes_function_transformer_candidate(tmp_path):
     env = _make_env(tmp_path)
     try:
@@ -625,6 +706,51 @@ def test_inspect_and_profile_are_compact_and_do_not_include_hidden_test(tmp_path
         env.close()
 
 
+def test_ydata_profile_artifacts_remain_private(tmp_path, monkeypatch):
+    def fake_ydata(train, target_col, private_dir, **kwargs):
+        html_path = Path(private_dir) / "data_profile_ydata.html"
+        json_path = Path(private_dir) / "data_profile_ydata.json"
+        html_path.write_text("<html>private profile</html>", encoding="utf-8")
+        json_path.write_text('{"private": true}', encoding="utf-8")
+        return {
+            "available": True,
+            "success": True,
+            "timed_out": False,
+            "rows_profiled": len(train),
+            "cols_profiled": train.shape[1],
+            "html_path": str(html_path),
+            "json_path": str(json_path),
+            "summary": {
+                "n_rows": len(train),
+                "n_cols": train.shape[1],
+                "missing_cells": 0,
+                "duplicate_rows": 0,
+                "variable_types": {"Numeric": 1},
+            },
+        }
+
+    monkeypatch.setattr("gym.notebook_env.run_ydata_profile", fake_ydata)
+    env = _make_env(tmp_path, hidden_green=True)
+    try:
+        observation = env.step({"type": "profile_data", "profile": "ydata"})
+
+        private_dir = Path(env.get_summary()["private_episode_dir"])
+        assert (private_dir / "data_profile_ydata.html").exists()
+        assert (private_dir / "data_profile_ydata.json").exists()
+        assert "<html" not in observation.stdout.lower()
+        assert str(private_dir) not in observation.stdout
+        assert "data_profile_ydata" not in observation.stdout
+
+        public_text = "\n".join(
+            path.read_text(encoding="utf-8", errors="ignore")
+            for path in tmp_path.rglob("*.json")
+        )
+        assert "data_profile_ydata" not in public_text
+        assert str(private_dir) not in public_text
+    finally:
+        env.close()
+
+
 def test_check_list_and_quick_validate_candidate_tools(tmp_path):
     env = _make_env(tmp_path)
     try:
@@ -662,6 +788,56 @@ def test_cleanlab_diagnose_disabled_fallback(tmp_path, monkeypatch):
 
         assert "[CLEANLAB DIAGNOSTIC]" in observation.stdout
         assert "disabled" in observation.stdout
+    finally:
+        env.close()
+
+
+def test_cleanlab_diagnostics_artifacts_remain_private(tmp_path, monkeypatch):
+    monkeypatch.setenv("AUTOVIBE_ENABLE_CLEANLAB", "1")
+    cleanlab_pkg = types.ModuleType("cleanlab")
+    cleanlab_filter = types.ModuleType("cleanlab.filter")
+    cleanlab_filter.find_label_issues = lambda **kwargs: [0]
+    cleanlab_pkg.filter = cleanlab_filter
+    monkeypatch.setitem(sys.modules, "cleanlab", cleanlab_pkg)
+    monkeypatch.setitem(sys.modules, "cleanlab.filter", cleanlab_filter)
+
+    env = _make_env(tmp_path)
+    try:
+        source = """
+from sklearn.compose import ColumnTransformer
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder
+
+X = train_df.drop(columns=[target_col])
+y = train_df[target_col]
+model = Pipeline([
+    ('prep', ColumnTransformer([
+        ('cat', OneHotEncoder(handle_unknown='ignore'), ['color']),
+        ('num', 'passthrough', ['x']),
+    ])),
+    ('clf', LogisticRegression(max_iter=200)),
+])
+model.fit(X, y)
+""".strip()
+        env.step(Action.add_cell_action(source, cell_type="code", execute=True))
+
+        observation = env.step({"type": "cleanlab_diagnose", "model_var": "model"})
+
+        private_dir = Path(env.get_summary()["private_episode_dir"])
+        assert (private_dir / "cleanlab_diagnostics_private.json").exists()
+        assert (private_dir / "cleanlab_issues_private.csv").exists()
+        assert "cleanlab_diagnostics_private" not in observation.stdout
+        assert "cleanlab_issues_private" not in observation.stdout
+        assert str(private_dir) not in observation.stdout
+
+        public_text = "\n".join(
+            path.read_text(encoding="utf-8", errors="ignore")
+            for path in tmp_path.rglob("*.json")
+        )
+        assert "cleanlab_diagnostics_private" not in public_text
+        assert "cleanlab_issues_private" not in public_text
+        assert str(private_dir) not in public_text
     finally:
         env.close()
 

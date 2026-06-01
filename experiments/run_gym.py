@@ -173,7 +173,7 @@ def main():
             "error_count": summary.get("error_count", summary.get("errors_count", 0)),
             "has_test_metric": int(has_test_metric),
             "valid_submit": int(bool(summary.get("valid_submit"))),
-            "submit_failed": int(summary.get("submitted") and not has_test_metric),
+            "submit_failed": int(summary.get("submit_failed", not has_test_metric)),
             "input_tokens": summary.get("input_tokens", 0),
             "output_tokens": summary.get("output_tokens", 0),
             "elapsed_seconds": summary.get("elapsed_seconds", 0),

@@ -146,6 +146,8 @@ def main():
         test_metric = None
         final_status = "no_candidate_found"
         null_reason = "No predict-capable model variable was produced."
+        submit_failure_type = "no_candidate_found"
+        finalize_path = "failed"
         submit_error = ""
         model_obj = namespace.get("model") or namespace.get("best_model")
         if model_obj is None:
@@ -160,6 +162,8 @@ def main():
             except Exception as exc:
                 final_status = "submit_blocked_preflight"
                 null_reason = f"{type(exc).__name__}: {exc}"
+                submit_failure_type = type(exc).__name__
+                finalize_path = "submit_preflight"
                 submit_error = null_reason
                 stderr += f"\n[submit preflight error] {submit_error}"
             else:
@@ -170,9 +174,13 @@ def main():
                     test_metric = score_with_coercion(metric_fn, y_test, preds)
                     final_status = "submitted_clean"
                     null_reason = None
+                    submit_failure_type = None
+                    finalize_path = "single_shot_model"
                 except Exception as exc:
                     final_status = "hidden_submit_failed"
                     null_reason = f"{type(exc).__name__}: {exc}"
+                    submit_failure_type = type(exc).__name__
+                    finalize_path = "hidden_test"
                     submit_error = null_reason
                     stderr += f"\n[submit error] {submit_error}"
 
@@ -187,6 +195,9 @@ def main():
             "valid_submit": test_metric is not None,
             "final_status": final_status,
             "null_reason": null_reason,
+            "final_test_metric": test_metric,
+            "submit_failure_type": submit_failure_type,
+            "finalize_path": finalize_path,
             "input_tokens": response.input_tokens,
             "output_tokens": response.output_tokens,
             "elapsed_seconds": elapsed,
@@ -205,9 +216,11 @@ def main():
         mlflow.set_tags({
             "final_status": final_status,
             "null_reason": null_reason or "",
+            "finalize_path": finalize_path,
         })
         if test_metric is not None:
             metrics["test_metric"] = test_metric
+            metrics["final_test_metric"] = test_metric
         mlflow.log_metrics(metrics)
         mlflow.log_text(code, "generated_solution.py")
         mlflow.log_text(stdout, "stdout.txt")

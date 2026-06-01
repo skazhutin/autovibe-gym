@@ -495,8 +495,9 @@ class NotebookGymEnv:
             )
             return self._record_observation(observation)
 
+        # Candidate-readiness failures are counted centrally in
+        # _record_candidate_diagnostic().
         if not diagnostic.has_predict:
-            self.model_check_failure_count += 1
             observation = self._observation(
                 action="validate",
                 feedback_items=[
@@ -511,7 +512,6 @@ class NotebookGymEnv:
             return self._record_observation(observation)
 
         if not diagnostic.raw_val_predict_ok:
-            self.model_check_failure_count += 1
             observation = self._observation(
                 action="validate",
                 feedback_items=[
@@ -522,7 +522,6 @@ class NotebookGymEnv:
             return self._record_observation(observation)
 
         if not diagnostic.prediction_length_ok or not diagnostic.prediction_nan_free:
-            self.model_check_failure_count += 1
             detail = "prediction length mismatch"
             if diagnostic.prediction_nan_free is False:
                 detail = "predictions contain NaN-like values"
@@ -543,13 +542,32 @@ class NotebookGymEnv:
             return self._record_observation(observation)
 
         if not diagnostic.serializable:
-            self.model_check_failure_count += 1
             observation = self._observation(
                 action="validate",
                 feedback_items=[
                     self._contract_feedback(
                         "candidate_serialization_failed",
                         MODEL_SERIALIZATION_MESSAGE.format(model_var=model_var),
+                        severity="blocker",
+                    )
+                ],
+                model_var=model_var,
+            )
+            return self._record_observation(observation)
+
+        if diagnostic.validation_metric is None:
+            observation = self._observation(
+                action="validate",
+                feedback_items=[
+                    self._contract_feedback(
+                        "validation_scoring_failed",
+                        (
+                            f"[MODEL CHECK] Candidate variable '{model_var}' produced predictions "
+                            "on raw validation rows, but the validation metric could not be computed: "
+                            f"{diagnostic.error_type or 'MetricError'}: "
+                            f"{_clip(diagnostic.error_message or 'metric computation failed', 280)}.\n"
+                            "Make sure predict() returns labels compatible with the target and metric."
+                        ),
                         severity="blocker",
                     )
                 ],
@@ -631,6 +649,7 @@ class NotebookGymEnv:
                 "reproducibility_level",
                 "raw_val_ready_only" if allow_dirty else "clean_replay",
             )
+            self.private_summary.setdefault("finalize_path", "agent_submit")
             self._record_event(
                 action="submit",
                 model_var=model_var,
@@ -653,6 +672,7 @@ class NotebookGymEnv:
             self.private_summary["null_reason"] = (
                 "Candidate passed validation but failed during private hidden-test submission."
             )
+            self.private_summary.setdefault("finalize_path", "agent_submit")
             self._record_event(
                 action="submit_failed",
                 model_var=model_var,
@@ -776,6 +796,22 @@ class NotebookGymEnv:
 
     def get_summary(self) -> dict:
         error_count = sum(1 for observation in self.state.history if observation.stderr.strip())
+        final_test_metric = self.private_summary.get("final_test_metric")
+        has_test_metric = final_test_metric is not None
+        final_status = self.private_summary.get("final_status")
+        if final_status is None:
+            if has_test_metric:
+                final_status = "submitted_clean"
+            elif self.state.submitted:
+                final_status = "hidden_submit_failed"
+            else:
+                final_status = "no_candidate_found"
+        null_reason = self.private_summary.get("null_reason")
+        if null_reason is None and not has_test_metric:
+            null_reason = "No hidden-test metric was produced."
+        finalize_path = self.private_summary.get("finalize_path")
+        if finalize_path is None:
+            finalize_path = "not_attempted" if not self.private_summary.get("finalized_by_host") else "failed"
         summary = {
             "steps_used": self.state.step,
             "checklist_coverage": self.checklist.coverage(),
@@ -784,8 +820,10 @@ class NotebookGymEnv:
             "errors_count": error_count,
             "submitted": self.state.submitted,
             "valid_submit": bool(self.private_summary.get("valid_submit", False)),
-            "test_metric": self.private_summary.get("final_test_metric"),
-            "final_test_metric": self.private_summary.get("final_test_metric"),
+            "test_metric": final_test_metric,
+            "final_test_metric": final_test_metric,
+            "has_test_metric": has_test_metric,
+            "submit_failed": not has_test_metric,
             "submit_failure_type": self.private_summary.get("submit_failure_type"),
             "elapsed_seconds": round(time.time() - self._start_time, 1),
             "notebook_cells_final": len(self.notebook.notebook.cells),
@@ -801,20 +839,25 @@ class NotebookGymEnv:
             "model_check_failure_count": self.model_check_failure_count,
             "candidate_diagnostics_total": len(self.candidate_diagnostics),
             "checklist_hints_shown_total": self.checklist.hints_shown_total,
+            "process_guidance_hints_shown_total": self.checklist.process_guidance_hints_shown_total,
             "protocol_version": self.protocol_version,
             "notebook_backend": "jupyter",
             "checklist_version": self.checklist_version,
             "feedback_policy_version": self.feedback_policy_version,
             "episode_workspace": str(self.workspace_dir),
             "private_episode_dir": str(self.private_dir),
-            "final_status": self.private_summary.get(
-                "final_status",
-                "submitted_clean" if self.state.submitted and self.private_summary.get("valid_submit") else None,
-            ),
-            "null_reason": self.private_summary.get("null_reason"),
-            "finalize_path": self.private_summary.get("finalize_path"),
+            "final_status": final_status,
+            "null_reason": null_reason,
+            "finalize_path": finalize_path,
         }
         summary.update(self.private_summary)
+        summary["test_metric"] = final_test_metric
+        summary["final_test_metric"] = final_test_metric
+        summary["has_test_metric"] = has_test_metric
+        summary["submit_failed"] = not has_test_metric
+        summary["final_status"] = final_status
+        summary["null_reason"] = null_reason
+        summary["finalize_path"] = finalize_path
         return summary
 
     def _add_cell(self, action: Action) -> Observation:
@@ -1355,11 +1398,15 @@ print({marker!r} + _autovibe_json.dumps({{
                 diagnostic.prediction_length_ok = _prediction_length(preds) == len(X_eval)
                 diagnostic.prediction_nan_free = _predictions_nan_free(preds)
                 if compute_metric and diagnostic.prediction_length_ok and diagnostic.prediction_nan_free:
-                    diagnostic.validation_metric = _score_with_coercion(
-                        self.metric_fn,
-                        y_eval,
-                        preds,
-                    )
+                    try:
+                        diagnostic.validation_metric = _score_with_coercion(
+                            self.metric_fn,
+                            y_eval,
+                            preds,
+                        )
+                    except Exception as exc:
+                        diagnostic.error_type = type(exc).__name__
+                        diagnostic.error_message = _clip(str(exc), 800)
             except Exception as exc:
                 diagnostic.raw_val_predict_ok = False
                 diagnostic.error_type = type(exc).__name__
@@ -1376,11 +1423,13 @@ print({marker!r} + _autovibe_json.dumps({{
         self.candidate_diagnostics.append(_json_safe(data))
         self._append_private_jsonl("candidate_diagnostics_private.jsonl", data)
         if (
-            diagnostic.has_predict is False
+            diagnostic.exists is False
+            or diagnostic.has_predict is False
             or diagnostic.raw_val_predict_ok is False
             or diagnostic.prediction_length_ok is False
             or diagnostic.prediction_nan_free is False
             or diagnostic.serializable is False
+            or _validation_scoring_failed(diagnostic)
         ):
             self.model_check_failure_count += 1
 
@@ -1942,6 +1991,7 @@ with open(_AutovibePath({self.kernel.kernel_visible_path(tmp_path)!r}), "rb") as
         self.private_summary["finalize_attempted_vars"] = attempted_vars
         self.private_summary["valid_submit"] = False
         self.private_summary["final_test_metric"] = None
+        self.private_summary["submit_failure_type"] = final_status
         self._record_event(
             action="finalize_failed",
             final_status=final_status,
@@ -2161,6 +2211,17 @@ def _predictions_nan_free(preds: Any) -> bool:
         return not bool(pd.isna(pd.Series(values)).any())
     except Exception:
         return False
+
+
+def _validation_scoring_failed(diagnostic: CandidateDiagnostic) -> bool:
+    return bool(
+        diagnostic.raw_val_predict_ok
+        and diagnostic.prediction_length_ok
+        and diagnostic.prediction_nan_free
+        and diagnostic.serializable is not False
+        and diagnostic.validation_metric is None
+        and diagnostic.error_type
+    )
 
 
 def _sample_search_params(search_space: dict[str, Any], rng: random.Random) -> dict[str, Any]:

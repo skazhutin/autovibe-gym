@@ -22,6 +22,12 @@ def main():
     parser.add_argument("--metric", default="test_metric")
     parser.add_argument("--dataset", default=None, help="Filter by dataset name")
     parser.add_argument("--output", default=None, help="Save CSV to this path")
+    parser.add_argument(
+        "--sort-by",
+        choices=["matrix", "metric"],
+        default="matrix",
+        help="Sort by dataset/model/mode matrix order or selected metric descending.",
+    )
     args = parser.parse_args()
 
     configure_mlflow_tracking(mlflow)
@@ -79,14 +85,24 @@ def main():
             denom = table["total_tokens"].replace(0, pd.NA) / 1000
             table["score_per_1k_tokens"] = table[args.metric] / denom
     sort_cols = [col for col in ["dataset", "model", "experiment_type"] if col in table.columns]
-    if sort_cols:
+    sorted_by = "matrix"
+    if args.sort_by == "metric" and args.metric in table.columns:
+        table = table.sort_values(args.metric, ascending=False, na_position="last")
+        sorted_by = args.metric
+    elif args.sort_by == "metric":
+        print(
+            f"[compare] Metric column '{args.metric}' is absent; falling back to matrix sort."
+        )
+        if sort_cols:
+            table = table.sort_values(sort_cols, na_position="last")
+    elif sort_cols:
         table = table.sort_values(sort_cols, na_position="last")
 
     pd.set_option("display.max_columns", None)
     pd.set_option("display.width", 160)
     pd.set_option("display.float_format", "{:.4f}".format)
 
-    print(f"\n=== Experiment: {args.experiment} | Sorted by: {args.metric} ===\n")
+    print(f"\n=== Experiment: {args.experiment} | Sorted by: {sorted_by} ===\n")
     print(table.to_string(index=False))
 
     if args.output:

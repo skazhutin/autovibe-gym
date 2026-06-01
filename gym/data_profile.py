@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
+import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -157,18 +160,33 @@ def run_ydata_profile(
     timeout_sec: int,
     minimal: bool = True,
 ) -> dict[str, Any]:
-    """Run ydata-profiling if available and save only private artifacts."""
-    started = time.time()
-    try:
-        from ydata_profiling import ProfileReport
-    except ImportError:
-        return {
-            "available": False,
-            "success": False,
-            "error_type": "ImportError",
-            "error_message": "ydata-profiling is not installed",
-        }
+    return run_ydata_profile_subprocess(
+        train,
+        target_col,
+        private_dir,
+        max_rows=max_rows,
+        max_cols=max_cols,
+        timeout_sec=timeout_sec,
+        minimal=minimal,
+    )
 
+
+def run_ydata_profile_subprocess(
+    train: pd.DataFrame,
+    target_col: str,
+    private_dir: Path,
+    *,
+    max_rows: int,
+    max_cols: int,
+    timeout_sec: int,
+    minimal: bool = True,
+) -> dict[str, Any]:
+    """Run ydata-profiling in a child process with a real timeout."""
+    started = time.time()
+    private_dir.mkdir(parents=True, exist_ok=True)
+    rows_profiled = 0
+    cols_profiled = 0
+    input_path: Path | None = None
     try:
         df = train.copy()
         if len(df) > max_rows:
@@ -178,30 +196,117 @@ def run_ydata_profile(
             keep.extend([c for c in df.columns if c != target_col][: max_cols - len(keep)])
             df = df[keep]
 
-        if time.time() - started > timeout_sec:
-            raise TimeoutError(f"ydata setup exceeded {timeout_sec}s")
-
-        profile = ProfileReport(
-            df,
-            title="AutoVibe Train Data Profile",
-            minimal=minimal,
-            explorative=not minimal,
-            progress_bar=False,
-        )
-        private_dir.mkdir(parents=True, exist_ok=True)
+        rows_profiled = int(df.shape[0])
+        cols_profiled = int(df.shape[1])
         html_path = private_dir / "data_profile_ydata.html"
         json_path = private_dir / "data_profile_ydata.json"
-        profile.to_file(str(html_path))
-        if time.time() - started > timeout_sec:
-            raise TimeoutError(f"ydata profiling exceeded {timeout_sec}s")
-        json_text = profile.to_json()
-        json_path.write_text(json_text, encoding="utf-8")
-        parsed = json.loads(json_text)
+
+        with tempfile.NamedTemporaryFile(
+            prefix="autovibe_ydata_input_",
+            suffix=".csv",
+            dir=private_dir,
+            delete=False,
+        ) as fh:
+            input_path = Path(fh.name)
+        df.to_csv(input_path, index=False)
+
+        child = r"""
+import json
+import sys
+import pandas as pd
+
+input_path, html_path, json_path, minimal_raw = sys.argv[1:5]
+minimal = minimal_raw == "1"
+try:
+    from ydata_profiling import ProfileReport
+except ImportError as exc:
+    print(json.dumps({
+        "available": False,
+        "success": False,
+        "error_type": "ImportError",
+        "error_message": "ydata-profiling is not installed",
+    }))
+    sys.exit(0)
+
+df = pd.read_csv(input_path)
+profile = ProfileReport(
+    df,
+    title="AutoVibe Train Data Profile",
+    minimal=minimal,
+    explorative=not minimal,
+    progress_bar=False,
+)
+profile.to_file(html_path)
+json_text = profile.to_json()
+with open(json_path, "w", encoding="utf-8") as fh:
+    fh.write(json_text)
+print(json.dumps({"available": True, "success": True}))
+""".strip()
+
+        try:
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    "-c",
+                    child,
+                    str(input_path),
+                    str(html_path),
+                    str(json_path),
+                    "1" if minimal else "0",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=timeout_sec,
+            )
+        except subprocess.TimeoutExpired:
+            return {
+                "available": True,
+                "success": False,
+                "timed_out": True,
+                "error_type": "TimeoutExpired",
+                "error_message": f"ydata-profiling exceeded {timeout_sec}s",
+                "elapsed_seconds": round(time.time() - started, 2),
+                "rows_profiled": rows_profiled,
+                "cols_profiled": cols_profiled,
+            }
+
+        if proc.returncode != 0:
+            return {
+                "available": True,
+                "success": False,
+                "timed_out": False,
+                "error_type": "RuntimeError",
+                "error_message": _clip((proc.stderr or proc.stdout).strip(), 500),
+                "elapsed_seconds": round(time.time() - started, 2),
+                "rows_profiled": rows_profiled,
+                "cols_profiled": cols_profiled,
+            }
+
+        child_status: dict[str, Any] = {}
+        for line in reversed(proc.stdout.splitlines()):
+            try:
+                child_status = json.loads(line)
+                break
+            except json.JSONDecodeError:
+                continue
+        if child_status and not child_status.get("success"):
+            child_status.update(
+                {
+                    "timed_out": False,
+                    "elapsed_seconds": round(time.time() - started, 2),
+                    "rows_profiled": rows_profiled,
+                    "cols_profiled": cols_profiled,
+                }
+            )
+            return child_status
+
+        parsed = json.loads(json_path.read_text(encoding="utf-8"))
         return {
             "available": True,
             "success": True,
-            "rows_profiled": int(df.shape[0]),
-            "cols_profiled": int(df.shape[1]),
+            "timed_out": False,
+            "rows_profiled": rows_profiled,
+            "cols_profiled": cols_profiled,
             "elapsed_seconds": round(time.time() - started, 2),
             "html_path": str(html_path),
             "json_path": str(json_path),
@@ -211,10 +316,19 @@ def run_ydata_profile(
         return {
             "available": True,
             "success": False,
+            "timed_out": False,
             "error_type": type(exc).__name__,
             "error_message": _clip(str(exc), 500),
             "elapsed_seconds": round(time.time() - started, 2),
+            "rows_profiled": rows_profiled,
+            "cols_profiled": cols_profiled,
         }
+    finally:
+        if input_path is not None:
+            try:
+                input_path.unlink()
+            except OSError:
+                pass
 
 
 def extract_ydata_summary(profile_json: dict[str, Any]) -> dict[str, Any]:
@@ -306,7 +420,14 @@ def format_ydata_profile_for_agent(
             ]
         )
 
-    if ydata_result and not ydata_result.get("success"):
+    if ydata_result and not ydata_result.get("success") and ydata_result.get("timed_out"):
+        lines.extend(
+            [
+                "",
+                "[PROFILE] ydata-profiling timed out; compact pandas profile was returned instead.",
+            ]
+        )
+    elif ydata_result and not ydata_result.get("success"):
         lines.extend(
             [
                 "",

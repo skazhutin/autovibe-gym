@@ -1,4 +1,4 @@
-from gym.feedback import FeedbackItem, NotebookChecklist
+from gym.feedback import GUIDANCE_ONLY_CHECKS, MANDATORY_CHECKS, FeedbackItem, NotebookChecklist
 
 
 FORBIDDEN_HINT_PARTS = [
@@ -139,3 +139,20 @@ def test_feedback_item_serializes_channel_metadata():
 
     assert item.to_dict()["channel"] == "contract"
     assert item.to_dict()["cell_id"] == "cell_01"
+
+
+def test_guidance_hints_do_not_change_mandatory_coverage_denominator():
+    checklist = NotebookChecklist(target_col="target")
+
+    assert len(MANDATORY_CHECKS) == 12
+    checklist.record_structural(
+        GUIDANCE_ONLY_CHECKS[0],
+        reason="guidance only",
+        step=1,
+    )
+    assert checklist.coverage() == 0.0
+
+    for key in MANDATORY_CHECKS:
+        checklist.record_structural(key, reason="unit", step=2)
+
+    assert checklist.coverage() == 1.0

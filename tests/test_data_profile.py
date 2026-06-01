@@ -1,4 +1,5 @@
-import sys
+import json
+import subprocess
 
 import pandas as pd
 
@@ -7,6 +8,7 @@ from gym.data_profile import (
     extract_ydata_summary,
     format_profile_for_agent,
     run_ydata_profile,
+    run_ydata_profile_subprocess,
 )
 
 
@@ -42,7 +44,22 @@ def test_ydata_summary_extraction_handles_mock_json():
 
 
 def test_ydata_unavailable_returns_graceful_fallback(tmp_path, monkeypatch):
-    monkeypatch.setitem(sys.modules, "ydata_profiling", None)
+    def fake_run(*args, **kwargs):
+        return subprocess.CompletedProcess(
+            args=args[0],
+            returncode=0,
+            stdout=json.dumps(
+                {
+                    "available": False,
+                    "success": False,
+                    "error_type": "ImportError",
+                    "error_message": "ydata-profiling is not installed",
+                }
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr("gym.data_profile.subprocess.run", fake_run)
     result = run_ydata_profile(
         pd.DataFrame({"x": [1, 2], "target": [0, 1]}),
         "target",
@@ -54,3 +71,26 @@ def test_ydata_unavailable_returns_graceful_fallback(tmp_path, monkeypatch):
 
     assert result["success"] is False
     assert result["error_type"] == "ImportError"
+
+
+def test_ydata_timeout_returns_fallback_without_lingering_input(tmp_path, monkeypatch):
+    def fake_timeout(*args, **kwargs):
+        raise subprocess.TimeoutExpired(cmd=args[0], timeout=kwargs.get("timeout"))
+
+    monkeypatch.setattr("gym.data_profile.subprocess.run", fake_timeout)
+
+    result = run_ydata_profile_subprocess(
+        pd.DataFrame({"x": [1, 2], "target": [0, 1]}),
+        "target",
+        tmp_path,
+        max_rows=10,
+        max_cols=10,
+        timeout_sec=1,
+    )
+
+    assert result["success"] is False
+    assert result["timed_out"] is True
+    assert result["error_type"] == "TimeoutExpired"
+    assert result["rows_profiled"] == 2
+    assert result["cols_profiled"] == 2
+    assert not list(tmp_path.glob("autovibe_ydata_input_*.csv"))

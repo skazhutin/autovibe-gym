@@ -119,6 +119,12 @@ MANDATORY_CHECKS: tuple[str, ...] = (
     "suspicious_columns_audit",
     "target_exclusion",
     "baseline_candidate_created",
+    "validation_evaluated",
+    "reproducible_solution",
+    "submit_ready_artifact",
+)
+
+GUIDANCE_ONLY_CHECKS: tuple[str, ...] = (
     "baseline_first",
     "raw_row_inference_ready",
     "derived_features_inside_pipeline",
@@ -127,9 +133,6 @@ MANDATORY_CHECKS: tuple[str, ...] = (
     "high_cardinality_handling",
     "unseen_categories_handling",
     "candidate_validation_before_submit",
-    "validation_evaluated",
-    "reproducible_solution",
-    "submit_ready_artifact",
 )
 
 
@@ -166,9 +169,11 @@ class NotebookChecklist:
     policy: FeedbackPolicy = field(default_factory=FeedbackPolicy)
     covered: set[str] = field(default_factory=set)
     optional_tags: set[str] = field(default_factory=set)
+    guidance_shown: set[str] = field(default_factory=set)
     evidence: list[ChecklistEvidence] = field(default_factory=list)
     executions_since_hint: int = 999
     hints_shown_total: int = 0
+    process_guidance_hints_shown_total: int = 0
 
     def record_execution(
         self,
@@ -205,6 +210,9 @@ class NotebookChecklist:
 
         self.executions_since_hint = 0
         self.hints_shown_total += 1
+        if hint in GUIDANCE_ONLY_CHECKS:
+            self.guidance_shown.add(hint)
+            self.process_guidance_hints_shown_total += 1
         return [
             FeedbackItem(
                 channel="checklist",
@@ -233,8 +241,10 @@ class NotebookChecklist:
             "covered": sorted(self.covered),
             "coverage": self.coverage(),
             "optional_tags": sorted(self.optional_tags),
+            "guidance_shown": sorted(self.guidance_shown),
             "evidence": [item.to_dict() for item in self.evidence],
             "hints_shown_total": self.hints_shown_total,
+            "process_guidance_hints_shown_total": self.process_guidance_hints_shown_total,
         }
 
     def _record_behavioral_evidence(
@@ -286,5 +296,8 @@ class NotebookChecklist:
     def _next_hint(self) -> str | None:
         for key in MANDATORY_CHECKS:
             if key not in self.covered:
+                return key
+        for key in GUIDANCE_ONLY_CHECKS:
+            if key not in self.guidance_shown:
                 return key
         return None

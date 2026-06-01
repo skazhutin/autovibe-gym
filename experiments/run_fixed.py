@@ -17,7 +17,7 @@ import json
 import os
 import time
 
-from gym import GymAgent, GymEnv
+from gym import NotebookGymEnv
 from gym.agent import SYSTEM_PROMPT
 from gym.datasets import DatasetSplits, load_dataset_splits, metric_from_name, resolve_metric
 from gym.llm import LiteLLMClient, OpenAICompatibleLLMClient
@@ -106,6 +106,29 @@ MODE_DEFAULTS = {
 # Fixed transitions agent
 # ---------------------------------------------------------------------------
 
+CODE_OR_NOTEBOOK_STEP_ACTIONS = {
+    "code",
+    "add_cell",
+    "update_cell",
+    "delete_cell",
+    "move_cell",
+    "run_cell",
+    "inspect_notebook",
+    "restart_and_run_all",
+    "validate",
+}
+
+TOOL_ACTIONS = {
+    "inspect_data",
+    "profile_data",
+    "list_candidates",
+    "check_candidate",
+    "quick_validate",
+    "cleanlab_diagnose",
+    "tune_hyperparameters",
+    "finalize",
+}
+
 def _default_llm_client(model: str):
     if "/" in model:
         return LiteLLMClient()
@@ -114,7 +137,7 @@ def _default_llm_client(model: str):
 
 class FixedTransitionsAgent:
     """
-    Wraps GymEnv and drives the agent through a fixed sequence of stages.
+    Wraps NotebookGymEnv and drives the agent through a fixed sequence of stages.
 
     At each stage transition the agent receives a new user message announcing
     the stage goal. Within a stage the feedback loop is identical to the
@@ -123,16 +146,17 @@ class FixedTransitionsAgent:
 
     def __init__(
         self,
-        env: GymEnv,
+        env: NotebookGymEnv,
         stages: list[dict],
         model: str,
         max_tokens: int = 8192,
+        client=None,
     ):
         self.env = env
         self.stages = stages
         self.model = model
         self.max_tokens = max_tokens
-        self.client = _default_llm_client(model)
+        self.client = client or _default_llm_client(model)
         self.messages: list[dict] = []
         self.total_input_tokens = 0
         self.total_output_tokens = 0
@@ -165,6 +189,7 @@ class FixedTransitionsAgent:
         stage_label = stage["label"]
         goal = stage["goal"]
         budget = stage["budget"]
+        max_stage_turns = budget + max(3, budget)
 
         # Announce the stage
         self.messages.append({
@@ -178,18 +203,26 @@ class FixedTransitionsAgent:
             ),
         })
 
-        stage_steps = 0
+        stage_turns = 0
+        stage_code_steps = 0
+        stage_tool_calls = 0
         stage_errors = 0
         last_action = None
         last_error_type = None
+        stop_reason = "stage_budget"
 
-        while stage_steps < budget and not self.env.state.submitted:
+        while (
+            stage_turns < max_stage_turns
+            and stage_code_steps < budget
+            and not self.env.state.submitted
+        ):
             response = self.client.complete(
                 model=self.model,
                 max_tokens=self.max_tokens,
                 system=SYSTEM_PROMPT,
                 messages=self.messages,
             )
+            stage_turns += 1
             self.total_input_tokens += response.input_tokens
             self.total_output_tokens += response.output_tokens
             self.messages.append({"role": "assistant", "content": response.text})
@@ -197,46 +230,55 @@ class FixedTransitionsAgent:
             try:
                 action = Action.from_llm_response(response.text)
             except ActionParseError as exc:
+                stage_errors += 1
+                last_error_type = type(exc).__name__
                 self.messages.append({
                     "role": "user",
                     "content": (
                         f"[ERROR] Could not parse your action: {exc}\n\n"
+                        f"[STAGE BUDGET] {max_stage_turns - stage_turns} turns and "
+                        f"{budget - stage_code_steps} code steps remain in {stage_label}.\n\n"
                         f"{ACTION_JSON_SCHEMA}"
                     ),
                 })
-                stage_errors += 1
                 continue
 
             observation = self.env.step(action)
             last_action = action.type
+            if action.type in CODE_OR_NOTEBOOK_STEP_ACTIONS:
+                stage_code_steps += 1
+            elif action.type in TOOL_ACTIONS:
+                stage_tool_calls += 1
             feedback = observation.to_feedback_message()
 
-            # Inject notebook context (last 3 cells) — same as GymAgent
-            notebook_ctx = self.env.state.cell_history.to_feedback_context(
-                max_cells=3, max_code_chars=500, max_output_chars=250
+            # Inject notebook context (last 3 cells) for the Jupyter backend.
+            notebook_ctx = self._notebook_context(
+                max_cells=3,
+                max_code_chars=500,
+                max_output_chars=250,
             )
             if notebook_ctx:
                 feedback = f"{feedback}\n\n{notebook_ctx}"
 
             # Inject stage budget so agent knows both env budget and stage budget
-            stage_remaining = budget - stage_steps - 1
-            if stage_remaining > 0:
+            code_remaining = budget - stage_code_steps
+            turn_remaining = max_stage_turns - stage_turns
+            if code_remaining > 0 and turn_remaining > 0:
                 feedback += (
-                    f"\n\n[STAGE BUDGET] {stage_remaining} steps remaining in {stage_label}."
+                    f"\n\n[STAGE BUDGET] {code_remaining} code steps and "
+                    f"{turn_remaining} total turns remaining in {stage_label}."
                 )
             else:
-                feedback += f"\n\n[STAGE BUDGET] This was your last step in {stage_label}."
+                feedback += f"\n\n[STAGE BUDGET] This was your last turn in {stage_label}."
 
             self.messages.append({"role": "user", "content": feedback})
 
-            if action.type == "code":
-                stage_steps += 1
             if observation.stderr.strip():
                 stage_errors += 1
                 last_error_type = observation.stderr.strip().split(":", 1)[0][:80]
                 # If more than half of stage budget consumed by errors, nudge
                 # agent to fall back to a simpler approach.
-                if stage_errors >= budget // 2 and stage_remaining > 0:
+                if stage_errors >= budget // 2 and code_remaining > 0:
                     self.messages.append({
                         "role": "user",
                         "content": (
@@ -246,12 +288,30 @@ class FixedTransitionsAgent:
                         ),
                     })
             if observation.submitted or observation.done:
+                stop_reason = "submitted" if observation.submitted else "env_done"
                 break
+
+        if not self.env.state.submitted:
+            if stage_turns >= max_stage_turns:
+                stop_reason = "max_stage_turns"
+                self.messages.append({
+                    "role": "user",
+                    "content": (
+                        f"[STAGE BUDGET] This fixed stage used its maximum number of turns "
+                        f"({max_stage_turns}) and is moving to the next stage."
+                    ),
+                })
+            elif stage_code_steps >= budget:
+                stop_reason = "stage_budget"
 
         self.stage_log.append({
             "stage": stage_name,
-            "steps": stage_steps,
+            "turns": stage_turns,
+            "code_steps": stage_code_steps,
+            "tool_calls": stage_tool_calls,
+            "steps": stage_code_steps,
             "errors": stage_errors,
+            "stop_reason": stop_reason,
             "last_action": last_action,
             "last_error_type": last_error_type,
             "candidate_vars_seen": self.env._candidate_var_order() if hasattr(self.env, "_candidate_var_order") else [],
@@ -259,47 +319,88 @@ class FixedTransitionsAgent:
             "checklist_coverage": self.env.checklist.coverage(),
         })
 
+    def _notebook_context(
+        self,
+        *,
+        max_cells: int,
+        max_code_chars: int,
+        max_output_chars: int,
+    ) -> str:
+        notebook = getattr(self.env, "notebook", None)
+        if notebook is None:
+            return ""
+        cells = list(getattr(notebook.notebook, "cells", []))[-max_cells:]
+        if not cells:
+            return ""
+        parts = ["[NOTEBOOK CONTEXT] Recent cells:"]
+        for cell in cells:
+            cell_id = str(cell.get("id", "unknown"))
+            cell_type = str(cell.get("cell_type", "code"))
+            source = _clip_text(str(cell.get("source", "")), max_code_chars)
+            parts.append(f"- {cell_id} ({cell_type})\n{source}")
+            outputs = cell.get("outputs", []) if cell_type == "code" else []
+            output_text = _clip_text(_outputs_to_text(outputs), max_output_chars)
+            if output_text:
+                parts.append(f"  output: {output_text}")
+        return "\n".join(parts)
+
     def _forced_submit(self) -> None:
-        """Try to submit whatever model is in the workspace."""
-        ns = self.env.state.workspace.namespace
-        # Prefer canonical names
-        model_var = None
-        for name in ["best_model", "model"]:
-            if ns.get(name) is not None:
-                model_var = name
-                break
-        # Fall back: scan for any object with predict()
-        if model_var is None:
-            for k, v in ns.items():
-                if not k.startswith("_") and callable(getattr(v, "predict", None)):
-                    model_var = k
-                    break
-        if model_var is None:
+        """Try to finalize whatever viable model is in the notebook."""
+        obs = self.env.finalize("auto")
+        if obs is None:
             print(
-                "[fixed] WARNING: forced submit skipped — no trained model found in workspace. "
+                "[fixed] WARNING: forced finalize skipped; no trained model was found. "
                 "Agent exhausted stage budgets without producing a model. test_metric will be None."
             )
             return
-        print(f"[fixed] Forced submit using workspace variable '{model_var}'.")
-        obs = self.env.step(Action.submit_action(model_var))
         self.messages.append({"role": "user", "content": obs.to_feedback_message()})
 
 
+def _clip_text(text: str, max_chars: int) -> str:
+    text = str(text).strip()
+    if len(text) <= max_chars:
+        return text
+    return text[: max_chars - 3].rstrip() + "..."
+
+
+def _outputs_to_text(outputs: list[dict]) -> str:
+    chunks: list[str] = []
+    for output in outputs:
+        output_type = output.get("output_type")
+        if output_type == "stream":
+            chunks.append(str(output.get("text", "")))
+        elif output_type in {"execute_result", "display_data"}:
+            data = output.get("data", {})
+            chunks.append(str(data.get("text/plain", "")))
+        elif output_type == "error":
+            traceback = output.get("traceback") or []
+            chunks.append("\n".join(str(line) for line in traceback))
+    return "\n".join(chunk.strip() for chunk in chunks if chunk).strip()
+
+
 def _summary_metrics(summary: dict) -> dict:
+    test_metric = summary.get("test_metric")
+    if test_metric is None:
+        test_metric = summary.get("final_test_metric")
     metrics = {
-        "has_test_metric": int(summary.get("test_metric") is not None),
-        "submit_failed": int(summary.get("test_metric") is None),
+        "has_test_metric": int(test_metric is not None),
+        "submit_failed": int(bool(summary.get("submit_failed", test_metric is None))),
         "checklist_coverage": summary["checklist_coverage"],
         "steps_used": summary["steps_used"],
         "error_count": summary.get("error_count", summary.get("errors_count", 0)),
         "valid_submit": int(bool(summary.get("valid_submit"))),
         "model_check_failure_count": summary.get("model_check_failure_count", 0),
+        "tool_calls_total": summary.get("tool_calls_total", 0),
+        "contract_feedback_count": summary.get("contract_feedback_count", 0),
         "input_tokens": summary.get("input_tokens", 0),
         "output_tokens": summary.get("output_tokens", 0),
         "elapsed_seconds": summary.get("elapsed_seconds", 0),
     }
-    if summary.get("test_metric") is not None:
-        metrics["test_metric"] = summary["test_metric"]
+    if summary.get("best_validation_metric") is not None:
+        metrics["best_validation_metric"] = summary["best_validation_metric"]
+    if test_metric is not None:
+        metrics["test_metric"] = test_metric
+        metrics["final_test_metric"] = test_metric
     return metrics
 
 
@@ -384,7 +485,7 @@ def main():
             "dataset_sampled": str(splits.metadata.sampled),
         })
 
-        env = GymEnv(
+        env = NotebookGymEnv(
             train=splits.train,
             val=splits.val,
             test=splits.test,
@@ -392,7 +493,8 @@ def main():
             metric_fn=metric_fn,
             metric_name=metric_name,
             max_steps=max_steps,
-            sandbox_timeout=sandbox_timeout,
+            mode="gym_with_checklist",
+            kernel_timeout=sandbox_timeout,
         )
 
         agent = FixedTransitionsAgent(
@@ -402,7 +504,12 @@ def main():
             max_tokens=max_tokens,
         )
         summary = agent.run()
-        mlflow.log_text(env.state.cell_history.to_markdown(), "cell_history.md")
+        episode_workspace = summary.get("episode_workspace")
+        if episode_workspace and os.path.isdir(episode_workspace):
+            mlflow.log_artifacts(episode_workspace, artifact_path="episode")
+        private_episode_dir = summary.get("private_episode_dir")
+        if private_episode_dir and os.path.isdir(private_episode_dir):
+            mlflow.log_artifacts(private_episode_dir, artifact_path="private_episode")
         mlflow.log_text(
             json.dumps(summary.get("stage_log", []), indent=2),
             "stage_log.json",
@@ -412,7 +519,9 @@ def main():
         mlflow.set_tags({
             "final_status": summary.get("final_status") or "",
             "null_reason": summary.get("null_reason") or "",
+            "finalize_path": summary.get("finalize_path") or "",
         })
+        env.close()
 
     print("\n=== Run Summary ===")
     stage_log = summary.pop("stage_log", [])
@@ -420,7 +529,9 @@ def main():
     if stage_log:
         print("\n=== Stage Log ===")
         for entry in stage_log:
-            print(f"  {entry['stage']}: {entry['steps']} steps, "
+            print(f"  {entry['stage']}: {entry['steps']} code steps, "
+                  f"{entry.get('tool_calls', 0)} tool calls, "
+                  f"{entry.get('turns', entry['steps'])} turns, "
                   f"{entry['errors']} errors, "
                   f"coverage={entry['checklist_coverage']:.2f}")
 

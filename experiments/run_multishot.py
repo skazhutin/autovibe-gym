@@ -261,12 +261,16 @@ def main():
         test_metric = None
         final_status = "no_candidate_found"
         null_reason = "No raw-validation-ready model was produced."
+        submit_failure_type = "no_candidate_found"
+        finalize_path = "failed"
         if best_model is not None:
             try:
                 best_model.predict(val.drop(columns=[target_col]).head(32))
             except Exception as exc:
                 final_status = "submit_blocked_preflight"
                 null_reason = f"{type(exc).__name__}: {exc}"
+                submit_failure_type = type(exc).__name__
+                finalize_path = "submit_preflight"
                 errors_count += 1
                 print(f"[submit preflight error] {exc}")
             else:
@@ -277,9 +281,13 @@ def main():
                     test_metric = score_with_coercion(metric_fn, y_test, test_preds)
                     final_status = "submitted_clean"
                     null_reason = None
+                    submit_failure_type = None
+                    finalize_path = "best_raw_validation_model"
                 except Exception as exc:
                     final_status = "hidden_submit_failed"
                     null_reason = f"{type(exc).__name__}: {exc}"
+                    submit_failure_type = type(exc).__name__
+                    finalize_path = "hidden_test"
                     errors_count += 1
                     print(f"[submit error] {exc}")
 
@@ -300,10 +308,12 @@ def main():
             metrics["best_validation_metric"] = best_val
         if test_metric is not None:
             metrics["test_metric"] = test_metric
+            metrics["final_test_metric"] = test_metric
         mlflow.log_metrics(metrics)
         mlflow.set_tags({
             "final_status": final_status,
             "null_reason": null_reason or "",
+            "finalize_path": finalize_path,
         })
 
     summary = {
@@ -318,6 +328,9 @@ def main():
         "valid_submit": test_metric is not None,
         "final_status": final_status,
         "null_reason": null_reason,
+        "final_test_metric": test_metric,
+        "submit_failure_type": submit_failure_type,
+        "finalize_path": finalize_path,
         "errors_count": errors_count,
         "input_tokens": total_input_tokens,
         "output_tokens": total_output_tokens,

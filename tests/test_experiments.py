@@ -9,6 +9,8 @@ import pytest
 from experiments import compare, mlflow_config, run_baseline, run_fixed, run_gym, run_multishot
 from experiments import run_all_modes_matrix
 from experiments import run_matrix
+from gym.llm import LLMResponse
+from gym.notebook_env import NotebookGymEnv
 
 
 def test_run_gym_load_dataset_returns_splits_and_metadata(tmp_path):
@@ -104,6 +106,50 @@ def test_run_fixed_summary_metrics_do_not_log_missing_test_metric_as_zero():
     assert metrics["submit_failed"] == 1
 
 
+def test_run_fixed_tool_only_stage_stops_at_turn_guard(tmp_path):
+    class ToolOnlyClient:
+        def __init__(self):
+            self.calls = 0
+
+        def complete(self, **kwargs):
+            self.calls += 1
+            return LLMResponse(text='{"type": "inspect_data"}', input_tokens=1, output_tokens=1)
+
+    def accuracy(y_true, y_pred):
+        return sum(int(a == b) for a, b in zip(y_true, y_pred)) / len(y_true)
+
+    data = pd.DataFrame({"x": [0, 1], "target": [0, 1]})
+    env = NotebookGymEnv(
+        train=data,
+        val=data,
+        test=data,
+        target_col="target",
+        metric_fn=accuracy,
+        metric_name="accuracy",
+        max_steps=10,
+        workspace_dir=tmp_path,
+        mode="gym_with_checklist",
+    )
+    client = ToolOnlyClient()
+    agent = run_fixed.FixedTransitionsAgent(
+        env=env,
+        stages=[{"name": "eda", "label": "Stage 1/1 - EDA", "goal": "Inspect data.", "budget": 1}],
+        model="fake-model",
+        client=client,
+    )
+    try:
+        summary = agent.run()
+    finally:
+        env.close()
+
+    first_stage = summary["stage_log"][0]
+    assert first_stage["turns"] == 4
+    assert first_stage["tool_calls"] == 4
+    assert first_stage["code_steps"] == 0
+    assert first_stage["stop_reason"] == "max_stage_turns"
+    assert client.calls == 4
+
+
 def test_configure_mlflow_tracking_ignores_placeholder_uri(monkeypatch):
     calls = []
     monkeypatch.setenv("MLFLOW_TRACKING_URI", "http://<server-ip>:5000")
@@ -173,10 +219,32 @@ def test_compare_prints_sorted_table_and_writes_csv(monkeypatch, tmp_path, capsy
 
     printed = capsys.readouterr().out
     assert "Experiment: autovibe-gym" in printed
+    assert "Sorted by: matrix" in printed
     assert output.exists()
     saved = pd.read_csv(output)
     assert list(saved["model"]) == ["m1", "m2"]
     assert list(saved["test_metric"]) == [0.2, 0.8]
+
+
+def test_compare_metric_sort_orders_by_selected_metric(monkeypatch, capsys):
+    runs = pd.DataFrame(
+        {
+            "params.experiment_type": ["gym", "baseline"],
+            "params.model": ["m1", "m2"],
+            "params.dataset": ["d", "d"],
+            "params.mode": ["local", "local"],
+            "metrics.test_metric": [0.2, 0.8],
+        }
+    )
+    monkeypatch.setattr(compare.mlflow, "set_tracking_uri", lambda uri: None)
+    monkeypatch.setattr(compare.mlflow, "search_runs", lambda **kwargs: runs)
+    monkeypatch.setattr("sys.argv", ["compare", "--sort-by", "metric"])
+
+    compare.main()
+
+    printed = capsys.readouterr().out
+    assert "Sorted by: test_metric" in printed
+    assert printed.index("m2") < printed.index("m1")
 
 
 def test_compare_handles_runs_without_test_metric(monkeypatch, capsys):
