@@ -762,3 +762,95 @@ table.data tbody tr.clickable:hover {
   display: block;
   margin-bottom: 2px;
 }
+
+/* ============ Grids ============ */
+.grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.stack { display: flex; flex-direction: column; gap: 24px; }
+@media (max-width: 1100px) {
+  .grid-4 { grid-template-columns: repeat(2, 1fr); }
+  .grid-3 { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 720px) {
+  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+}
+
+/* ============ Metric card ============ */
+.metric-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.metric-label {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+.metric-num {
+  font-family: var(--font-mono);
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+.metric-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 2px;
+}
+.metric-delta {
+  font-size: 12px;
+  font-weight: 600;
+}
+.metric-card.dark .metric-label { color: rgba(255,255,255,.65); }
+.metric-card .ic {
+  width: 34px; height: 34px; border-radius: 9px;
+  background: var(--accent-soft); color: var(--accent-ink);
+  display: grid; place-items: center;
+}
+.metric-card.dark .ic { background: var(--accent); color: #1a1a1a; }
+
+/* ============ Active run card ============ */
+.runcard {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.runcard .top { display: flex; justify-content: space-between; gap: 10px; }
+.runcard .model { font-family: var(--font-mono); font-weight: 600; font-size: 14px; }
+.runcard .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.runcard .body { display: flex; align-items: center; gap: 16px; }
+.runcard .meta { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--text-dim); }
+
+/* ============ Filters bar ============ */
+.filters {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 18px;
+}
+.search {
+  position: relative;
+  flex: 1;
+  min-width: 220px;
+}
+.search svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-faint); }
+.search input { padding-left: 38px; }
+.select-sm {
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13.5px;
+  font-family: inherit;
+}
+
+/* ============ score chip in tables ============ */
+.score-cell { font-family: var(--font-mono); font-weight: 700; }
+.score-null { color: var(--text-faint); }
+.metric-suffix { color: var(--text-faint); font-size: 11px; font-weight: 500; margin-left: 4px; }
