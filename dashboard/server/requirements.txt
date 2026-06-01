@@ -1,0 +1,8 @@
+# The dashboard backend reuses the project's .venv, which already provides these.
+# Listed here for environments that build the dashboard standalone.
+fastapi>=0.110
+uvicorn[standard]>=0.27
+pydantic>=2.6
+python-multipart>=0.0.9   # multipart/form-data for dataset CSV uploads
+mlflow>=2.10              # read experiment runs/metrics/artifacts
+pandas>=2.0               # dataset preview + column stats

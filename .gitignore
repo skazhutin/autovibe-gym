@@ -94,6 +94,14 @@ memory/
 .ipynb_checkpoints/
 *.ipynb
 
+# Web dashboard
+dashboard/web/node_modules/
+dashboard/web/dist/
+dashboard/web/.vite/
+dashboard/web/*.tsbuildinfo
+dashboard/server/data/
+dashboard/**/__pycache__/
+
 # IDE/OS
 .vscode/
 .idea/
