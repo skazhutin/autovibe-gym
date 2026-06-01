@@ -14,6 +14,8 @@ from typing import Any, Protocol
 from jupyter_client import BlockingKernelClient, KernelManager
 from nbformat.v4 import output_from_msg
 
+from .executor import thread_limit_env
+
 
 _DOCKER_EXECUTE_SCRIPT = r"""
 import json
@@ -580,6 +582,10 @@ class ContainerJupyterKernelSession(_KernelClientMixin):
             "--env", "XDG_CONFIG_HOME=/tmp/config",
             "--env", "MPLBACKEND=Agg",
             "--env", "AUTOVIBE_JUPYTER_KERNEL=1",
+        ])
+        for var, value in thread_limit_env().items():
+            command.extend(["--env", f"{var}={value}"])
+        command.extend([
             self.docker_image,
             "python", "-m", "ipykernel_launcher", "-f", f"/workspace/{self._CONN_FILE}",
         ])
@@ -778,4 +784,5 @@ def _minimal_kernel_env() -> dict[str, str]:
             "AUTOVIBE_JUPYTER_KERNEL": "1",
         }
     )
+    env.update(thread_limit_env())
     return env
