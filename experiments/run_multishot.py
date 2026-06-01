@@ -26,6 +26,7 @@ from gym.datasets import load_dataset_splits, resolve_metric
 from gym.executor import CodeExecutor
 from gym.llm import default_model_name, make_llm_client
 from gym.protocol import Action
+from gym.scoring import score_with_coercion
 
 if load_dotenv is not None:
     load_dotenv()
@@ -49,8 +50,11 @@ Available variables pre-loaded in the execution namespace:
 Rules:
 - Do NOT access test data; it is strictly hidden.
 - Train your best model on train_df and evaluate on val_df if useful.
-- Assign your final trained model to a variable called `model`.
-- The model must have a .predict() method that works on raw DataFrame rows.
+- Wrap ALL preprocessing (encoding, scaling, imputation) inside a single
+  scikit-learn Pipeline / ColumnTransformer and assign that fitted Pipeline to
+  `model`, so `model.predict(df)` works on raw, unprocessed DataFrame rows.
+  Do NOT transform features outside the model — validation and test sets are raw.
+- Keep any hyperparameter search small (cv<=3); n_jobs=-1 is allowed.
 - Write only executable Python. Do not include markdown or explanations.
 """
 
@@ -219,7 +223,7 @@ def main():
                     X_val = val.drop(columns=[target_col])
                     y_val = val[target_col]
                     val_preds = model_obj.predict(X_val)
-                    val_metric = float(metric_fn(y_val, val_preds))
+                    val_metric = score_with_coercion(metric_fn, y_val, val_preds)
                     if best_val is None or val_metric > best_val:
                         best_val = val_metric
                         best_model = model_obj
@@ -241,7 +245,7 @@ def main():
                 X_test = test.drop(columns=[target_col])
                 y_test = test[target_col]
                 test_preds = best_model.predict(X_test)
-                test_metric = float(metric_fn(y_test, test_preds))
+                test_metric = score_with_coercion(metric_fn, y_test, test_preds)
             except Exception as exc:
                 errors_count += 1
                 print(f"[submit error] {exc}")
