@@ -981,3 +981,13 @@ table.data tbody tr.clickable:hover {
 .log-msg .role { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-faint); margin-bottom: 6px; font-weight: 700; }
 .log-msg pre { margin: 0; white-space: pre-wrap; word-break: break-word; font-family: var(--font-mono); font-size: 12px; }
 .process-log { background: var(--ink); color: #e6e6e6; border-radius: var(--r-md); padding: 14px; font-family: var(--font-mono); font-size: 12px; white-space: pre-wrap; word-break: break-word; max-height: 460px; overflow-y: auto; }
+
+/* ============ Compare ============ */
+.compare { display: grid; grid-template-columns: 300px 1fr; gap: 20px; align-items: start; }
+@media (max-width: 900px) { .compare { grid-template-columns: 1fr; } }
+.cmp-list { position: sticky; top: 92px; max-height: calc(100vh - 120px); overflow-y: auto; }
+.cmp-pick { display: flex; gap: 10px; align-items: flex-start; padding: 10px; border-radius: var(--r-sm); cursor: pointer; }
+.cmp-pick:hover { background: var(--surface-2); }
+.cmp-pick input { margin-top: 3px; accent-color: var(--accent-ink); }
+.cmp-pick .nm { font-family: var(--font-mono); font-size: 12.5px; font-weight: 600; }
+.cmp-right { min-width: 0; display: flex; flex-direction: column; gap: 16px; }
