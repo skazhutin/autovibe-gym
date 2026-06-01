@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-01 (H200 recon run: surfaced sandbox/threading/CLI issues; first round of fixes)
+**Last updated:** 2026-06-01 (gym test_metric=null root-caused and fixed: robust action parsing + host-side finalize + label coercion)
 **Phase:** Hardening after first full H200 recon. All 4 run types × 2 cloud models executed on `example_student_dropout` (+ `example_room_occupancy`); fixing the blockers found.
 
 ---
@@ -102,15 +102,29 @@ Fixed in this PR:
   (sklearn 1.7.2) and read on the host venv (1.8.0) → `InconsistentVersionWarning`.
   Pinned `scikit-learn==1.7.2` so the image and host resolve identically.
 
-Still open (need server-side iteration, not in this PR):
+Gym `test_metric=null` — root-caused and fixed (next PR, branch
+`dev/claude/gym-good-score`):
 
-- **Notebook gym/iterative modes never produce a `test_metric`.** Every gym/iter run
-  ended `forced_submit=true`, `best_validation_metric=null`, `test_metric=null` — the
-  agent never reaches a successful `validate`, so the strict forced-submit fallback
-  finds no candidate. Likely a mix of training crashes (now mitigated by thread caps)
-  and the agent not emitting/landing a `validate` action. Re-run after this PR to
-  re-measure; if still null, loosen submit parsing (curator suggestion) and inspect
-  traces of a near-SOTA model.
+- **Cause 1 — action parsing.** `gemma-4-26b` wraps its JSON in chat-template
+  tool-call tokens (`{...}<tool_call|>`, `<|tool_call>call:{...}`). The strict
+  parser required the text to end in `}`, fell through to the legacy code
+  fallback, and dumped the raw action text into a notebook cell → SyntaxError
+  loop, so the agent never reached validate/submit. Fixed with robust extraction
+  (strip wrapper tokens, balanced-brace JSON scan, `strict=False`).
+- **Cause 2 — brittle clean run.** restart_and_run_all re-runs the whole messy
+  notebook; missing libs (`seaborn`), slow GridSearchCV (per-cell timeout), and
+  cross-cell `NameError`s from deleted cells made every clean run fail. Mitigated
+  by installing matplotlib/seaborn, raising the per-cell timeout to 120s, and
+  steering the prompt to finalize early with a small search.
+- **Cause 3 — strict finalize + label skew.** Forced submit needed a prior
+  validate; agents that built a good model but mismanaged the protocol got null.
+  Added host-side `NotebookGymEnv.finalize()` (live-kernel fallback before any
+  kernel-wiping restart) and label dtype coercion in validate/submit.
+- **Verified:** a dirty-kernel, label-encoded model now finalizes to
+  `final_test_metric=0.7247` f1_macro on `student_dropout` (vs baseline 0.739).
+
+Still open (need server-side iteration):
+
 - **deepseek-v4-flash baseline/multishot write broken code** (GridSearchCV errors →
   `submit_failed`); gemma baseline/multishot succeed (0.739 / 0.741). Prompt tuning.
 - **Sandbox image name.** Default is `autovibe-gym-sandbox:latest`; the server only
@@ -142,6 +156,7 @@ Still open (need server-side iteration, not in this PR):
 
 | Date | Change |
 |------|--------|
+| 2026-06-01 | Fixed gym `test_metric=null`: robust action parsing (tool-call tokens), host-side `finalize()` live-kernel fallback, label-encoding coercion in validate/submit, viz libs + per-cell timeout + prompt steering; verified 0.7247 on student_dropout |
 | 2026-06-01 | H200 recon: capped BLAS/OMP threads in sandbox+kernel, added `run_fixed --max-steps`, pinned scikit-learn==1.7.2; documented open gym-submit issue |
 | 2026-05-29 | Hardened notebook privacy artifacts, Docker kernel path/port handling, step-budget blocking, and deterministic CI sandbox image build |
 | 2026-05-29 | Implemented ContainerJupyterKernelBackend: Docker sandbox with internal network, read-only rootfs, and dropped capabilities |

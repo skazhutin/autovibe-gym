@@ -27,9 +27,12 @@ except ImportError:
 if load_dotenv is not None:
     load_dotenv()
 
+# sandbox_timeout is the per-cell kernel execution limit. restart_and_run_all
+# re-runs the whole notebook (incl. model training) cell-by-cell under this
+# limit, so it must be generous enough for a fit + small hyperparameter search.
 MODE_DEFAULTS = {
-    "local": {"max_steps": 30, "max_tokens": 8192, "sandbox_timeout": 60},
-    "cloud": {"max_steps": 15, "max_tokens": 4096, "sandbox_timeout": 30},
+    "local": {"max_steps": 30, "max_tokens": 8192, "sandbox_timeout": 120},
+    "cloud": {"max_steps": 20, "max_tokens": 4096, "sandbox_timeout": 120},
 }
 
 
