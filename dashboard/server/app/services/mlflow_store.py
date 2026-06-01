@@ -333,7 +333,11 @@ def checklist(episode_dir: Path | None, target_col: str = "", fallback_coverage:
     except Exception:
         pass
     items = [{**m, "closed": closed_step[m["id"]] is not None, "closedStep": closed_step[m["id"]]} for m in items_meta]
-    return {"items": items, "coverage": coverage, "closed": sum(1 for i in items if i["closed"]), "total": len(items)}
+    replay_closed = sum(1 for i in items if i["closed"])
+    # Use the env's authoritative coverage metric for the count so it matches the
+    # run header; fall back to the per-item replay count only when unavailable.
+    closed = round(coverage * len(items)) if coverage is not None else replay_closed
+    return {"items": items, "coverage": coverage, "closed": closed, "total": len(items)}
 
 
 def episode_progress(episode_dir: Path | None, target_col: str = "") -> dict[str, Any]:
