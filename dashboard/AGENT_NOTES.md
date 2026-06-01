@@ -116,6 +116,12 @@ GET  /runs/{id}/events (SSE/poll for live)
   uses live workspace while running else mlflow .../artifacts/episode; _enrich_live() folds
   episode_progress (step/checklist/errors via replay) into running runs (list + detail).
   Frontend polls detail+tabs every 2.5s. Tokens still only at end (in agent, logged to mlflow).
+  EXECUTION LOCALITY: launcher spawns LOCAL .venv python, cwd=local repo; kernel backend=local
+  → gym + notebook model-training run on the MACHINE RUNNING THE BACKEND. Only LLM is remote.
+  So to offload the laptop → run the whole dashboard ON the server. FastAPI now serves the built
+  SPA (main.py: mounts /assets + SPA catch-all when web/dist exists) → one process. serve.sh
+  (HOST=0.0.0.0 PORT=8011 BUILD=1) for server. Deploy steps in dashboard/README.md. Server venv
+  needs `pip install -r dashboard/server/requirements.txt` (fastapi/uvicorn/multipart) + current gym.
 - next ideas: open draft PR; optional gym-side incremental artifact flush for true live streaming;
   run a real end-to-end launch once an LLM endpoint is reachable.
 </content>

@@ -35,6 +35,10 @@ class Settings:
         self.settings_file: Path = DATA_DIR / "settings.json"
         self.runs_dir: Path = DATA_DIR / "runs"
         self.uploads_dir: Path = DATA_DIR / "uploads"
+        # Built SPA to serve in single-app/server mode (FastAPI serves the UI too).
+        self.web_dist: Path = Path(
+            os.getenv("AUTOVIBE_DASHBOARD_WEB", str(SERVER_DIR.parent / "web" / "dist"))
+        )
         self.cors_origins: list[str] = [
             "http://localhost:5173",
             "http://127.0.0.1:5173",
