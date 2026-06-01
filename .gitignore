@@ -99,8 +99,7 @@ dashboard/web/node_modules/
 dashboard/web/dist/
 dashboard/web/.vite/
 dashboard/web/*.tsbuildinfo
-dashboard/server/data/runs/
-dashboard/server/data/uploads/
+dashboard/server/data/
 dashboard/**/__pycache__/
 
 # IDE/OS
