@@ -991,3 +991,27 @@ table.data tbody tr.clickable:hover {
 .cmp-pick input { margin-top: 3px; accent-color: var(--accent-ink); }
 .cmp-pick .nm { font-family: var(--font-mono); font-size: 12.5px; font-weight: 600; }
 .cmp-right { min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+
+/* ============ Datasets ============ */
+.ds-card { display: flex; flex-direction: column; gap: 10px; height: 100%; }
+.ds-title { font-family: var(--font-mono); font-weight: 600; font-size: 15px; }
+.ds-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; font-size: 12.5px; }
+.ds-stat .k { color: var(--text-faint); }
+.ds-stat .v { font-family: var(--font-mono); font-weight: 600; }
+.ds-actions { display: flex; gap: 8px; border-top: 1px solid var(--border); padding-top: 12px; margin-top: auto; }
+.upload-tile { border: 2px dashed var(--border); border-radius: var(--r-lg); display: grid; place-items: center; min-height: 100%; cursor: pointer; color: var(--text-dim); transition: border-color .15s, color .15s; text-align: center; padding: 24px; }
+.upload-tile:hover { border-color: var(--accent-ink); color: var(--accent-ink); }
+.dropzone { border: 2px dashed var(--border); border-radius: var(--r-sm); padding: 14px; text-align: center; cursor: pointer; font-size: 13px; color: var(--text-dim); }
+.dropzone:hover { border-color: var(--accent-ink); }
+.dropzone.has { border-color: var(--green); color: var(--green); background: var(--green-bg); }
+
+/* ============ Settings rows ============ */
+.set-group { margin-bottom: 12px; }
+.set-row { display: flex; justify-content: space-between; gap: 20px; padding: 16px 0; border-bottom: 1px solid var(--border); align-items: center; }
+.set-row:last-child { border-bottom: none; }
+.set-row .label { font-weight: 600; font-size: 14px; }
+.set-row .hint { color: var(--text-faint); font-size: 12.5px; margin-top: 2px; }
+.set-row .control { width: 320px; max-width: 52%; flex: none; }
+.swatch-row { display: flex; gap: 8px; }
+.swatch { width: 28px; height: 28px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; }
+.swatch.active { border-color: var(--text); }
