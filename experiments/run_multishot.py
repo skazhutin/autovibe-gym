@@ -22,6 +22,7 @@ except ImportError:
     load_dotenv = None
 
 from experiments.mlflow_config import configure_mlflow_tracking
+from gym.data_profile import build_dataset_card
 from gym.datasets import load_dataset_splits, resolve_metric
 from gym.executor import CodeExecutor
 from gym.llm import default_model_name, make_llm_client
@@ -143,13 +144,12 @@ def main():
         docker_image=args.sandbox_image,
     )
 
+    dataset_card = build_dataset_card(train, val, target_col, metric_name, max_chars=4500)
     task_prompt = (
         f"Solve a supervised ML task.\n"
         f"Target column: '{target_col}'\n"
         f"Metric: {metric_name} (higher is better)\n\n"
-        f"Training data shape: {train.shape}\n"
-        f"Validation data shape: {val.shape}\n\n"
-        f"Dataset statistics:\n{train.describe(include='all').to_string()}\n\n"
+        f"{dataset_card}\n\n"
         "Workspace variables: train_df, val_df, target_col, pd, np\n"
         "Assign your trained model to variable: model"
     )
@@ -195,8 +195,12 @@ def main():
             try:
                 action = Action.from_llm_response(response.text)
                 code = action.code if action.type == "code" else ""
+                parse_status = "ok"
+                parse_error = None
             except Exception:
                 code = _extract_code(response.text)
+                parse_status = "fallback"
+                parse_error = "Action parsing failed; extracted code fence/plain text."
 
             namespace = {
                 "train_df": train.copy(),
@@ -218,37 +222,74 @@ def main():
                         break
 
             val_metric = None
+            raw_validation_ready = False
+            preflight_error = None
             if model_obj is not None:
                 try:
                     X_val = val.drop(columns=[target_col])
                     y_val = val[target_col]
                     val_preds = model_obj.predict(X_val)
+                    raw_validation_ready = True
                     val_metric = score_with_coercion(metric_fn, y_val, val_preds)
                     if best_val is None or val_metric > best_val:
                         best_val = val_metric
                         best_model = model_obj
                 except Exception as exc:
-                    attempt_error = (attempt_error or "") + f" [val_eval: {exc}]"
+                    preflight_error = f"{type(exc).__name__}: {exc}"
+                    attempt_error = (attempt_error or "") + f" [val_eval: {preflight_error}]"
                     errors_count += 1
 
             attempt_log.append({
                 "attempt": attempt + 1,
+                "input_tokens": response.input_tokens,
+                "output_tokens": response.output_tokens,
+                "code_length": len(code),
+                "parse_status": parse_status,
+                "parse_error": parse_error,
+                "execution_success": not bool(stderr.strip()),
                 "val_metric": val_metric,
+                "raw_validation_ready": raw_validation_ready,
+                "submit_preflight_error": preflight_error,
                 "error": attempt_error,
             })
+            mlflow.log_text(code, f"attempt_{attempt + 1:02d}_solution.py")
+            mlflow.log_text(stdout, f"attempt_{attempt + 1:02d}_stdout.txt")
+            mlflow.log_text(stderr, f"attempt_{attempt + 1:02d}_stderr.txt")
             if val_metric is not None:
                 mlflow.log_metric("val_metric", val_metric, step=attempt)
 
         test_metric = None
+        final_status = "no_candidate_found"
+        null_reason = "No raw-validation-ready model was produced."
+        submit_failure_type = "no_candidate_found"
+        finalize_path = "failed"
         if best_model is not None:
             try:
-                X_test = test.drop(columns=[target_col])
-                y_test = test[target_col]
-                test_preds = best_model.predict(X_test)
-                test_metric = score_with_coercion(metric_fn, y_test, test_preds)
+                best_model.predict(val.drop(columns=[target_col]).head(32))
             except Exception as exc:
+                final_status = "submit_blocked_preflight"
+                null_reason = f"{type(exc).__name__}: {exc}"
+                submit_failure_type = type(exc).__name__
+                finalize_path = "submit_preflight"
                 errors_count += 1
-                print(f"[submit error] {exc}")
+                print(f"[submit preflight error] {exc}")
+            else:
+                try:
+                    X_test = test.drop(columns=[target_col])
+                    y_test = test[target_col]
+                    test_preds = best_model.predict(X_test)
+                    test_metric = score_with_coercion(metric_fn, y_test, test_preds)
+                    final_status = "submitted_clean"
+                    null_reason = None
+                    submit_failure_type = None
+                    finalize_path = "best_raw_validation_model"
+                except Exception as exc:
+                    final_status = "hidden_submit_failed"
+                    null_reason = f"{type(exc).__name__}: {exc}"
+                    submit_failure_type = type(exc).__name__
+                    finalize_path = "hidden_test"
+                    errors_count += 1
+                    print(f"[submit error] {exc}")
 
         elapsed = round(time.time() - started, 1)
         mlflow.log_text(json.dumps(attempt_log, indent=2), "attempt_log.json")
@@ -256,6 +297,7 @@ def main():
             "attempts_used": len(attempt_log),
             "error_count": errors_count,
             "has_test_metric": int(test_metric is not None),
+            "valid_submit": int(test_metric is not None),
             "submit_failed": int(test_metric is None),
             "input_tokens": total_input_tokens,
             "output_tokens": total_output_tokens,
@@ -263,9 +305,16 @@ def main():
         }
         if best_val is not None:
             metrics["best_val_metric"] = best_val
+            metrics["best_validation_metric"] = best_val
         if test_metric is not None:
             metrics["test_metric"] = test_metric
+            metrics["final_test_metric"] = test_metric
         mlflow.log_metrics(metrics)
+        mlflow.set_tags({
+            "final_status": final_status,
+            "null_reason": null_reason or "",
+            "finalize_path": finalize_path,
+        })
 
     summary = {
         "experiment_type": "repeated_single_shot",
@@ -276,6 +325,12 @@ def main():
         "test_metric": test_metric,
         "has_test_metric": test_metric is not None,
         "submit_failed": test_metric is None,
+        "valid_submit": test_metric is not None,
+        "final_status": final_status,
+        "null_reason": null_reason,
+        "final_test_metric": test_metric,
+        "submit_failure_type": submit_failure_type,
+        "finalize_path": finalize_path,
         "errors_count": errors_count,
         "input_tokens": total_input_tokens,
         "output_tokens": total_output_tokens,

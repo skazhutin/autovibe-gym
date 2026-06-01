@@ -6,15 +6,19 @@ on:
     paths:
       - "Dockerfile.sandbox"
       - "gym/jupyter_kernel.py"
+      - "gym/notebook_env.py"
       - "scripts/verify_docker_sandbox.py"
       - "tests/test_jupyter_kernel.py"
+      - "tests/test_notebook_env.py"
       - ".github/workflows/docker-sandbox.yml"
   pull_request:
     paths:
       - "Dockerfile.sandbox"
       - "gym/jupyter_kernel.py"
+      - "gym/notebook_env.py"
       - "scripts/verify_docker_sandbox.py"
       - "tests/test_jupyter_kernel.py"
+      - "tests/test_notebook_env.py"
   workflow_dispatch:
 
 jobs:
@@ -38,7 +42,7 @@ jobs:
         run: docker build -f Dockerfile.sandbox -t autovibe-gym-sandbox:latest .
 
       - name: Run integration tests
-        run: python -m pytest tests/test_jupyter_kernel.py -m integration -v
+        run: python -m pytest tests/test_jupyter_kernel.py tests/test_notebook_env.py -m integration -v
 
       - name: Verify Docker sandbox (smoke test)
         run: python scripts/verify_docker_sandbox.py

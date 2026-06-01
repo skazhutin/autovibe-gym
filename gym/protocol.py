@@ -15,6 +15,14 @@ ActionType = Literal[
     "restart_and_run_all",
     "validate",
     "submit",
+    "inspect_data",
+    "profile_data",
+    "check_candidate",
+    "quick_validate",
+    "list_candidates",
+    "cleanlab_diagnose",
+    "tune_hyperparameters",
+    "finalize",
 ]
 
 
@@ -51,6 +59,23 @@ Validate action:
 
 Submit action:
 {"type": "submit", "model_var": "model"}
+
+Auto-select a candidate variable when useful:
+{"type": "validate", "model_var": "auto"}
+{"type": "submit", "model_var": "auto"}
+{"type": "finalize", "model_var": "auto"}
+
+Environment data/candidate tools:
+{"type": "inspect_data"}
+{"type": "profile_data", "profile": "compact"}
+{"type": "profile_data", "profile": "ydata"}
+{"type": "list_candidates"}
+{"type": "check_candidate", "model_var": "auto"}
+{"type": "quick_validate", "model_var": "auto"}
+{"type": "cleanlab_diagnose", "model_var": "auto", "source": "validation_or_cv", "max_issues": 20}
+
+Bounded tuning tool:
+{"type": "tune_hyperparameters", "model_var": "model", "search_space": {"classifier__n_estimators": {"type": "int", "low": 100, "high": 300}}, "n_trials": 10, "timeout_sec": 60, "scoring": "metric"}
 """.strip()
 
 
@@ -66,6 +91,13 @@ class Action:
     cell_id: str | None = None
     new_position: int | None = None
     model_var: str = "model"
+    profile: str = "compact"
+    source: str = "validation_or_cv"
+    max_issues: int = 20
+    search_space: dict[str, Any] = field(default_factory=dict)
+    n_trials: int = 10
+    timeout_sec: int = 60
+    scoring: str = "metric"
 
     def __post_init__(self) -> None:
         if self.type not in {
@@ -79,6 +111,14 @@ class Action:
             "restart_and_run_all",
             "validate",
             "submit",
+            "inspect_data",
+            "profile_data",
+            "check_candidate",
+            "quick_validate",
+            "list_candidates",
+            "cleanlab_diagnose",
+            "tune_hyperparameters",
+            "finalize",
         }:
             raise ActionParseError(f"Unsupported action type: {self.type!r}")
         if self.type == "code" and not isinstance(self.code, str):
@@ -102,8 +142,27 @@ class Action:
                 raise ActionParseError("move_cell requires a 'new_position'.")
             if self.new_position < 0:
                 raise ActionParseError("move_cell requires a non-negative 'new_position'.")
-        if self.type in {"validate", "submit"} and not self.model_var:
+        if self.type in {
+            "validate",
+            "submit",
+            "check_candidate",
+            "quick_validate",
+            "cleanlab_diagnose",
+            "tune_hyperparameters",
+            "finalize",
+        } and not self.model_var:
             raise ActionParseError(f"{self.type} requires a non-empty 'model_var'.")
+        if self.type == "profile_data" and self.profile not in {"compact", "ydata"}:
+            raise ActionParseError("profile_data requires profile 'compact' or 'ydata'.")
+        if self.type == "cleanlab_diagnose" and self.max_issues < 1:
+            raise ActionParseError("cleanlab_diagnose requires max_issues >= 1.")
+        if self.type == "tune_hyperparameters":
+            if not isinstance(self.search_space, dict):
+                raise ActionParseError("tune_hyperparameters requires object 'search_space'.")
+            if self.n_trials < 1:
+                raise ActionParseError("tune_hyperparameters requires n_trials >= 1.")
+            if self.timeout_sec < 1:
+                raise ActionParseError("tune_hyperparameters requires timeout_sec >= 1.")
 
     @classmethod
     def code_action(cls, code: str) -> "Action":
@@ -171,13 +230,52 @@ class Action:
         if action_type in {"inspect_notebook", "restart_and_run_all"}:
             return cls(type=action_type)
 
-        if action_type == "validate":
+        if action_type in {"inspect_data", "list_candidates"}:
+            return cls(type=action_type)
+
+        if action_type == "profile_data":
+            return cls(
+                type="profile_data",
+                profile=str(payload.get("profile") or "compact"),
+            )
+
+        if action_type in {"validate", "check_candidate", "quick_validate", "finalize"}:
             model_var = payload.get("model_var", "model")
-            return cls(type="validate", model_var=str(model_var))
+            return cls(type=action_type, model_var=str(model_var))
 
         if action_type == "submit":
             model_var = payload.get("model_var", "model")
             return cls.submit_action(str(model_var))
+
+        if action_type == "cleanlab_diagnose":
+            model_var = payload.get("model_var", "auto")
+            try:
+                max_issues = int(payload.get("max_issues", 20))
+            except (TypeError, ValueError) as exc:
+                raise ActionParseError("cleanlab_diagnose requires integer 'max_issues'.") from exc
+            return cls(
+                type="cleanlab_diagnose",
+                model_var=str(model_var),
+                source=str(payload.get("source") or "validation_or_cv"),
+                max_issues=max_issues,
+            )
+
+        if action_type == "tune_hyperparameters":
+            try:
+                n_trials = int(payload.get("n_trials", 10))
+                timeout_sec = int(payload.get("timeout_sec", 60))
+            except (TypeError, ValueError) as exc:
+                raise ActionParseError(
+                    "tune_hyperparameters requires integer n_trials and timeout_sec."
+                ) from exc
+            return cls(
+                type="tune_hyperparameters",
+                model_var=str(payload.get("model_var", "model")),
+                search_space=dict(payload.get("search_space") or {}),
+                n_trials=n_trials,
+                timeout_sec=timeout_sec,
+                scoring=str(payload.get("scoring") or "metric"),
+            )
 
         raise ActionParseError(f"Unsupported action type: {raw_type!r}")
 
@@ -247,12 +345,30 @@ class Action:
                 "cell_id": self.cell_id,
                 "new_position": self.new_position,
             }
-        if self.type == "inspect_notebook":
+        if self.type in {"inspect_notebook", "inspect_data", "list_candidates"}:
             return {"type": self.type}
         if self.type == "restart_and_run_all":
             return {"type": self.type}
-        if self.type == "validate":
+        if self.type == "profile_data":
+            return {"type": self.type, "profile": self.profile}
+        if self.type in {"validate", "check_candidate", "quick_validate", "finalize"}:
             return {"type": self.type, "model_var": self.model_var}
+        if self.type == "cleanlab_diagnose":
+            return {
+                "type": self.type,
+                "model_var": self.model_var,
+                "source": self.source,
+                "max_issues": self.max_issues,
+            }
+        if self.type == "tune_hyperparameters":
+            return {
+                "type": self.type,
+                "model_var": self.model_var,
+                "search_space": self.search_space,
+                "n_trials": self.n_trials,
+                "timeout_sec": self.timeout_sec,
+                "scoring": self.scoring,
+            }
         return {"type": "submit", "model_var": self.model_var}
 
 
@@ -276,6 +392,9 @@ class Observation:
     notebook_status: dict[str, Any] = field(default_factory=dict)
     feedback_items: list[dict[str, Any]] = field(default_factory=list)
     validation_metric: float | None = None
+    final_status: str | None = None
+    null_reason: str | None = None
+    finalize_path: str | None = None
 
     def to_feedback_message(self) -> str:
         parts = [f"[ACTION] {self.action}", f"[STEP] {self.step}"]
@@ -291,6 +410,11 @@ class Observation:
             parts.append(f"[CHECKLIST FEEDBACK]\n{hints_text}")
         if self.validation_metric is not None:
             parts.append(f"[VALIDATION] metric={self.validation_metric:.6f}")
+        if self.final_status:
+            terminal = f"[FINAL STATUS] {self.final_status}"
+            if self.null_reason:
+                terminal += f"\nnull_reason={self.null_reason}"
+            parts.append(terminal)
 
         if self.notebook_status:
             status_text = "\n".join(
@@ -327,6 +451,9 @@ class Observation:
             "notebook_status": self.notebook_status,
             "feedback_items": self.feedback_items,
             "validation_metric": self.validation_metric,
+            "final_status": self.final_status,
+            "null_reason": self.null_reason,
+            "finalize_path": self.finalize_path,
         }
 
     def to_private_dict(self) -> dict[str, Any]:
@@ -364,6 +491,12 @@ def _normalize_action_type(raw_type: Any) -> str:
         "run_all": "restart_and_run_all",
         "restart-run-all": "restart_and_run_all",
         "submit_model": "submit",
+        "check-model": "check_candidate",
+        "check_model": "check_candidate",
+        "quick-validate": "quick_validate",
+        "quickvalidate": "quick_validate",
+        "inspect-data": "inspect_data",
+        "profile-data": "profile_data",
     }
     return aliases.get(normalized, normalized)
 

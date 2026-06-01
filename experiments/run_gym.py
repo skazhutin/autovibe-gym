@@ -173,7 +173,7 @@ def main():
             "error_count": summary.get("error_count", summary.get("errors_count", 0)),
             "has_test_metric": int(has_test_metric),
             "valid_submit": int(bool(summary.get("valid_submit"))),
-            "submit_failed": int(summary.get("submitted") and not has_test_metric),
+            "submit_failed": int(summary.get("submit_failed", not has_test_metric)),
             "input_tokens": summary.get("input_tokens", 0),
             "output_tokens": summary.get("output_tokens", 0),
             "elapsed_seconds": summary.get("elapsed_seconds", 0),
@@ -187,6 +187,7 @@ def main():
             "contract_feedback_count": summary.get("contract_feedback_count", 0),
             "model_check_failure_count": summary.get("model_check_failure_count", 0),
             "checklist_hints_shown_total": summary.get("checklist_hints_shown_total", 0),
+            "tool_calls_total": summary.get("tool_calls_total", 0),
         }
         if summary.get("best_validation_metric") is not None:
             metrics["best_validation_metric"] = summary["best_validation_metric"]
@@ -194,6 +195,11 @@ def main():
             metrics["final_test_metric"] = summary["final_test_metric"]
             metrics["test_metric"] = summary["final_test_metric"]
         mlflow.log_metrics(metrics)
+        mlflow.set_tags({
+            "final_status": summary.get("final_status") or "",
+            "null_reason": summary.get("null_reason") or "",
+            "finalize_path": summary.get("finalize_path") or "",
+        })
         mlflow.log_artifacts(summary["episode_workspace"], artifact_path="episode")
         if summary.get("private_episode_dir"):
             mlflow.log_artifacts(

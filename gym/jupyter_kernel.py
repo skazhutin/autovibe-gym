@@ -287,7 +287,7 @@ target_col = {target_col!r}
 
     def dump_variable_to_file(self, variable_name: str, output_path: str | Path) -> None:
         source = f"""
-import pickle as _autovibe_pickle
+import cloudpickle as _autovibe_pickle
 from pathlib import Path as _AutovibePath
 
 if {variable_name!r} not in globals():

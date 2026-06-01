@@ -68,7 +68,7 @@ GENERIC_CHECKLIST_HINTS: dict[str, str] = {
         "Make sure the target column is not included in the model features."
     ),
     "baseline_candidate_created": (
-        "Create a reproducible candidate model before spending budget on refinements."
+        "Before complex tuning, it is safer to create one simple candidate that can already validate and submit on raw rows."
     ),
     "reproducible_solution": (
         "The current solution should reproduce after a clean kernel restart; run "
@@ -81,6 +81,30 @@ GENERIC_CHECKLIST_HINTS: dict[str, str] = {
     "submit_ready_artifact": (
         "Before final submission, make sure the selected candidate can predict raw "
         "validation features."
+    ),
+    "baseline_first": (
+        "Before complex tuning, it is safer to create one simple candidate that can already validate and submit on raw rows."
+    ),
+    "raw_row_inference_ready": (
+        "The final candidate should accept raw validation/test rows directly in predict()."
+    ),
+    "derived_features_inside_pipeline": (
+        "If you derive new columns during training, make sure the final candidate can create the same columns inside predict() when it receives raw validation or hidden-test rows."
+    ),
+    "serialization_reproducibility": (
+        "Before final submission, check that the candidate can be serialized and reloaded without relying on live-kernel-only state."
+    ),
+    "finalization_planning": (
+        "Keep enough budget to validate or finalize a raw-row-ready candidate before the episode ends."
+    ),
+    "high_cardinality_handling": (
+        "High-cardinality columns should be handled deliberately; avoid relying on identifiers that may not generalize."
+    ),
+    "unseen_categories_handling": (
+        "Categorical encoders should handle categories that appear in validation/test but were not present during fitting."
+    ),
+    "candidate_validation_before_submit": (
+        "Use check_candidate or validate before submit so raw-row and serialization failures are caught early."
     ),
 }
 
@@ -98,6 +122,17 @@ MANDATORY_CHECKS: tuple[str, ...] = (
     "validation_evaluated",
     "reproducible_solution",
     "submit_ready_artifact",
+)
+
+GUIDANCE_ONLY_CHECKS: tuple[str, ...] = (
+    "baseline_first",
+    "raw_row_inference_ready",
+    "derived_features_inside_pipeline",
+    "serialization_reproducibility",
+    "finalization_planning",
+    "high_cardinality_handling",
+    "unseen_categories_handling",
+    "candidate_validation_before_submit",
 )
 
 
@@ -134,9 +169,11 @@ class NotebookChecklist:
     policy: FeedbackPolicy = field(default_factory=FeedbackPolicy)
     covered: set[str] = field(default_factory=set)
     optional_tags: set[str] = field(default_factory=set)
+    guidance_shown: set[str] = field(default_factory=set)
     evidence: list[ChecklistEvidence] = field(default_factory=list)
     executions_since_hint: int = 999
     hints_shown_total: int = 0
+    process_guidance_hints_shown_total: int = 0
 
     def record_execution(
         self,
@@ -173,6 +210,9 @@ class NotebookChecklist:
 
         self.executions_since_hint = 0
         self.hints_shown_total += 1
+        if hint in GUIDANCE_ONLY_CHECKS:
+            self.guidance_shown.add(hint)
+            self.process_guidance_hints_shown_total += 1
         return [
             FeedbackItem(
                 channel="checklist",
@@ -201,8 +241,10 @@ class NotebookChecklist:
             "covered": sorted(self.covered),
             "coverage": self.coverage(),
             "optional_tags": sorted(self.optional_tags),
+            "guidance_shown": sorted(self.guidance_shown),
             "evidence": [item.to_dict() for item in self.evidence],
             "hints_shown_total": self.hints_shown_total,
+            "process_guidance_hints_shown_total": self.process_guidance_hints_shown_total,
         }
 
     def _record_behavioral_evidence(
@@ -254,5 +296,8 @@ class NotebookChecklist:
     def _next_hint(self) -> str | None:
         for key in MANDATORY_CHECKS:
             if key not in self.covered:
+                return key
+        for key in GUIDANCE_ONLY_CHECKS:
+            if key not in self.guidance_shown:
                 return key
         return None
