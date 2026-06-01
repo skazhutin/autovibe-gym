@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-01 (local web dashboard added: FastAPI + Vite/React/TS in `dashboard/`)
+**Last updated:** 2026-06-02 (dashboard launch/checklist/responsive hardening verified end-to-end)
 **Phase:** Hardening after first full H200 recon + building the local control-panel dashboard for configuring/launching/inspecting runs.
 
 ---
@@ -75,10 +75,10 @@ Last local run:
 python -m pytest --cov=gym --cov=experiments --cov=scripts --cov-report=term-missing --cov-report=xml --cov-fail-under=70
 ```
 
-Result after hardening changes: `154 passed, 2 skipped`, coverage `75.26%`.
-The two skipped tests are Docker integration tests skipped only in the local
-Windows environment because Docker CLI is unavailable; GitHub Actions now builds
-`autovibe-gym-sandbox:latest` before pytest so these run in CI.
+Result after dashboard hardening: `198 passed`, coverage `74.70%`.
+The Docker-backed notebook integration test ran locally in this Windows
+workspace and passed. GitHub Actions remains the source of truth for the Linux
+sandbox image build.
 
 ---
 
@@ -169,12 +169,27 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 - **Verified:** `npm run build` clean; FastAPI serves over HTTP; Vite dev proxies
   `/api`; real MLflow runs/datasets render; launcher builds correct commands;
   simulated mid-run workspace confirms live step/checklist/notebook/logs reads.
+- **Hardened after merge:** Windows/default Python detection now resolves the
+  repo `.venv\Scripts\python.exe` (with `sys.executable` fallback), single-shot
+  and repeated single-shot launches use the correct planned step counts, MLflow
+  mode/progress/status mapping handles `baseline_single_shot` and repeated
+  attempts, placeholder zero scores from failed submits are hidden, checklist
+  detail/list coverage both fall back to authoritative MLflow coverage when
+  episode artifacts are absent, and the run detail donut uses that authoritative
+  coverage value. The responsive shell now switches to compact top navigation on
+  mobile so the dashboard has no page-level horizontal overflow.
+- **Verified after hardening:** backend API smoke confirms `/api/health`,
+  `/api/runs`, and `/api/runs/{id}/checklist` agree on `11/12` and `0.88` for a
+  legacy MLflow run without episode events; browser smoke on desktop/mobile
+  confirms `11/12`, `88%`, no stale `92%`, no console errors, and no page-level
+  horizontal overflow.
 - **Run:** `dashboard/server/run.sh` (API :8000) + `cd dashboard/web && npm i && npm run dev` (:5173).
 
 ## Blocked / Needs Decision
 
-- Local Docker CLI is unavailable in this Windows workspace, so Docker kernel
-  integration is verified in GitHub Actions rather than locally.
+- Local Docker CLI is available in this Windows workspace as of 2026-06-02; the
+  Docker-backed notebook integration test passed locally. GitHub Actions still
+  verifies the Linux sandbox image path.
 - Existing `GymEnv` remains for compatibility, but new iterative experiments
   should use `NotebookGymEnv`.
 - Repository owner still needs to confirm the `main` ruleset requires the
@@ -196,6 +211,7 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 
 | Date | Change |
 |------|--------|
+| 2026-06-02 | Dashboard polish: fixed Windows Python discovery for run launches, stabilized single-shot/repeated launch progress, reconciled checklist list/detail coverage for legacy MLflow runs, hid placeholder failed-submit scores, pinned `scikit-learn==1.7.2` in `pyproject.toml`, added dashboard regression tests, and fixed mobile layout overflow |
 | 2026-06-01 | Dashboard run fixes: dedup the MLflow twin of a live launch by run-name; reconcile orphaned 'running' metas (server reload mid-run) against MLflow; live per-second duration on client; cap launch threads (OMP/BLAS/MKL + AUTOVIBE_SANDBOX_THREADS, sequential joblib) to stop CPU/fan spikes; `run.sh` reload off by default (gym `.py` artifact writes were restarting uvicorn mid-run) |
 | 2026-06-01 | Added local web dashboard (`dashboard/`): FastAPI backend (MLflow runs, episode-artifact parsing, datasets/models CRUD, subprocess run launcher) + Vite/React/TS frontend with all 8 screens on the T-Bank design system |
 | 2026-06-01 | Fixed single-shot/repeated multishot H200 failure modes: raw-input pipeline prompts, shared label-coercion scoring, sequential joblib in the subprocess/Docker executor |

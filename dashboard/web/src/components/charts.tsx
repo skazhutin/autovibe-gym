@@ -22,11 +22,12 @@ export function Sparkline({ data, w = 120, h = 34, tone = "accent" }: { data: nu
   );
 }
 
-export function Donut({ value, total, size = 120 }: { value: number; total: number; size?: number }) {
+export function Donut({ value, total, size = 120, percent }: { value: number; total: number; size?: number; percent?: number | null }) {
   const stroke = 12;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
-  const pct = total > 0 ? value / total : 0;
+  const rawPct = percent ?? (total > 0 ? value / total : 0);
+  const pct = Math.max(0, Math.min(1, rawPct));
   return (
     <div className="ring" style={{ width: size, height: size }}>
       <svg width={size} height={size}>

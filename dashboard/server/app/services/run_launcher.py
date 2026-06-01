@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import os
 import signal
+import shutil
 import subprocess
 import time
 import uuid
@@ -34,6 +35,18 @@ _MODE_TO_RUNNER = {
     "iterative": ("experiments.run_gym", "iterative_no_checklist"),
     "gym": ("experiments.run_gym", "gym_with_checklist"),
 }
+
+
+def _planned_steps(cfg: dict[str, Any]) -> int | None:
+    if cfg["mode"] == "single":
+        return 1
+    if cfg["mode"] == "repeated":
+        return cfg.get("shots")
+    return cfg.get("maxSteps")
+
+
+def _python_available(python_bin: str) -> bool:
+    return Path(python_bin).exists() or shutil.which(python_bin) is not None
 
 
 def _run_dir(local_id: str) -> Path:
@@ -133,6 +146,8 @@ def launch(cfg: dict[str, Any]) -> dict[str, Any]:
     s = get_settings()
     if cfg["mode"] not in _MODE_TO_RUNNER:
         raise ValueError(f"Unsupported mode: {cfg['mode']}")
+    if not _python_available(s.python_bin):
+        raise ValueError(f"Python interpreter not found: {s.python_bin}")
     local_id = "live_" + uuid.uuid4().hex[:8]
     cfg["runName"] = f"dash_{local_id}"
     run_dir = _run_dir(local_id)
@@ -157,7 +172,7 @@ def launch(cfg: dict[str, Any]) -> dict[str, Any]:
         "checklistTotal": 12,
         "errors": 0,
         "step": 0,
-        "steps": cfg.get("maxSteps"),
+        "steps": _planned_steps(cfg),
         "tokIn": 0,
         "tokOut": 0,
         "startedMs": int(time.time() * 1000),
@@ -290,6 +305,8 @@ def _apply_summary(meta: dict[str, Any], summary: dict[str, Any] | None) -> None
         meta["checklist"] = round(cov * meta.get("checklistTotal", 12))
     if summary.get("steps_used") is not None:
         meta["step"] = int(summary["steps_used"])
+    elif summary.get("attempts_used") is not None:
+        meta["step"] = int(summary["attempts_used"])
     if summary.get("error_count") is not None:
         meta["errors"] = int(summary["error_count"])
     meta["tokIn"] = int(summary.get("input_tokens", meta.get("tokIn", 0)) or 0)

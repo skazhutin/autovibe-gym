@@ -7,6 +7,7 @@ runners and reads their MLflow tracking store).
 from __future__ import annotations
 
 import os
+import sys
 from functools import lru_cache
 from pathlib import Path
 
@@ -16,13 +17,28 @@ SERVER_DIR = Path(__file__).resolve().parents[1]
 DATA_DIR = SERVER_DIR / "data"
 
 
+def default_python_bin(repo_root: Path = REPO_ROOT) -> str:
+    """Resolve the project venv Python on both Unix and Windows checkouts."""
+    venv = repo_root / ".venv"
+    candidates = [
+        venv / "bin" / "python",
+        venv / "Scripts" / "python.exe",
+    ]
+    if os.name == "nt":
+        candidates.reverse()
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+    return sys.executable
+
+
 class Settings:
     """Resolved paths and tunables. Mutable subset is persisted to settings.json."""
 
     def __init__(self) -> None:
         self.repo_root: Path = REPO_ROOT
         self.datasets_dir: Path = REPO_ROOT / "datasets"
-        self.python_bin: str = os.getenv("AUTOVIBE_PYTHON", str(REPO_ROOT / ".venv" / "bin" / "python"))
+        self.python_bin: str = os.getenv("AUTOVIBE_PYTHON", default_python_bin(REPO_ROOT))
         # MLflow store (file-backed sqlite at repo root by default).
         self.mlflow_db: Path = REPO_ROOT / "mlflow.db"
         self.mlflow_tracking_uri: str = os.getenv(
