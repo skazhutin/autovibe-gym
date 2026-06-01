@@ -318,6 +318,12 @@ def main():
     parser.add_argument("--mode", choices=["local", "cloud"], default="local")
     parser.add_argument("--model", default=None, help="Override LLM_MODEL env var")
     parser.add_argument("--max-tokens", type=int, default=None)
+    parser.add_argument(
+        "--max-steps",
+        type=int,
+        default=None,
+        help="Override total step budget (default: sum of stage budgets + 5).",
+    )
     parser.add_argument("--sandbox-timeout", type=int, default=None)
     parser.add_argument("--experiment-name", default="autovibe-gym")
     parser.add_argument("--run-name", default=None)
@@ -335,7 +341,10 @@ def main():
         seed=args.seed,
     )
     metric_fn, metric_name = resolve_metric(splits.metadata, splits.train[splits.target_col])
-    max_steps = sum(s["budget"] for s in stages) + 5  # small buffer for submit
+    # Total step budget defaults to the sum of stage budgets plus a small
+    # buffer for the submit action; --max-steps overrides it for CLI parity
+    # with the other run_* scripts and the batch matrix runner.
+    max_steps = args.max_steps or (sum(s["budget"] for s in stages) + 5)
 
     dataset_name = _dataset_name(splits, args.dataset_dir or args.dataset)
     model_name = args.model or os.getenv("LLM_MODEL", "Qwen/Qwen2.5-Coder-7B-Instruct")
