@@ -34,6 +34,29 @@ def _default_kernel_backend() -> KernelExecutionBackend:
     return LocalJupyterKernelBackend()
 
 
+def _score_with_coercion(metric_fn: Any, y_true: Any, preds: Any) -> float:
+    """Score predictions, tolerating label-encoding dtype mismatches.
+
+    Agents routinely LabelEncode the target and return integer predictions while
+    the held-out split keeps the original (e.g. string) labels. Mirror the legacy
+    GymEnv coercion chain: try directly, then cast to the target dtype, then map
+    integer predictions through the sorted class labels.
+    """
+    try:
+        return float(metric_fn(y_true, preds))
+    except (ValueError, TypeError):
+        import numpy as np
+        import pandas as pd
+
+        try:
+            preds_cast = pd.Series(preds).astype(y_true.dtype).values
+            return float(metric_fn(y_true, preds_cast))
+        except Exception:
+            classes = sorted(y_true.unique())
+            preds_mapped = np.array([classes[int(p)] for p in preds])
+            return float(metric_fn(y_true, preds_mapped))
+
+
 MODEL_INTERFACE_MESSAGE = (
     "[MODEL CHECK] The selected candidate is not submit-ready because it does "
     "not provide a predict(X) method."
@@ -318,9 +341,11 @@ class NotebookGymEnv:
         )
         return self._record_observation(observation)
 
-    def validate_candidate(self, model_var: str = "model") -> Observation:
+    def validate_candidate(
+        self, model_var: str = "model", *, allow_dirty: bool = False
+    ) -> Observation:
         self.validation_calls_total += 1
-        blocker = self._clean_state_blocker()
+        blocker = None if allow_dirty else self._clean_state_blocker()
         if blocker is not None:
             observation = self._observation(
                 action="validate",
@@ -368,7 +393,7 @@ class NotebookGymEnv:
         y_val = self.state.val[self.state.target_col]
         try:
             preds = model.predict(X_val)
-            validation_metric = float(self.metric_fn(y_val, preds))
+            validation_metric = _score_with_coercion(self.metric_fn, y_val, preds)
         except Exception:
             self.model_check_failure_count += 1
             observation = self._observation(
@@ -427,8 +452,10 @@ class NotebookGymEnv:
         )
         return self._record_observation(observation)
 
-    def submit_by_name(self, model_var: str = "model") -> Observation:
-        blocker = self._clean_state_blocker()
+    def submit_by_name(
+        self, model_var: str = "model", *, allow_dirty: bool = False
+    ) -> Observation:
+        blocker = None if allow_dirty else self._clean_state_blocker()
         if blocker is not None:
             observation = self._observation(
                 action="submit",
@@ -438,13 +465,17 @@ class NotebookGymEnv:
             return self._record_observation(observation)
 
         candidate = self.candidates.latest()
-        if (
+        mismatch = (
             candidate is None
             or not candidate.validation_success
             or candidate.model_var != model_var
-            or candidate.notebook_revision != self.notebook.revision
-            or candidate.clean_run_id != self.last_clean_run_id
-        ):
+        )
+        if not allow_dirty:
+            mismatch = mismatch or (
+                candidate.notebook_revision != self.notebook.revision
+                or candidate.clean_run_id != self.last_clean_run_id
+            )
+        if mismatch:
             observation = self._observation(
                 action="submit",
                 feedback_items=[
@@ -467,7 +498,7 @@ class NotebookGymEnv:
             X_test = self.state.test.drop(columns=[self.state.target_col])
             y_test = self.state.test[self.state.target_col]
             preds = model.predict(X_test)
-            score = float(self.metric_fn(y_test, preds))
+            score = _score_with_coercion(self.metric_fn, y_test, preds)
             candidate.submitted = True
             self.state.submitted = True
             self.private_summary["final_test_metric"] = score
@@ -511,6 +542,78 @@ class NotebookGymEnv:
                 model_var=model_var,
             )
             return self._record_observation(observation)
+
+    # Variable names agents commonly bind their fitted estimator to, tried in
+    # order during host-side finalization when the agent never validated.
+    _CANDIDATE_VAR_NAMES = (
+        "model",
+        "best_model",
+        "final_model",
+        "clf",
+        "classifier",
+        "pipeline",
+        "best_pipeline",
+        "best_estimator",
+        "estimator",
+        "reg",
+        "regressor",
+    )
+
+    def finalize(self) -> Observation | None:
+        """Best-effort host-controlled finalization when the agent stops without
+        a valid submit (e.g. the step budget is exhausted).
+
+        Implements the TZ fallback contract: if the agent never submitted, the
+        environment selects a candidate itself. It submits an already-validated
+        candidate for the current clean run, or otherwise performs a clean
+        ``restart_and_run_all`` and validates the first predict-capable
+        candidate variable found in the notebook before submitting it.
+
+        Returns the terminal :class:`Observation`, or ``None`` when no
+        reproducible candidate could be produced (e.g. the clean run fails).
+        """
+        if self.state.submitted:
+            return None
+
+        # 1. Reuse an existing validated candidate for the current clean run.
+        candidate = self.candidates.latest()
+        if (
+            candidate is not None
+            and candidate.validation_success
+            and not self.dirty_since_clean_run
+            and candidate.clean_run_id == self.last_clean_run_id
+            and candidate.notebook_revision == self.notebook.revision
+        ):
+            return self.submit_by_name(candidate.model_var)
+
+        # 2. Live-kernel fallback (tried before any restart, which would wipe the
+        #    kernel). The agent often has a working fitted estimator in the live
+        #    kernel even when the accumulated notebook cannot replay cleanly.
+        #    The candidate is still tested on raw validation and raw test rows, so
+        #    raw-input correctness is preserved; only the full-notebook
+        #    reproducibility guarantee is relaxed to avoid a null outcome.
+        live = self._finalize_from_candidate_vars(allow_dirty=True)
+        if live is not None:
+            return live
+
+        # 3. Last resort: a clean restart_and_run_all, then validate + submit.
+        if self.dirty_since_clean_run or self.last_clean_run_id is None:
+            self.restart_and_run_all()
+            if self.dirty_since_clean_run:
+                return None  # clean run failed; nothing reproducible to submit
+        return self._finalize_from_candidate_vars(allow_dirty=False)
+
+    def _finalize_from_candidate_vars(self, *, allow_dirty: bool) -> Observation | None:
+        for model_var in self._CANDIDATE_VAR_NAMES:
+            self.validate_candidate(model_var, allow_dirty=allow_dirty)
+            latest = self.candidates.latest()
+            if (
+                latest is not None
+                and latest.validation_success
+                and latest.model_var == model_var
+            ):
+                return self.submit_by_name(model_var, allow_dirty=allow_dirty)
+        return None
 
     def get_summary(self) -> dict:
         error_count = sum(1 for observation in self.state.history if observation.stderr.strip())

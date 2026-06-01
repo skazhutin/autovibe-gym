@@ -453,3 +453,47 @@ for path in sorted(Path(".").rglob("*")):
                 hits.append(rel)
 print("\\n".join(hits))
 """.strip()
+
+
+def test_score_with_coercion_handles_label_encoding():
+    from sklearn.metrics import f1_score
+
+    from gym.notebook_env import _score_with_coercion
+
+    def metric(y_true, y_pred):
+        return f1_score(y_true, y_pred, average="macro")
+
+    y_true = pd.Series(["a", "b", "a", "c"])
+    int_preds = [0, 1, 0, 2]  # LabelEncoded predictions against string labels
+    assert _score_with_coercion(metric, y_true, int_preds) == 1.0
+
+
+def test_finalize_submits_live_kernel_model_without_clean_run(tmp_path):
+    env = _make_env(tmp_path)
+    try:
+        # Train a picklable sklearn candidate that predicts on raw rows, leaving
+        # the notebook dirty (the agent never ran restart_and_run_all / validate
+        # / submit). The 'color' string column is dropped inside the pipeline.
+        cell = (
+            "from sklearn.pipeline import Pipeline\n"
+            "from sklearn.compose import ColumnTransformer\n"
+            "from sklearn.tree import DecisionTreeClassifier\n"
+            "X = train_df.drop(columns=[target_col])\n"
+            "y = train_df[target_col]\n"
+            "pre = ColumnTransformer([('num', 'passthrough', ['x'])], remainder='drop')\n"
+            "model = Pipeline([('pre', pre), ('clf', DecisionTreeClassifier(random_state=0))])\n"
+            "model.fit(X, y)\n"
+        )
+        env.step(Action.add_cell_action(cell, cell_type="code", execute=True))
+        assert env.dirty_since_clean_run is True
+        assert env.candidates.latest() is None
+
+        observation = env.finalize()
+        assert observation is not None
+        assert observation.submitted is True
+
+        summary = env.get_summary()
+        assert summary.get("valid_submit") is True
+        assert summary.get("final_test_metric") is not None
+    finally:
+        env.close()
