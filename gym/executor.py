@@ -147,6 +147,10 @@ class CodeExecutor:
             "AUTOVIBE_SANDBOX=1",
             "--env",
             "TMPDIR=/tmp",
+            "--env",
+            "JOBLIB_MULTIPROCESSING=0",
+            "--env",
+            "LOKY_MAX_CPU_COUNT=1",
         ]
         if self.disable_network:
             command.extend(["--network", "none"])
@@ -245,6 +249,12 @@ class CodeExecutor:
             "AUTOVIBE_SANDBOX": "1",
         })
         env.update(thread_limit_env())
+        # The sandbox blocks socket and process-spawning syscalls for isolation,
+        # so sklearn/joblib n_jobs=-1 (loky/multiprocessing) crashes while
+        # starting workers. Force the sequential joblib backend; training then
+        # runs in-process and code using n_jobs no longer fails.
+        env["JOBLIB_MULTIPROCESSING"] = "0"
+        env["LOKY_MAX_CPU_COUNT"] = "1"
         return env
 
     @staticmethod
