@@ -23,6 +23,7 @@ from experiments.mlflow_config import configure_mlflow_tracking
 from gym.datasets import load_dataset_splits, resolve_metric
 from gym.executor import CodeExecutor
 from gym.llm import default_model_name, make_llm_client
+from gym.scoring import score_with_coercion
 
 if load_dotenv is not None:
     load_dotenv()
@@ -30,7 +31,16 @@ if load_dotenv is not None:
 SYSTEM_PROMPT = """You are an expert data scientist. Solve the ML task completely in one Python code block.
 Available variables: train_df, val_df, target_col, pd, np.
 Do NOT access test data.
-At the end of your code, assign your best trained model to a variable called `model`.
+
+Requirements for the final model:
+- Wrap ALL preprocessing (encoding, scaling, imputation) inside a single
+  scikit-learn Pipeline / ColumnTransformer and assign that fitted Pipeline to
+  `model`, so `model.predict(df)` works on raw, unprocessed DataFrame rows.
+  Do NOT transform features outside the model — the hidden test set is raw.
+- Keep any hyperparameter search small (cv<=3, few candidates) so it finishes
+  quickly; n_jobs=-1 is allowed.
+- Assign your best trained Pipeline to a variable called `model`.
+
 Output only a single ```python ... ``` block, nothing else."""
 
 
@@ -145,7 +155,7 @@ def main():
                 X_test = test.drop(columns=[target_col])
                 y_test = test[target_col]
                 preds = model_obj.predict(X_test)
-                test_metric = float(metric_fn(y_test, preds))
+                test_metric = score_with_coercion(metric_fn, y_test, preds)
             except Exception as exc:
                 stderr += f"\n[submit error] {exc}"
 

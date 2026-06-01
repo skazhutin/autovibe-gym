@@ -34,27 +34,7 @@ def _default_kernel_backend() -> KernelExecutionBackend:
     return LocalJupyterKernelBackend()
 
 
-def _score_with_coercion(metric_fn: Any, y_true: Any, preds: Any) -> float:
-    """Score predictions, tolerating label-encoding dtype mismatches.
-
-    Agents routinely LabelEncode the target and return integer predictions while
-    the held-out split keeps the original (e.g. string) labels. Mirror the legacy
-    GymEnv coercion chain: try directly, then cast to the target dtype, then map
-    integer predictions through the sorted class labels.
-    """
-    try:
-        return float(metric_fn(y_true, preds))
-    except (ValueError, TypeError):
-        import numpy as np
-        import pandas as pd
-
-        try:
-            preds_cast = pd.Series(preds).astype(y_true.dtype).values
-            return float(metric_fn(y_true, preds_cast))
-        except Exception:
-            classes = sorted(y_true.unique())
-            preds_mapped = np.array([classes[int(p)] for p in preds])
-            return float(metric_fn(y_true, preds_mapped))
+from .scoring import score_with_coercion as _score_with_coercion
 
 
 MODEL_INTERFACE_MESSAGE = (
