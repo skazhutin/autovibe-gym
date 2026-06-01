@@ -1,7 +1,7 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-05-29 (docs sync: TZ.md, PROTOCOL.md fallback contract, EXPERIMENT_REPORT)
-**Phase:** COMPLETE. All infrastructure merged (PR #13). 158 tests passing. Awaiting notebook-era experiment runs on H200.
+**Last updated:** 2026-06-01 (H200 recon run: surfaced sandbox/threading/CLI issues; first round of fixes)
+**Phase:** Hardening after first full H200 recon. All 4 run types × 2 cloud models executed on `example_student_dropout` (+ `example_room_occupancy`); fixing the blockers found.
 
 ---
 
@@ -82,6 +82,41 @@ Windows environment because Docker CLI is unavailable; GitHub Actions now builds
 
 ---
 
+## H200 Recon Findings (2026-06-01)
+
+First full run of all modes × both cloud models (`deepseek-v4-flash`, `gemma-4-26b`)
+on the H200 server. Cloud API (`llm.letovo.site`) exposes only these two models —
+no Qwen yet (curator's Qwen3-32B suggestion needs local vLLM serving).
+
+Fixed in this PR:
+
+- **OpenBLAS / OpenMP thread exhaustion.** The subprocess sandbox env and the
+  local Jupyter kernel env set no thread caps. On the many-core server this aborts
+  model training with `OpenBLAS: Memory allocation failed` (subprocess backend) and
+  xgboost ctypes `DataIter` crashes (notebook kernel). Now capped via
+  `thread_limit_env()` in `executor.py`, `_minimal_kernel_env()`, and the Docker
+  kernel `--env` block (overridable with `AUTOVIBE_SANDBOX_THREADS`).
+- **`run_fixed.py` CLI parity.** It rejected `--max-steps` (used by every other
+  runner and the matrix), crashing the fixed-transition runs with exit 2. Added.
+- **scikit-learn replay skew.** Candidate pickles were written in the sandbox image
+  (sklearn 1.7.2) and read on the host venv (1.8.0) → `InconsistentVersionWarning`.
+  Pinned `scikit-learn==1.7.2` so the image and host resolve identically.
+
+Still open (need server-side iteration, not in this PR):
+
+- **Notebook gym/iterative modes never produce a `test_metric`.** Every gym/iter run
+  ended `forced_submit=true`, `best_validation_metric=null`, `test_metric=null` — the
+  agent never reaches a successful `validate`, so the strict forced-submit fallback
+  finds no candidate. Likely a mix of training crashes (now mitigated by thread caps)
+  and the agent not emitting/landing a `validate` action. Re-run after this PR to
+  re-measure; if still null, loosen submit parsing (curator suggestion) and inspect
+  traces of a near-SOTA model.
+- **deepseek-v4-flash baseline/multishot write broken code** (GridSearchCV errors →
+  `submit_failed`); gemma baseline/multishot succeed (0.739 / 0.741). Prompt tuning.
+- **Sandbox image name.** Default is `autovibe-gym-sandbox:latest`; the server only
+  had `autovibe-gym:latest` built, and rootless Docker can't pull from docker.io.
+  Server setup task: build the image under the expected tag.
+
 ## Blocked / Needs Decision
 
 - Local Docker CLI is unavailable in this Windows workspace, so Docker kernel
@@ -107,6 +142,7 @@ Windows environment because Docker CLI is unavailable; GitHub Actions now builds
 
 | Date | Change |
 |------|--------|
+| 2026-06-01 | H200 recon: capped BLAS/OMP threads in sandbox+kernel, added `run_fixed --max-steps`, pinned scikit-learn==1.7.2; documented open gym-submit issue |
 | 2026-05-29 | Hardened notebook privacy artifacts, Docker kernel path/port handling, step-budget blocking, and deterministic CI sandbox image build |
 | 2026-05-29 | Implemented ContainerJupyterKernelBackend: Docker sandbox with internal network, read-only rootfs, and dropped capabilities |
 | 2026-05-29 | Rebasing Jupyter branch on updated `origin/main` and preserving LiteLLM/Groq provider support |
