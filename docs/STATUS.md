@@ -1,7 +1,7 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-01 (gym test_metric=null root-caused and fixed: robust action parsing + host-side finalize + label coercion)
-**Phase:** Hardening after first full H200 recon. All 4 run types × 2 cloud models executed on `example_student_dropout` (+ `example_room_occupancy`); fixing the blockers found.
+**Last updated:** 2026-06-01 (single-shot/repeated multishot H200 blockers addressed: raw-input pipelines, shared label coercion, sequential joblib)
+**Phase:** Hardening after first full H200 recon. All 4 run types × 2 cloud models executed on `example_student_dropout` (+ `example_room_occupancy`); fixing the blockers found and preparing the next full rerun.
 
 ---
 
@@ -36,8 +36,8 @@ test, sandbox, and logging gaps.
 | File | Status | Notes |
 |------|--------|-------|
 | `run_gym.py` | Done | uses `NotebookGymEnv`, logs notebook/process/private metrics, artifacts to MLflow |
-| `run_baseline.py` | Done | single-shot control preserved; missing score is not logged as zero |
-| `run_multishot.py` | Done | logged as `repeated_single_shot`; not the fair checklist control |
+| `run_baseline.py` | Done | single-shot control preserved; prompts require raw-DataFrame pipelines; missing score is not logged as zero |
+| `run_multishot.py` | Done | logged as `repeated_single_shot`; prompts require raw-DataFrame pipelines; not the fair checklist control |
 | `run_fixed.py` | Done | fixed-transition control preserved; failed submit is not logged as real score 0.0 |
 | `compare.py` | Done | handles missing metrics without zero substitution |
 
@@ -123,10 +123,25 @@ Gym `test_metric=null` — root-caused and fixed (next PR, branch
 - **Verified:** a dirty-kernel, label-encoded model now finalizes to
   `final_test_metric=0.7247` f1_macro on `student_dropout` (vs baseline 0.739).
 
+Single-shot / repeated multishot failures — addressed in this PR (branch
+`dev/claude/oneshot-multishot-fix`):
+
+- **Raw hidden-test input mismatch.** Baseline/multishot prompts now require a
+  fitted scikit-learn `Pipeline` / `ColumnTransformer` assigned to `model`, so
+  `model.predict(raw_df)` works on raw validation and hidden-test rows instead
+  of relying on notebook-side preprocessing state.
+- **Label dtype mismatch.** The label-coercion scoring helper is now shared by
+  `NotebookGymEnv`, `run_baseline.py`, and `run_multishot.py`, so label-encoded
+  integer predictions can be scored against string/categorical targets.
+- **Joblib worker crashes in sandbox.** The subprocess/Docker executor forces
+  sequential joblib/loky execution (`JOBLIB_MULTIPROCESSING=0`,
+  `LOKY_MAX_CPU_COUNT=1`), preventing `n_jobs=-1` searches from failing when
+  process spawning is restricted.
+- **Pending verification:** rerun the H200 matrix to confirm DeepSeek
+  baseline/multishot no longer end as `submit_failed`.
+
 Still open (need server-side iteration):
 
-- **deepseek-v4-flash baseline/multishot write broken code** (GridSearchCV errors →
-  `submit_failed`); gemma baseline/multishot succeed (0.739 / 0.741). Prompt tuning.
 - **Sandbox image name.** Default is `autovibe-gym-sandbox:latest`; the server only
   had `autovibe-gym:latest` built, and rootless Docker can't pull from docker.io.
   Server setup task: build the image under the expected tag.
@@ -147,7 +162,7 @@ Still open (need server-side iteration):
 
 1. [x] Все PR смержены в main
 2. [x] TZ.md, PROTOCOL.md, EXPERIMENT_REPORT.md синхронизированы
-3. [ ] Запустить `python -m experiments.run_matrix --mode local` на H200 → получить notebook-era experiment results
+3. [ ] Запустить `python -m experiments.run_matrix --mode local` на H200 → получить notebook-era experiment results и подтвердить fixed single-shot/repeated multishot сабмиты
 4. [ ] Обновить EXPERIMENT_REPORT.md с новыми результатами после п.3
 
 ---
@@ -156,6 +171,7 @@ Still open (need server-side iteration):
 
 | Date | Change |
 |------|--------|
+| 2026-06-01 | Fixed single-shot/repeated multishot H200 failure modes: raw-input pipeline prompts, shared label-coercion scoring, sequential joblib in the subprocess/Docker executor |
 | 2026-06-01 | Fixed gym `test_metric=null`: robust action parsing (tool-call tokens), host-side `finalize()` live-kernel fallback, label-encoding coercion in validate/submit, viz libs + per-cell timeout + prompt steering; verified 0.7247 on student_dropout |
 | 2026-06-01 | H200 recon: capped BLAS/OMP threads in sandbox+kernel, added `run_fixed --max-steps`, pinned scikit-learn==1.7.2; documented open gym-submit issue |
 | 2026-05-29 | Hardened notebook privacy artifacts, Docker kernel path/port handling, step-budget blocking, and deterministic CI sandbox image build |
