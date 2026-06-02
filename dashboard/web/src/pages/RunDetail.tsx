@@ -8,6 +8,12 @@ import { Icon } from "../components/Icon";
 import { CodeBlock } from "../components/CodeBlock";
 import { Donut } from "../components/charts";
 
+const STEP_ICON: Record<string, string> = {
+  add_cell: "plus", update_cell: "edit", edit_cell: "edit", delete_cell: "trash",
+  run_cell: "play", restart_and_run_all: "refresh", inspect_notebook: "notebook",
+  validate: "check", submit: "check2",
+};
+
 const TABS = [
   { id: "notebook", label: "Ноутбук", icon: "notebook" },
   { id: "trajectory", label: "Траектория", icon: "route" },
@@ -71,7 +77,7 @@ function TrajectoryTab({ id, live }: { id: string; live: boolean }) {
         <div key={i} className="traj-step">
           <div className="traj-marker">
             <div className={`traj-dot ${s.action}`}>
-              {(s.action === "submit" || s.action === "validate") && <Icon name="check" size={10} strokeWidth={3} />}
+              <Icon name={STEP_ICON[s.kind ?? ""] ?? "notebook"} size={15} />
             </div>
           </div>
           <div className="traj-card">

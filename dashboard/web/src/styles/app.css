@@ -1043,14 +1043,14 @@ table.data tbody tr.clickable:hover {
 /* Trajectory tab */
 .traj { display: flex; flex-direction: column; }
 .traj-step { display: flex; gap: 14px; align-items: flex-start; position: relative; }
-.traj-marker { flex: none; width: 16px; display: flex; justify-content: center; padding-top: 5px; }
-/* solid filled node — cannot look clipped/ghosted */
-.traj-dot { width: 16px; height: 16px; border-radius: 50%; background: var(--text-faint); display: grid; place-items: center; color: #fff; flex: none; position: relative; z-index: 1; }
-.traj-dot.validate { background: var(--blue); }
-.traj-dot.submit { background: var(--green); }
+.traj-marker { flex: none; width: 30px; display: flex; justify-content: center; padding-top: 1px; }
+/* soft tinted badge with a centered line icon */
+.traj-dot { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; flex: none; position: relative; z-index: 1; background: var(--surface-2); color: var(--text-dim); border: 1px solid var(--border); }
+.traj-dot.validate { background: color-mix(in srgb, var(--blue) 14%, transparent); color: var(--blue); border-color: transparent; }
+.traj-dot.submit { background: var(--green-bg); color: var(--green); border-color: var(--green-border); }
 /* connector spans the full row down to the next step's node */
 .traj-step:not(:last-child)::after {
-  content: ""; position: absolute; left: 8px; top: 22px; bottom: -12px;
+  content: ""; position: absolute; left: 15px; top: 32px; bottom: -12px;
   width: 2px; transform: translateX(-50%); background: var(--border); z-index: 0;
 }
 .traj-card { flex: 1; min-width: 0; border: 1px solid var(--border); border-radius: var(--r-md); padding: 14px; margin-bottom: 12px; }

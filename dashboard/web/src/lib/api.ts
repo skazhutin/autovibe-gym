@@ -89,6 +89,7 @@ export type FeedbackChannel =
 export interface TrajectoryStep {
   step: number;
   action: "code" | "validate" | "submit";
+  kind?: string;
   title: string;
   code: string;
   budgetRemaining?: number;

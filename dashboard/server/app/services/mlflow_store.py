@@ -285,7 +285,7 @@ def trajectory(episode_dir: Path | None) -> list[dict[str, Any]]:
             feedback.append({"ch": "runtime", "text": entry["stderr"].strip()[:2000]})
         ui_action = "submit" if action == "submit" else ("validate" if action == "validate" else "code")
         steps.append({
-            "step": entry.get("step"), "action": ui_action, "title": title,
+            "step": entry.get("step"), "action": ui_action, "kind": action, "title": title,
             "code": entry.get("code") or "", "budgetRemaining": entry.get("budget_remaining"),
             "feedback": feedback,
         })
