@@ -150,5 +150,11 @@ GET  /runs/{id}/events (SSE/poll for live)
   single backend; verify served module via curl localhost:5173/src/... and kind via the :5173 proxy.
 - next ideas: open draft PR; optional gym-side incremental artifact flush for true live streaming;
   run a real end-to-end launch once an LLM endpoint is reachable.
-</content>
-</invoke>
+
+## Local executor fix (PR #29, branch dev/claude/local-executor-fix)
+single-shot/repeated use legacy GymEnv executor (gym/executor.py backends "subprocess"|"docker").
+.env had AUTOVIBE_EXECUTOR_BACKEND=docker → Mac w/o Docker → "Cannot connect to Docker daemon" →
+no candidate. Fix: _build_env (local) sets AUTOVIBE_EXECUTOR_BACKEND=subprocess + AUTOVIBE_KERNEL_
+BACKEND=local (override AUTOVIBE_DASHBOARD_EXECUTOR). Verified docker error gone. Remaining single-
+shot fail "Pipeline has no attribute predict" = LLM output quality (unfitted/partial pipeline), not
+infra — would need baseline prompt tuning.
