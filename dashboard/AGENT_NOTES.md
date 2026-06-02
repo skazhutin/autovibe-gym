@@ -131,6 +131,15 @@ GET  /runs/{id}/events (SSE/poll for live)
   (remote_* keys in settings.json, password masked in GET, never wiped by masked PUT). POST
   /api/settings/remote-check probes ssh+repo+gym. NOTE: couldn't test against real server — 10.8.52.11
   unreachable from agent sandbox (only user's Mac has VPN). Needs user testing + ssh key.
+  EXECUTION SELECTOR (done): New Run has «на сервере (SSH) / на компьютере»; LaunchPayload.execution
+  overrides global toggle; run_launcher.launch computes want_remote; remote_exec.is_configured() gates it.
+  MODELS: team gemma/deepseek seed at llm.letovo.site (INTERNAL host — only on VPN; off-VPN → ConnectTimeout).
+  Cerebras gpt-oss-120b added LOCALLY to data/models.json (gitignored, key not in git) as a public option.
+  CHECKLIST CONSISTENCY (done, branch dev/claude/checklist-coverage-fix): tab coverage/count = recorded
+  checklist_coverage metric (== banner); episode_progress uses same round(coverage*total) formula; and
+  exactly `closed` items render green (replay-detected first, then canonical order) so ticks == number.
+  DOCS RULE: keep docs/STATUS.md changelog + this file updated every change (user asked). main is protected;
+  fixes go on dev/claude/* branches via PR.
 - next ideas: open draft PR; optional gym-side incremental artifact flush for true live streaming;
   run a real end-to-end launch once an LLM endpoint is reachable.
 </content>

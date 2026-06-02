@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-02 (dashboard launch/checklist/responsive hardening verified end-to-end)
+**Last updated:** 2026-06-02 (dashboard: local/server execution modes, SSH remote exec, live updates, checklist consistency)
 **Phase:** Hardening after first full H200 recon + building the local control-panel dashboard for configuring/launching/inspecting runs.
 
 ---
@@ -160,6 +160,14 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 - **Frontend** (`dashboard/web`, Vite+React+TS): all 8 screens built to the
   T-Bank design tokens — Dashboard, New Run, Runs, Run Detail (5 tabs), Compare,
   Datasets (+detail/upload/delete), Models, Settings. Light/dark theme + accent.
+- **Execution modes:** each run picks where the gym executes — **local** (on the
+  machine running the backend; only the LLM call is remote — works off-VPN) or
+  **server (SSH)** (gym + kernels run on the GPU server, results synced back via
+  rsync; configured in Settings). The site can also be served entirely from the
+  server (single-app mode) when a port is reachable.
+- **Models:** registry seeded with the team's gemma/deepseek on the shared LLM
+  server; any OpenAI-compatible endpoint (e.g. Cerebras/Groq/Gemini) can be added.
+  Header pill shows LLM server reachability.
 - **Live updates:** runs launch into a known `data/runs/<id>/workspace` dir; the
   gym already flushes public artifacts after every step, so while a run is in
   progress the dashboard reads that dir directly — step counter, checklist
@@ -211,6 +219,11 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 
 | Date | Change |
 |------|--------|
+| 2026-06-02 | Dashboard checklist consistency: tab count uses the recorded `checklist_coverage` (single source of truth, matches the run banner) and exactly that many items render green; aligned the live-banner count to the same formula |
+| 2026-06-02 | Dashboard execution modes: per-run selector «на сервере (SSH) / на компьютере» on New Run (overrides the global default); local mode runs gym on the machine and calls the remote LLM (works off-VPN) |
+| 2026-06-02 | Dashboard remote execution: run the gym on the GPU server over SSH while the site stays local (`services/remote_exec.py`: ssh/rsync launch + artifact sync + run-summary parse; key auth or optional expect password); configurable in Settings with a connectivity probe |
+| 2026-06-02 | Dashboard single-app server mode: FastAPI serves the built SPA (one process) so the whole dashboard can run on the server; added `serve.sh` and deploy docs |
+| 2026-06-02 | Dashboard live updates: launches write to a known workspace dir and the backend reads in-flight artifacts, so step/checklist/notebook/trajectory/logs advance during a run (2.5s polling); models registry seeded with team gemma/deepseek; header pill switched to LLM "Сервер онлайн/офлайн" |
 | 2026-06-02 | Dashboard polish: fixed Windows Python discovery for run launches, stabilized single-shot/repeated launch progress, reconciled checklist list/detail coverage for legacy MLflow runs, hid placeholder failed-submit scores, pinned `scikit-learn==1.7.2` in `pyproject.toml`, added dashboard regression tests, and fixed mobile layout overflow |
 | 2026-06-01 | Dashboard run fixes: dedup the MLflow twin of a live launch by run-name; reconcile orphaned 'running' metas (server reload mid-run) against MLflow; live per-second duration on client; cap launch threads (OMP/BLAS/MKL + AUTOVIBE_SANDBOX_THREADS, sequential joblib) to stop CPU/fan spikes; `run.sh` reload off by default (gym `.py` artifact writes were restarting uvicorn mid-run) |
 | 2026-06-01 | Added local web dashboard (`dashboard/`): FastAPI backend (MLflow runs, episode-artifact parsing, datasets/models CRUD, subprocess run launcher) + Vite/React/TS frontend with all 8 screens on the T-Bank design system |
