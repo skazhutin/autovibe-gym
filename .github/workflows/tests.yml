@@ -33,7 +33,7 @@ jobs:
       - name: Prepare example datasets
         run: |
           python scripts/prepare_datasets.py --list
-          python scripts/prepare_datasets.py --suite example_datasets
+          python scripts/prepare_datasets.py
           python scripts/prepare_datasets.py --list
 
       - name: Build Jupyter sandbox image

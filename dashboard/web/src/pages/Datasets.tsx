@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, type Dataset, type DatasetStatus } from "../lib/api";
 import { useAsync } from "../lib/hooks";
-import { Button, Card, EmptyState, Field, Modal, Skeleton, Spinner, Tag } from "../components/ui";
+import { Button, Card, EmptyState, Field, Modal, SelectDropdown, Skeleton, Spinner, Tag } from "../components/ui";
 import { Icon } from "../components/Icon";
 import { DatasetWizard } from "../components/datasets/DatasetWizard";
 
@@ -14,19 +14,19 @@ const STATUS_TONE: Record<DatasetStatus, "green" | "blue" | "red"> = {
   unprepared: "red",
 };
 const STATUS_LABEL: Record<DatasetStatus, string> = {
-  prepared: "подготовлен",
-  partial: "частичный",
-  unprepared: "не подготовлен",
+  prepared: "prepared",
+  partial: "partial",
+  unprepared: "unprepared",
 };
 const TASK_LABEL: Record<string, string> = {
-  classification: "классификация",
-  regression: "регрессия",
-  auto: "авто",
-  unknown: "неизвестно",
+  classification: "classification",
+  regression: "regression",
+  auto: "auto",
+  unknown: "unknown",
 };
 const METRIC_GOAL_LABEL: Record<string, string> = {
-  max: "больше лучше",
-  min: "меньше лучше",
+  max: "maximize",
+  min: "minimize",
 };
 
 function statusOf(d: Dataset): DatasetStatus {
@@ -67,7 +67,6 @@ function DatasetCard({ d, onOpen, onDelete }: { d: Dataset; onOpen: () => void; 
       <div className="spread">
         <div style={{ minWidth: 0 }}>
           <div className="ds-title">{d.name}</div>
-          <div className="mono faint dataset-id">{d.id}</div>
         </div>
         <Tag tone={STATUS_TONE[status]}>{STATUS_LABEL[status]}</Tag>
       </div>
@@ -76,15 +75,15 @@ function DatasetCard({ d, onOpen, onDelete }: { d: Dataset; onOpen: () => void; 
         <Tag tone={d.taskType === "regression" ? "blue" : d.taskType === "classification" ? "accent" : "neutral"}>{taskLabel}</Tag>
         <Tag mono>{METRIC_GOAL_LABEL[d.metricGoal ?? "max"] ?? d.metricGoal}</Tag>
         {(d.tags ?? []).slice(0, 3).map((tag) => <Tag key={tag} tone="neutral">{tag}</Tag>)}
-        {d.warningsCount ? <Tag tone="red">{d.warningsCount} предупрежд.</Tag> : null}
+        {d.warningsCount ? <Tag tone="red">{d.warningsCount} warnings</Tag> : null}
       </div>
       <div className="ds-stats rich">
-        <div className="ds-stat"><span className="k">строки</span><span className="v">{d.rows ? d.rows.toLocaleString() : "-"}</span></div>
-        <div className="ds-stat"><span className="k">признаки</span><span className="v">{d.cols || "-"}</span></div>
+        <div className="ds-stat"><span className="k">rows</span><span className="v">{d.rows ? d.rows.toLocaleString() : "-"}</span></div>
+        <div className="ds-stat"><span className="k">features</span><span className="v">{d.cols || "-"}</span></div>
         <div className="ds-stat"><span className="k">target</span><span className="v">{d.target}</span></div>
-        <div className="ds-stat"><span className="k">метрика</span><span className="v">{d.metric}</span></div>
+        <div className="ds-stat"><span className="k">metric</span><span className="v">{d.metric}</span></div>
         <div className="ds-stat"><span className="k">seed</span><span className="v">{d.seed ?? 42}</span></div>
-        <div className="ds-stat"><span className="k">источник</span><span className="v">{sourceText(d)}</span></div>
+        <div className="ds-stat"><span className="k">source</span><span className="v">{sourceText(d)}</span></div>
       </div>
       <div className="split-pills">
         {splitTag(d.hasTrain, "train")}
@@ -114,9 +113,6 @@ export default function Datasets() {
   const [taskFilter, setTaskFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [metricFilter, setMetricFilter] = useState("all");
-  const [splitFilter, setSplitFilter] = useState("all");
-  const [sourceFilter, setSourceFilter] = useState("");
-  const [warningsFilter, setWarningsFilter] = useState("all");
   const [sort, setSort] = useState<SortKey>("updatedDesc");
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -129,12 +125,6 @@ export default function Datasets() {
       if (taskFilter !== "all" && (d.taskType ?? "unknown") !== taskFilter) return false;
       if (statusFilter !== "all" && status !== statusFilter) return false;
       if (metricFilter !== "all" && d.metric !== metricFilter) return false;
-      if (splitFilter === "train" && !d.hasTrain) return false;
-      if (splitFilter === "val" && !d.hasVal) return false;
-      if (splitFilter === "test" && !d.hasTest) return false;
-      if (sourceFilter.trim() && !sourceText(d).toLowerCase().includes(sourceFilter.trim().toLowerCase())) return false;
-      if (warningsFilter === "with" && !(d.warningsCount && d.warningsCount > 0)) return false;
-      if (warningsFilter === "without" && (d.warningsCount ?? 0) > 0) return false;
       return true;
     });
     const time = (v?: string | null) => (v ? new Date(v).getTime() : 0);
@@ -150,7 +140,7 @@ export default function Datasets() {
       if (sort === "colsDesc") return (b.cols ?? 0) - (a.cols ?? 0);
       return (a.cols ?? 0) - (b.cols ?? 0);
     });
-  }, [data, metricFilter, query, sort, sourceFilter, splitFilter, statusFilter, taskFilter, warningsFilter]);
+  }, [data, metricFilter, query, sort, statusFilter, taskFilter]);
 
   async function del() {
     if (!toDelete) return;
@@ -169,7 +159,7 @@ export default function Datasets() {
     setWizardOpen(false);
     setNotice(`Датасет ${ds.name} создан.`);
     reload();
-    nav(`/datasets/${ds.id}`);
+    nav(`/problems/${ds.id}`);
   }
 
   if (loading && !data) {
@@ -179,11 +169,8 @@ export default function Datasets() {
   return (
     <div className="stack" style={{ gap: 18 }}>
       <div className="spread dataset-center-head">
-        <div>
-          <h2 className="page-title">Центр датасетов</h2>
-          <div className="muted">Управление исходными файлами, подготовленными train/val/test-сплитами, метаданными, источниками и заметками для агента AutoML Gym.</div>
-        </div>
-        <Button variant="primary" icon="plus" onClick={() => setWizardOpen(true)}>Добавить датасет</Button>
+        <div />
+        <Button variant="primary" icon="plus" onClick={() => setWizardOpen(true)}>Новая проблема</Button>
       </div>
 
       {notice && <div className="success-line"><Icon name="check" size={15} /> {notice}</div>}
@@ -192,20 +179,24 @@ export default function Datasets() {
         <div className="filters" style={{ marginBottom: 0 }}>
           <div className="search">
             <Icon name="search" size={16} />
-            <input className="input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Поиск по имени, ID, целевой колонке, метрике, источнику, тегам..." />
+            <input className="input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Поиск по проблемам..." />
           </div>
-          <select className="select-sm" value={sort} onChange={(e) => setSort(e.target.value as SortKey)}>
-            <option value="updatedDesc">Сначала обновленные</option>
-            <option value="updatedAsc">Сначала давно обновленные</option>
-            <option value="createdDesc">Сначала новые</option>
-            <option value="createdAsc">Сначала старые</option>
-            <option value="az">А-Я</option>
-            <option value="za">Я-А</option>
-            <option value="rowsDesc">Больше строк</option>
-            <option value="rowsAsc">Меньше строк</option>
-            <option value="colsDesc">Больше признаков</option>
-            <option value="colsAsc">Меньше признаков</option>
-          </select>
+          <SelectDropdown
+            value={sort}
+            onChange={setSort}
+            options={[
+              { value: "updatedDesc", label: "Сначала обновлённые" },
+              { value: "updatedAsc",  label: "Давно не обновлялись" },
+              { value: "createdDesc", label: "Сначала новые" },
+              { value: "createdAsc",  label: "Сначала старые" },
+              { value: "az",          label: "А → Я" },
+              { value: "za",          label: "Я → А" },
+              { value: "rowsDesc",    label: "Больше строк" },
+              { value: "rowsAsc",     label: "Меньше строк" },
+              { value: "colsDesc",    label: "Больше признаков" },
+              { value: "colsAsc",     label: "Меньше признаков" },
+            ]}
+          />
           <Button variant="ghost" icon="sliders" onClick={() => setFiltersOpen((v) => !v)}>Фильтры</Button>
         </div>
         {filtersOpen && (
@@ -213,9 +204,9 @@ export default function Datasets() {
             <Field label="Задача">
               <select className="input" value={taskFilter} onChange={(e) => setTaskFilter(e.target.value)}>
                 <option value="all">все</option>
-                <option value="classification">классификация</option>
-                <option value="regression">регрессия</option>
-                <option value="unknown">неизвестно</option>
+                <option value="classification">classification</option>
+                <option value="regression">regression</option>
+                <option value="unknown">unknown</option>
               </select>
             </Field>
             <Field label="Статус">
@@ -232,22 +223,6 @@ export default function Datasets() {
                 {metrics.map((m) => <option key={m} value={m}>{m}</option>)}
               </select>
             </Field>
-            <Field label="Нужный сплит">
-              <select className="input" value={splitFilter} onChange={(e) => setSplitFilter(e.target.value)}>
-                <option value="all">все</option>
-                <option value="train">есть train</option>
-                <option value="val">есть val</option>
-                <option value="test">есть test</option>
-              </select>
-            </Field>
-            <Field label="Источник содержит"><input className="input" value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} /></Field>
-            <Field label="Предупреждения">
-              <select className="input" value={warningsFilter} onChange={(e) => setWarningsFilter(e.target.value)}>
-                <option value="all">все</option>
-                <option value="with">с предупреждениями</option>
-                <option value="without">без предупреждений</option>
-              </select>
-            </Field>
           </div>
         )}
       </Card>
@@ -262,7 +237,7 @@ export default function Datasets() {
       ) : (
         <div className="dataset-grid">
           {filtered.map((d) => (
-            <DatasetCard key={d.id} d={d} onOpen={() => nav(`/datasets/${d.id}`)} onDelete={() => setToDelete(d)} />
+            <DatasetCard key={d.id} d={d} onOpen={() => nav(`/problems/${d.id}`)} onDelete={() => setToDelete(d)} />
           ))}
         </div>
       )}

@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-02 (dashboard: Dataset Center localization, metadata cleanup, and source polish)
+**Last updated:** 2026-06-03 (PR #34: Dataset Center hardening, route compatibility, and CI fix)
 **Phase:** Hardening after first full H200 recon + building the local control-panel dashboard for configuring/launching/inspecting runs.
 
 ---
@@ -75,7 +75,7 @@ Last local run:
 python -m pytest --cov=gym --cov=experiments --cov=scripts --cov-report=term-missing --cov-report=xml --cov-fail-under=70
 ```
 
-Result after dashboard hardening: `198 passed`, coverage `74.70%`.
+Result after PR #34 hardening: `212 passed`.
 The Docker-backed notebook integration test ran locally in this Windows
 workspace and passed. GitHub Actions remains the source of truth for the Linux
 sandbox image build.
@@ -196,6 +196,13 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
   `raw`, `train/val/test`, `Target column`), dataset suite/group metadata is
   removed from dashboard/project flows, empty sources display `-`, and example
   configs now carry the repository creation timestamp plus UCI source metadata.
+- **Dataset Center PR #34 hardening:** URL downloads now reject localhost/private
+  targets and unsafe redirects, archive extraction budgets count decompressed
+  gzip bytes, failed create-from-config attempts clean their temporary dataset
+  root, root-format legacy datasets keep root `meta.json` edits, JSONL raw
+  uploads are covered by tests, `/datasets` remains compatible with the new
+  `/problems` navigation, and CI dataset preparation uses the current
+  `prepare_datasets.py` CLI.
 - **Verified after hardening:** backend API smoke confirms `/api/health`,
   `/api/runs`, and `/api/runs/{id}/checklist` agree on `11/12` and `0.88` for a
   legacy MLflow run without episode events; browser smoke on desktop/mobile
@@ -229,6 +236,7 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 
 | Date | Change |
 |------|--------|
+| 2026-06-03 | PR #34 Dataset Center hardening: fixed CI dataset preparation, restored finite upload limits, blocked localhost/private URL downloads and unsafe redirects, enforced gzip decompressed-size limits, made dataset creation atomic, preserved legacy root `meta.json` edits, added JSONL/SSRF/cleanup regressions, and kept `/datasets` route compatibility after the `/problems` UI rename |
 | 2026-06-02 | Dataset Center polish: one-column dataset cards, Russian UI with common ML terms preserved, dataset suite/group metadata removed from project flows, example configs now include repository-created timestamp and UCI sources, and empty sources display `-` |
 | 2026-06-02 | Dataset Center full workflow: backend staged uploads/URL downloads/safe archive extraction/table preview/create-from-config/config editing, React Dataset Center search/filter/sort, full creation wizard, seven-tab detail page, docs and backend tests |
 | 2026-06-02 | Single-shot/repeated now show code + checklist coverage in the dashboard: the legacy runners emit a synthesized episode (solution.ipynb, notebook_events, feedback_trace, summary) into `--workspace-dir` and log `checklist_coverage` measured from the generated code, so Notebook/Trajectory/Checklist tabs populate for these modes too |

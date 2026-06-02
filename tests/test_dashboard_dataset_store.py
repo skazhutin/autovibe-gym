@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import gzip
 import json
 import zipfile
 from types import SimpleNamespace
@@ -60,6 +61,22 @@ def test_archive_extraction_rejects_path_traversal(isolated_store):
         dataset_store.extract_upload_archive(uploaded["upload_id"], "uploaded/bad.zip")
 
 
+def test_gzip_extraction_enforces_decompressed_size_limit(isolated_store, monkeypatch):
+    monkeypatch.setattr(dataset_store, "_MAX_EXTRACTED_BYTES", 100)
+    uploaded = dataset_store.upload_file("large.csv.gz", gzip.compress(b"x" * 500))
+
+    with pytest.raises(ValueError, match="maximum allowed size"):
+        dataset_store.extract_upload_archive(uploaded["upload_id"], "uploaded/large.csv.gz")
+
+
+def test_url_upload_rejects_local_and_private_targets(isolated_store):
+    with pytest.raises(ValueError, match="localhost"):
+        dataset_store.upload_from_url("http://localhost/data.csv")
+
+    with pytest.raises(ValueError, match="private/internal"):
+        dataset_store.upload_from_url("http://127.0.0.1/data.csv")
+
+
 def test_csv_upload_preview_returns_columns_rows_and_missing_counts(isolated_store):
     uploaded = dataset_store.upload_file("data.csv", _csv_bytes(rows=6))
 
@@ -69,6 +86,42 @@ def test_csv_upload_preview_returns_columns_rows_and_missing_counts(isolated_sto
     assert preview["shown"] == 3
     assert preview["total"] == 6
     assert preview["missing"]["target"] == 0
+
+
+def test_jsonl_upload_can_preview_and_create_raw_split(isolated_store):
+    rows = [
+        {"x": i, "segment": "a" if i % 2 else "b", "target": i % 2}
+        for i in range(20)
+    ]
+    payload = "\n".join(json.dumps(row) for row in rows).encode("utf-8")
+    uploaded = dataset_store.upload_file("raw.jsonl", payload)
+
+    preview = dataset_store.preview_upload(uploaded["upload_id"], "uploaded/raw.jsonl", limit=4)
+    ds = dataset_store.create_from_config(
+        {
+            "id": "jsonl-demo",
+            "name": "JSONL Demo",
+            "upload_id": uploaded["upload_id"],
+            "task": {
+                "task_type": "classification",
+                "target_col": "target",
+                "metric_name": "f1_macro",
+            },
+            "splits": {
+                "mode": "raw_split",
+                "raw_path": "uploaded/raw.jsonl",
+                "ratios": {"train": 0.6, "val": 0.2, "test": 0.2},
+                "seed": 11,
+                "shuffle": True,
+                "stratify": "off",
+            },
+        }
+    )
+
+    assert preview["columns"] == ["x", "segment", "target"]
+    assert preview["shown"] == 4
+    assert ds["prepared"] is True
+    assert (isolated_store.datasets_dir / "jsonl-demo" / "prepared" / "train.csv").exists()
 
 
 def test_create_dataset_from_one_raw_table_writes_splits_config_and_meta(isolated_store):
@@ -111,6 +164,23 @@ def test_create_dataset_from_one_raw_table_writes_splits_config_and_meta(isolate
     assert meta["metric_name"] == "f1_macro"
     assert cfg["status"] == "prepared"
     assert cfg["raw_files"][0]["path"].startswith("raw/uploaded/")
+
+
+def test_failed_create_from_config_removes_partial_dataset_dir(isolated_store):
+    uploaded = dataset_store.upload_file("raw.csv", _csv_bytes(rows=6))
+
+    with pytest.raises(ValueError, match="Target column"):
+        dataset_store.create_from_config(
+            {
+                "id": "bad-target",
+                "name": "Bad Target",
+                "upload_id": uploaded["upload_id"],
+                "task": {"task_type": "classification", "target_col": "missing", "metric_name": "f1_macro"},
+                "splits": {"mode": "raw_split", "raw_path": "uploaded/raw.csv"},
+            }
+        )
+
+    assert not (isolated_store.datasets_dir / "bad-target").exists()
 
 
 def test_create_dataset_from_prepared_files(isolated_store):
@@ -189,6 +259,24 @@ def test_old_prepared_meta_dataset_still_describes_correctly(isolated_store):
     assert ds["name"] == "Legacy"
     assert ds["target"] == "target"
     assert ds["rows"] == 6
+
+
+def test_legacy_root_dataset_edit_does_not_create_shadow_prepared_meta(isolated_store):
+    root = isolated_store.datasets_dir / "legacy-root"
+    root.mkdir()
+    for split in ("train", "val", "test"):
+        pd.DataFrame({"x": [1, 2], "target": [0, 1]}).to_csv(root / f"{split}.csv", index=False)
+    (root / "meta.json").write_text(
+        json.dumps({"name": "Legacy Root", "target_col": "target", "metric_name": "f1_macro"}),
+        encoding="utf-8",
+    )
+
+    updated = dataset_store.update_meta("legacy-root", {"desc": "edited"})
+
+    assert updated is not None
+    assert updated["prepared"] is True
+    assert updated["rows"] == 6
+    assert not (root / "prepared" / "meta.json").exists()
 
 
 def test_empty_source_displays_dash(isolated_store):

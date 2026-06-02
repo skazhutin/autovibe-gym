@@ -29,6 +29,8 @@ export default function App() {
         <Route path="compare" element={<Compare />} />
         <Route path="datasets" element={<Datasets />} />
         <Route path="datasets/:id" element={<DatasetDetail />} />
+        <Route path="problems" element={<Datasets />} />
+        <Route path="problems/:id" element={<DatasetDetail />} />
         <Route path="models" element={<Models />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>

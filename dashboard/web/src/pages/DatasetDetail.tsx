@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, type AgentNotes, type Dataset, type DatasetConfig, type DatasetSource } from "../lib/api";
 import { useAsync } from "../lib/hooks";
@@ -13,20 +14,20 @@ const TABS = [
   { id: "splits", label: "Сплиты", icon: "layers" },
   { id: "config", label: "Конфиг", icon: "settings" },
   { id: "sources", label: "Источники", icon: "external" },
-  { id: "notes", label: "Заметки агента", icon: "notebook" },
+  { id: "notes", label: "Заметки агенту", icon: "notebook" },
 ];
 
 type Split = "train" | "val" | "test";
 const STATUS_LABEL: Record<string, string> = {
-  prepared: "подготовлен",
-  partial: "частичный",
-  unprepared: "не подготовлен",
+  prepared: "prepared",
+  partial: "partial",
+  unprepared: "unprepared",
 };
 const TASK_LABEL: Record<string, string> = {
-  auto: "авто",
-  classification: "классификация",
-  regression: "регрессия",
-  unknown: "неизвестно",
+  auto: "auto",
+  classification: "classification",
+  regression: "regression",
+  unknown: "unknown",
 };
 const METRIC_GOAL_LABEL: Record<string, string> = {
   max: "больше лучше",
@@ -36,6 +37,44 @@ const SPLIT_MODE_LABEL: Record<string, string> = {
   raw_split: "raw split",
   prepared_files: "готовые файлы",
 };
+
+const METRICS = {
+  classification: ["f1_macro", "f1_weighted", "accuracy", "roc_auc", "logloss"],
+  regression: ["neg_rmse", "rmse", "mae", "r2"],
+  auto: ["f1_macro", "f1_weighted", "neg_rmse", "rmse"],
+};
+
+function inferGoal(metric: string): "max" | "min" {
+  const m = metric.toLowerCase();
+  if (m.startsWith("neg_")) return "max";
+  return ["rmse", "rmsle", "mae", "mse", "logloss"].includes(m) ? "min" : "max";
+}
+
+function Info({ text }: { text: string }) {
+  const [visible, setVisible] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const dotRef = useRef<HTMLSpanElement>(null);
+  function show() {
+    const rect = dotRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setPos({ top: rect.top, left: rect.left + rect.width / 2 });
+    setVisible(true);
+  }
+  return (
+    <>
+      <span ref={dotRef} className="info-dot" aria-label={text} onMouseEnter={show} onMouseLeave={() => setVisible(false)}>?</span>
+      {visible && createPortal(<div className="tooltip-portal" style={{ top: pos.top, left: pos.left }}>{text}</div>, document.body)}
+    </>
+  );
+}
+
+function FieldInfo({ label, info, hint, children, required }: { label: ReactNode; info: string; hint?: string; children: ReactNode; required?: boolean }) {
+  return (
+    <Field label={<span className="field-info-label">{label}<Info text={info} /></span>} hint={hint} required={required}>
+      {children}
+    </Field>
+  );
+}
 
 function sourceText(dataset: Dataset) {
   const value = dataset.source && dataset.source !== "-" ? dataset.source : dataset.sources?.[0]?.name || dataset.sources?.[0]?.url || "-";
@@ -208,21 +247,33 @@ function SplitsTab({ config }: { config: DatasetConfig | null }) {
 
 function ConfigTab({ id, config, onSaved }: { id: string; config: DatasetConfig | null; onSaved: () => void }) {
   const [form, setForm] = useState<DatasetConfig | null>(config);
+  const [tagsStr, setTagsStr] = useState((config?.tags ?? []).join(", "));
   const [busy, setBusy] = useState(false);
   const [ok, setOk] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  useEffect(() => setForm(config), [config]);
+  useEffect(() => {
+    setForm(config);
+    setTagsStr((config?.tags ?? []).join(", "));
+  }, [config]);
   if (!form) return <Skeleton h={240} />;
   const task = form.task;
   const setTask = (patch: Partial<typeof task>) => setForm((s) => s && { ...s, task: { ...s.task, ...patch } });
+  const metricSuggestions = useMemo(
+    () => METRICS[task.task_type as keyof typeof METRICS] ?? METRICS.auto,
+    [task.task_type]
+  );
+  function updateMetric(value: string) {
+    setTask({ metric_name: value, metric_goal: inferGoal(value) });
+  }
   async function save() {
     const current = form;
     if (!current) return;
-    setBusy(true);
-    setOk(false);
-    setErr(null);
+    setBusy(true); setOk(false); setErr(null);
     try {
-      await api.updateDatasetConfig(id, current);
+      await api.updateDatasetConfig(id, {
+        ...current,
+        tags: tagsStr.split(",").map((s) => s.trim()).filter(Boolean),
+      });
       setOk(true);
       onSaved();
     } catch (e) {
@@ -235,29 +286,50 @@ function ConfigTab({ id, config, onSaved }: { id: string; config: DatasetConfig 
     <Card>
       <div className="stack" style={{ gap: 16 }}>
         <div className="grid-3">
-          <Field label="Имя"><input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
-          <Field label="Тип задачи">
+          <FieldInfo label="Тип задачи" info="classification — предсказание категорий (классов). regression — предсказание числа. auto — тип определится автоматически по данным.">
             <select className="input" value={task.task_type} onChange={(e) => setTask({ task_type: e.target.value as typeof task.task_type })}>
-              <option value="auto">авто</option><option value="classification">классификация</option><option value="regression">регрессия</option>
+              <option value="auto">auto</option>
+              <option value="classification">classification</option>
+              <option value="regression">regression</option>
             </select>
-          </Field>
-          <Field label="Цель метрики">
+          </FieldInfo>
+          <FieldInfo label="Target column" info="Название колонки с целевой переменной — то, что агент должен научиться предсказывать. Эта колонка никогда не включается в признаки." required>
+            <input className="input mono" value={task.target_col} onChange={(e) => setTask({ target_col: e.target.value })} placeholder="target" />
+          </FieldInfo>
+          <FieldInfo label="Metric goal" info="Направление оптимизации: maximize — чем больше, тем лучше (accuracy, f1); minimize — чем меньше, тем лучше (rmse, mae). Выводится автоматически из имени метрики.">
             <select className="input" value={task.metric_goal} onChange={(e) => setTask({ metric_goal: e.target.value as typeof task.metric_goal })}>
-              <option value="max">больше лучше</option><option value="min">меньше лучше</option>
+              <option value="max">maximize</option>
+              <option value="min">minimize</option>
             </select>
-          </Field>
-          <Field label="Target column"><input className="input mono" value={task.target_col} onChange={(e) => setTask({ target_col: e.target.value })} /></Field>
-          <Field label="Метрика"><input className="input mono" value={task.metric_name} onChange={(e) => setTask({ metric_name: e.target.value })} /></Field>
+          </FieldInfo>
+          <FieldInfo
+            label={<>Метрика <a className="docs-link" href="https://scikit-learn.org/stable/modules/model_evaluation.html" target="_blank" rel="noopener noreferrer">все метрики sklearn ↗</a></>}
+            info="Название метрики из sklearn.metrics. Считается на test после submit; агент видит только val. Примеры: f1_macro, accuracy, neg_rmse, roc_auc"
+            required
+          >
+            <input className="input mono" value={task.metric_name} onChange={(e) => updateMetric(e.target.value)} list="config-metric-suggestions" />
+            <datalist id="config-metric-suggestions">
+              {metricSuggestions.map((m) => <option key={m} value={m} />)}
+            </datalist>
+          </FieldInfo>
+          <div style={{ gridColumn: "span 2" }}>
+            <FieldInfo label="Теги" info="Ключевые слова через запятую — используются для поиска и фильтрации. Пример: tabular, benchmark, uci">
+              <input className="input" value={tagsStr} onChange={(e) => setTagsStr(e.target.value)} placeholder="tabular, benchmark" />
+            </FieldInfo>
+          </div>
         </div>
         <details className="disclosure">
           <summary>Расширенный конфиг</summary>
           <div className="grid-2" style={{ marginTop: 14 }}>
-            <Field label="ID-колонки"><input className="input mono" value={(task.id_columns ?? []).join(", ")} onChange={(e) => setTask({ id_columns: e.target.value.split(",").map((v) => v.trim()).filter(Boolean) })} /></Field>
-            <Field label="Игнорируемые колонки"><input className="input mono" value={(task.ignore_columns ?? []).join(", ")} onChange={(e) => setTask({ ignore_columns: e.target.value.split(",").map((v) => v.trim()).filter(Boolean) })} /></Field>
-            <Field label="Колонка весов"><input className="input mono" value={task.sample_weight_col ?? ""} onChange={(e) => setTask({ sample_weight_col: e.target.value || null })} /></Field>
-            <Field label="Group column"><input className="input mono" value={task.group_col ?? ""} onChange={(e) => setTask({ group_col: e.target.value || null })} /></Field>
-            <Field label="Временная колонка"><input className="input mono" value={task.time_col ?? ""} onChange={(e) => setTask({ time_col: e.target.value || null })} /></Field>
-            <Field label="Положительный класс"><input className="input mono" value={task.positive_label ?? ""} onChange={(e) => setTask({ positive_label: e.target.value || null })} /></Field>
+            <FieldInfo label="ID-колонки" info="Колонки-идентификаторы (id, row_id) — автоматически исключаются из признаков. Через запятую.">
+              <input className="input mono" value={(task.id_columns ?? []).join(", ")} onChange={(e) => setTask({ id_columns: e.target.value.split(",").map((v) => v.trim()).filter(Boolean) })} placeholder="id, row_id" />
+            </FieldInfo>
+            <FieldInfo label="Игнорируемые колонки" info="Колонки, которые точно не должны стать признаками X — например, служебные поля или дубли target.">
+              <input className="input mono" value={(task.ignore_columns ?? []).join(", ")} onChange={(e) => setTask({ ignore_columns: e.target.value.split(",").map((v) => v.trim()).filter(Boolean) })} />
+            </FieldInfo>
+            <FieldInfo label="Разрешённые библиотеки" info="Ограничение набора инструментов агента. Пусто = разрешено всё. Через запятую.">
+              <input className="input mono" value={(task.allowed_libraries ?? []).join(", ")} onChange={(e) => setTask({ allowed_libraries: e.target.value.split(",").map((v) => v.trim()).filter(Boolean) })} placeholder="sklearn, xgboost" />
+            </FieldInfo>
           </div>
         </details>
         <div className="row">
@@ -288,7 +360,7 @@ function SourcesTab({ id, config, onSaved }: { id: string; config: DatasetConfig
   return (
     <div className="stack" style={{ gap: 12 }}>
       {sources.map((source, idx) => (
-        <Card key={idx}>
+        <Card key={idx} className="compact-card">
           <div className="spread" style={{ marginBottom: 12 }}>
             <strong>Источник {idx + 1}</strong>
             <Button size="sm" variant="ghost" icon="trash" onClick={() => setSources((s) => s.filter((_, i) => i !== idx))}>Удалить</Button>
@@ -298,6 +370,8 @@ function SourcesTab({ id, config, onSaved }: { id: string; config: DatasetConfig
             <Field label="URL"><input className="input" value={source.url ?? ""} onChange={(e) => update(idx, { url: e.target.value })} /></Field>
             <Field label="Лицензия"><input className="input" value={source.license ?? ""} onChange={(e) => update(idx, { license: e.target.value })} /></Field>
             <Field label="Цитирование"><input className="input" value={source.citation ?? ""} onChange={(e) => update(idx, { citation: e.target.value })} /></Field>
+            <Field label="Автор"><input className="input" value={source.author ?? ""} onChange={(e) => update(idx, { author: e.target.value })} /></Field>
+            <Field label="Организация"><input className="input" value={source.organization ?? ""} onChange={(e) => update(idx, { organization: e.target.value })} /></Field>
           </div>
           <Field label="Заметки"><textarea className="input" rows={2} value={source.notes ?? ""} onChange={(e) => update(idx, { notes: e.target.value })} /></Field>
         </Card>
@@ -312,12 +386,10 @@ function SourcesTab({ id, config, onSaved }: { id: string; config: DatasetConfig
 
 function AgentNotesTab({ id, config, onSaved }: { id: string; config: DatasetConfig | null; onSaved: () => void }) {
   const [notes, setNotes] = useState<AgentNotes | null>(config?.agent_notes ?? null);
-  const [cols, setCols] = useState("{}");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => {
     setNotes(config?.agent_notes ?? null);
-    setCols(JSON.stringify(config?.agent_notes?.column_descriptions ?? {}, null, 2));
   }, [config]);
   if (!notes) return <Skeleton h={220} />;
   const set = (patch: Partial<AgentNotes>) => setNotes((n) => n && { ...n, ...patch });
@@ -325,8 +397,7 @@ function AgentNotesTab({ id, config, onSaved }: { id: string; config: DatasetCon
     setBusy(true);
     setErr(null);
     try {
-      const parsed = JSON.parse(cols || "{}");
-      await api.updateDatasetConfig(id, { agent_notes: { ...notes, column_descriptions: parsed } } as Partial<DatasetConfig>);
+      await api.updateDatasetConfig(id, { agent_notes: notes } as Partial<DatasetConfig>);
       onSaved();
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
@@ -336,14 +407,21 @@ function AgentNotesTab({ id, config, onSaved }: { id: string; config: DatasetCon
   }
   return (
     <Card>
-      <div className="stack" style={{ gap: 14 }}>
-        <div className="warn-box">Эти поля могут быть видны LLM-агенту. Не добавляйте тестовые метки, скрытые ответы или утечки.</div>
-        <label className="check-row"><input type="checkbox" checked={notes.visible_to_agent} onChange={(e) => set({ visible_to_agent: e.target.checked })} /> Видно агенту</label>
-        <Field label="Описание задачи"><textarea className="input" rows={3} value={notes.task_description} onChange={(e) => set({ task_description: e.target.value })} /></Field>
-        <Field label="Структура данных"><textarea className="input" rows={3} value={notes.data_structure} onChange={(e) => set({ data_structure: e.target.value })} /></Field>
-        <Field label="JSON описаний колонок"><textarea className="input mono" rows={6} value={cols} onChange={(e) => setCols(e.target.value)} /></Field>
-        <Field label="Дополнительные комментарии"><textarea className="input" rows={3} value={notes.additional_comments} onChange={(e) => set({ additional_comments: e.target.value })} /></Field>
-        <Field label="Предупреждение об утечке"><textarea className="input" rows={2} value={notes.leakage_warning} onChange={(e) => set({ leakage_warning: e.target.value })} /></Field>
+      <div className="stack" style={{ gap: 16 }}>
+        <div className="warn-box">Эти поля могут быть видны LLM-агенту. Не добавляйте тестовые метки или скрытые ответы.</div>
+        <label className="check-row"><input type="checkbox" checked={notes.visible_to_agent} onChange={(e) => set({ visible_to_agent: e.target.checked })} /> Передавать заметки агенту</label>
+        <FieldInfo label="Описание задачи" info="Что нужно предсказать и зачем. Если включено 'Передавать агенту' — попадает в промпт как контекст задачи.">
+          <textarea className="input" rows={3} value={notes.task_description} onChange={(e) => set({ task_description: e.target.value })} />
+        </FieldInfo>
+        <FieldInfo label="Структура данных" info="Описание колонок: типы, форматы, особенности (пропуски, выбросы). Помогает агенту быстрее разобраться с данными.">
+          <textarea className="input" rows={3} value={notes.data_structure} onChange={(e) => set({ data_structure: e.target.value })} />
+        </FieldInfo>
+        <FieldInfo label="Дополнительные комментарии" info="Любые пояснения для агента: известные проблемы в данных, советы по feature engineering, особенности задачи.">
+          <textarea className="input" rows={3} value={notes.additional_comments} onChange={(e) => set({ additional_comments: e.target.value })} />
+        </FieldInfo>
+        <FieldInfo label="Предупреждения" info="Потенциальные источники data leakage или других проблем, о которых должен знать агент. Не указывайте тестовые ответы.">
+          <textarea className="input" rows={2} value={notes.leakage_warning} onChange={(e) => set({ leakage_warning: e.target.value })} />
+        </FieldInfo>
         <div className="row">
           <Button variant="primary" onClick={save} disabled={busy}>{busy ? <Spinner /> : "Сохранить заметки"}</Button>
           {err && <span className="error-inline">{err}</span>}
@@ -359,33 +437,73 @@ export default function DatasetDetail() {
   const [tab, setTab] = useState("overview");
   const { data, loading, reload } = useAsync(() => api.getDataset(id), [id]);
   const { data: config, loading: configLoading, reload: reloadConfig } = useAsync(() => api.getDatasetConfig(id), [id]);
+  const [editingName, setEditingName] = useState(false);
+  const [draftName, setDraftName] = useState("");
+  const titleInputRef = useRef<HTMLInputElement>(null);
 
   function refresh() {
     reload();
     reloadConfig();
   }
 
+  function startEditName() {
+    if (!data) return;
+    setDraftName(data.name);
+    setEditingName(true);
+    setTimeout(() => titleInputRef.current?.select(), 0);
+  }
+
+  async function commitName() {
+    const trimmed = draftName.trim();
+    setEditingName(false);
+    if (!trimmed || trimmed === data?.name) return;
+    try {
+      await api.updateDatasetConfig(id, { name: trimmed } as Partial<DatasetConfig>);
+      refresh();
+    } catch {}
+  }
+
+  function cancelName() {
+    setEditingName(false);
+  }
+
   if (loading && !data) return <Skeleton h={300} />;
-  if (!data) return <EmptyState icon="alert" title="Датасет не найден" action={<Button onClick={() => nav("/datasets")}>К датасетам</Button>} />;
+  if (!data) return <EmptyState icon="alert" title="Датасет не найден" action={<Button onClick={() => nav("/problems")}>К датасетам</Button>} />;
 
   return (
     <div>
-      <button className="back-link" onClick={() => nav("/datasets")}><Icon name="chevronLeft" size={16} /> Все датасеты</button>
+      <button className="back-link" onClick={() => nav("/problems")}><Icon name="chevronLeft" size={16} /> Все датасеты</button>
       <Card style={{ marginBottom: 20 }}>
-        <div className="spread">
-          <div>
-            <div className="ds-title" style={{ fontSize: 18 }}>{data.name}</div>
-            <div className="run-meta-line" style={{ margin: "10px 0 0" }}>
-              <Tag tone={data.status === "prepared" ? "green" : data.status === "partial" ? "blue" : "red"}>{STATUS_LABEL[data.status ?? (data.prepared ? "prepared" : "partial")]}</Tag>
-              <span className="mono faint">метрика: {data.metric}</span>
-              <span className="mono faint">target: {data.target}</span>
-              <span className="mono faint">путь: {data.datasetDir}</span>
+        <div className="spread" style={{ alignItems: "flex-start" }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+              {editingName ? (
+                <input
+                  ref={titleInputRef}
+                  className="input ds-title-input"
+                  value={draftName}
+                  onChange={(e) => setDraftName(e.target.value)}
+                  onBlur={commitName}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitName(); } if (e.key === "Escape") cancelName(); }}
+                  style={{ fontSize: 18, fontWeight: 600 }}
+                />
+              ) : (
+                <div className="ds-title ds-title-editable" style={{ fontSize: 18 }} onClick={startEditName} title="Нажмите, чтобы изменить название">{data.name}</div>
+              )}
+            </div>
+            <div className="stack" style={{ gap: 4 }}>
+              <span className="mono faint" style={{ fontSize: 13 }}>metric: <strong className="mono" style={{ color: "var(--text)" }}>{data.metric}</strong></span>
+              <span className="mono faint" style={{ fontSize: 13 }}>target: <strong className="mono" style={{ color: "var(--text)" }}>{data.target}</strong></span>
+              <span className="mono faint" style={{ fontSize: 13 }}>path: {data.datasetDir}</span>
             </div>
           </div>
-          <div className="chip-metrics">
-            <div className="chip-metric"><div><div className="cm-label">строки</div><div className="cm-val">{data.rows.toLocaleString()}</div></div></div>
-            <span className="vline" />
-            <div className="chip-metric"><div><div className="cm-label">признаки</div><div className="cm-val">{data.cols}</div></div></div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 12 }}>
+            <Tag tone={data.status === "prepared" ? "green" : data.status === "partial" ? "blue" : "red"}>{STATUS_LABEL[data.status ?? (data.prepared ? "prepared" : "partial")]}</Tag>
+            <div className="chip-metrics">
+              <div className="chip-metric"><div><div className="cm-label">строки</div><div className="cm-val">{data.rows.toLocaleString()}</div></div></div>
+              <span className="vline" />
+              <div className="chip-metric"><div><div className="cm-label">признаки</div><div className="cm-val">{data.cols}</div></div></div>
+            </div>
           </div>
         </div>
       </Card>

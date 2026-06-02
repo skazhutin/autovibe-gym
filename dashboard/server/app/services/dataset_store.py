@@ -8,9 +8,11 @@ The runner contract stays intentionally small: a runnable dataset has
 from __future__ import annotations
 
 import gzip
+import ipaddress
 import json
 import re
 import shutil
+import socket
 import tarfile
 import uuid
 import zipfile
@@ -18,7 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib.parse import unquote, urlparse
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 import pandas as pd
 import yaml
@@ -525,6 +527,43 @@ def _safe_filename(name: str) -> str:
     return clean or f"file-{uuid.uuid4().hex[:8]}"
 
 
+def _validate_download_url(url: str) -> str:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError("Only http(s) URLs are supported")
+    host = parsed.hostname
+    if not host:
+        raise ValueError("Download URL must include a hostname")
+    if host.lower() in {"localhost"} or host.lower().endswith(".localhost"):
+        raise ValueError("Downloads from localhost are not allowed")
+    try:
+        addresses = socket.getaddrinfo(host, parsed.port, type=socket.SOCK_STREAM)
+    except socket.gaierror as exc:
+        raise ValueError(f"Could not resolve download host: {host}") from exc
+    for family, _, _, _, sockaddr in addresses:
+        raw_ip = sockaddr[0]
+        try:
+            ip = ipaddress.ip_address(raw_ip)
+        except ValueError as exc:
+            raise ValueError(f"Could not parse resolved address for {host}: {raw_ip}") from exc
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_multicast
+            or ip.is_reserved
+            or ip.is_unspecified
+        ):
+            raise ValueError(f"Downloads from private/internal addresses are not allowed: {host}")
+    return url
+
+
+class _SafeRedirectHandler(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[no-untyped-def]
+        _validate_download_url(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
 def _file_info(path: Path, base: Path) -> dict[str, Any]:
     rel = path.resolve().relative_to(base.resolve()).as_posix()
     info: dict[str, Any] = {
@@ -587,11 +626,11 @@ def upload_file(filename: str, data: bytes, upload_id: str | None = None) -> dic
 
 
 def upload_from_url(url: str, upload_id: str | None = None) -> dict[str, Any]:
-    parsed = urlparse(url)
-    if parsed.scheme not in {"http", "https"}:
-        raise ValueError("Only http(s) URLs are supported")
-    req = Request(url, headers={"User-Agent": "autovibe-gym-dashboard/0.1"})
-    with urlopen(req, timeout=20) as resp:
+    safe_url = _validate_download_url(url)
+    parsed = urlparse(safe_url)
+    req = Request(safe_url, headers={"User-Agent": "autovibe-gym-dashboard/0.1"})
+    opener = build_opener(_SafeRedirectHandler)
+    with opener.open(req, timeout=20) as resp:
         chunks: list[bytes] = []
         total = 0
         while True:
@@ -638,9 +677,13 @@ def extract_upload_archive(upload_id: str, rel_path: str | None = None) -> dict[
     count = 0
     total = 0
 
-    def check_budget(size: int) -> None:
+    def check_file(size: int) -> None:
         nonlocal count, total
         count += 1
+        check_bytes(size)
+
+    def check_bytes(size: int) -> None:
+        nonlocal total
         total += max(size, 0)
         if count > _MAX_EXTRACTED_FILES:
             raise ValueError("Archive contains too many files")
@@ -660,7 +703,7 @@ def extract_upload_archive(upload_id: str, rel_path: str | None = None) -> dict[
                     mode = (info.external_attr >> 16) & 0o170000
                     if mode == 0o120000:
                         raise ValueError(f"Refusing to extract symlink: {info.filename}")
-                    check_budget(info.file_size)
+                    check_file(info.file_size)
                     target = _archive_target(extracted_root, info.filename)
                     target.parent.mkdir(parents=True, exist_ok=True)
                     with zf.open(info) as src, target.open("wb") as dst:
@@ -676,7 +719,7 @@ def extract_upload_archive(upload_id: str, rel_path: str | None = None) -> dict[
                         continue
                     if not member.isfile():
                         continue
-                    check_budget(member.size)
+                    check_file(member.size)
                     target.parent.mkdir(parents=True, exist_ok=True)
                     src = tf.extractfile(member)
                     if src is None:
@@ -686,9 +729,14 @@ def extract_upload_archive(upload_id: str, rel_path: str | None = None) -> dict[
         elif lower.endswith(".gz"):
             out_name = archive.name[:-3] or f"decompressed-{uuid.uuid4().hex[:6]}"
             target = _archive_target(extracted_root, out_name)
-            check_budget(archive.stat().st_size)
+            check_file(0)
             with gzip.open(archive, "rb") as src, target.open("wb") as dst:
-                shutil.copyfileobj(src, dst)
+                while True:
+                    chunk = src.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    check_bytes(len(chunk))
+                    dst.write(chunk)
         else:
             raise ValueError(f"Unsupported archive format: {archive.name}")
     return {"upload_id": upload_id, "files": _file_tree(root), "flat": _flat_files(root)}
@@ -891,10 +939,9 @@ def _status_from_prepared(frames: dict[str, pd.DataFrame]) -> str:
 
 def create_from_config(payload: dict[str, Any]) -> dict[str, Any]:
     dataset_id = sanitize_dataset_id(str(payload.get("id") or payload.get("name") or "dataset"))
-    dataset_root = _dataset_root(dataset_id)
-    if dataset_root.exists():
+    final_root = _dataset_root(dataset_id)
+    if final_root.exists():
         raise ValueError(f"Dataset '{dataset_id}' already exists.")
-    dataset_root.mkdir(parents=True)
     upload_id = payload.get("upload_id") or payload.get("uploadId")
     task = dict(payload.get("task") or {})
     splits = dict(payload.get("splits") or {})
@@ -910,6 +957,44 @@ def create_from_config(payload: dict[str, Any]) -> dict[str, Any]:
     if not metric:
         raise ValueError("Metric is required.")
 
+    dataset_root = _safe_child(get_settings().datasets_dir, f".{dataset_id}-{uuid.uuid4().hex[:8]}")
+    dataset_root.mkdir(parents=True)
+    try:
+        return _create_from_config_in_root(
+            payload=payload,
+            dataset_id=dataset_id,
+            dataset_root=dataset_root,
+            final_root=final_root,
+            upload_id=str(upload_id) if upload_id else None,
+            task=task,
+            splits=splits,
+            warnings=warnings,
+            target=target,
+            metric=metric,
+            task_type=task_type,
+            seed=seed,
+        )
+    except Exception:
+        if dataset_root.exists():
+            shutil.rmtree(dataset_root)
+        raise
+
+
+def _create_from_config_in_root(
+    *,
+    payload: dict[str, Any],
+    dataset_id: str,
+    dataset_root: Path,
+    final_root: Path,
+    upload_id: str | None,
+    task: dict[str, Any],
+    splits: dict[str, Any],
+    warnings: list[str],
+    target: str,
+    metric: str,
+    task_type: str,
+    seed: int,
+) -> dict[str, Any]:
     raw_files = _copy_upload_to_dataset(str(upload_id) if upload_id else None, dataset_root)
     mode = str(splits.get("mode") or "raw_split")
     source_paths: dict[str, str | None] = {}
@@ -1023,7 +1108,10 @@ def create_from_config(payload: dict[str, Any]) -> dict[str, Any]:
     }
     _write_json(_config_path(dataset_root), final_config)
     _write_json(dataset_root / "prepared" / "meta.json", _compatible_meta(final_config))
-    return describe_dataset(dataset_root, deep=True)
+    if final_root.exists():
+        raise ValueError(f"Dataset '{dataset_id}' already exists.")
+    dataset_root.rename(final_root)
+    return describe_dataset(final_root, deep=True)
 
 
 def get_dataset_config(dataset_id: str) -> dict[str, Any] | None:
@@ -1054,7 +1142,7 @@ def update_dataset_config(dataset_id: str, updates: dict[str, Any]) -> dict[str,
     merged["updated_at"] = _now_iso()
     merged["status"] = _status_from_files(root, _read_json(_meta_dir(root) / "meta.json"))
     _write_json(_config_path(root), merged)
-    _write_json(root / "prepared" / "meta.json", _compatible_meta(merged))
+    _write_json(_meta_dir(root) / "meta.json", _compatible_meta(merged))
     return describe_dataset(root, deep=True)
 
 

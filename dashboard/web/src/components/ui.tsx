@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Icon } from "./Icon";
 import type { RunStatus } from "../lib/api";
 import { STATUS_LABELS, formatDuration } from "../lib/format";
@@ -250,11 +250,66 @@ export function Modal({
   );
 }
 
+/* ---------------- SelectDropdown ---------------- */
+export function SelectDropdown<T extends string>({
+  value,
+  options,
+  onChange,
+}: {
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (v: T) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const current = options.find((o) => o.value === value);
+
+  useEffect(() => {
+    if (!open) return;
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  return (
+    <div className="select-dropdown" ref={ref}>
+      <button
+        className="select-dropdown-trigger"
+        onClick={() => setOpen((v) => !v)}
+        type="button"
+      >
+        <span>{current?.label ?? value}</span>
+        <Icon name="chevronDown" size={14} strokeWidth={2.2} />
+      </button>
+      {open && (
+        <div className="select-dropdown-menu">
+          {options.map((o) => (
+            <button
+              key={o.value}
+              className={`select-dropdown-item${o.value === value ? " selected" : ""}`}
+              onClick={() => { onChange(o.value); setOpen(false); }}
+              type="button"
+            >
+              {o.value === value && <Icon name="check" size={13} strokeWidth={2.5} />}
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ---------------- Form field ---------------- */
-export function Field({ label, hint, children }: { label: ReactNode; hint?: string; children: ReactNode }) {
+export function Field({ label, hint, children, required }: { label: ReactNode; hint?: string; children: ReactNode; required?: boolean }) {
   return (
     <label className="field">
-      <span className="field-label">{label}</span>
+      <span className="field-label">
+        {label}
+        {required && <span className="required-star" aria-hidden="true">*</span>}
+      </span>
       {hint && <span className="field-hint">{hint}</span>}
       {children}
     </label>
