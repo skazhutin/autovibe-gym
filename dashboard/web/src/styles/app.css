@@ -1042,13 +1042,13 @@ table.data tbody tr.clickable:hover {
 
 /* Trajectory tab */
 .traj { display: flex; flex-direction: column; }
-.traj-step { display: flex; gap: 14px; align-items: flex-start; }
-.traj-marker { position: relative; flex: none; display: flex; justify-content: center; padding-top: 2px; }
-.traj-dot { width: 26px; height: 26px; border-radius: 50%; background: var(--surface); border: 2px solid var(--border); display: grid; place-items: center; color: var(--text-dim); flex: none; z-index: 1; }
-/* connector line between markers */
-.traj-step:not(:last-child) .traj-marker::after {
-  content: ""; position: absolute; top: 28px; bottom: -12px; left: 50%;
-  width: 2px; transform: translateX(-50%); background: var(--border);
+.traj-step { display: flex; gap: 14px; align-items: flex-start; position: relative; }
+.traj-marker { flex: none; display: flex; justify-content: center; padding-top: 2px; }
+.traj-dot { width: 26px; height: 26px; border-radius: 50%; background: var(--surface); border: 2px solid var(--border); display: grid; place-items: center; color: var(--text-dim); flex: none; position: relative; z-index: 1; }
+/* connector spans the full row down to the next step's marker */
+.traj-step:not(:last-child)::after {
+  content: ""; position: absolute; left: 13px; top: 26px; bottom: -12px;
+  width: 2px; transform: translateX(-50%); background: var(--border); z-index: 0;
 }
 .traj-pip { width: 8px; height: 8px; border-radius: 50%; background: var(--text-faint); }
 .traj-dot.submit { border-color: var(--green); color: var(--green); }
