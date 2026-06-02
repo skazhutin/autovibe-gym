@@ -58,7 +58,7 @@ export default function Layout() {
     <div className="app">
       <aside className="sidebar">
         <div className="sidebar-logo">
-          <span className="mark">A</span>
+          <span className="mark"><Icon name="dumbbell" size={19} strokeWidth={2.3} /></span>
           AutoVibe Gym
         </div>
         <nav className="nav">

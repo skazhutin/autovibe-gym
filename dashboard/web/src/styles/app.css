@@ -8,15 +8,17 @@
 }
 .sidebar {
   width: var(--sidebar-w);
-  flex: 0 0 var(--sidebar-w);
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
   height: 100vh;
   background: var(--surface);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   padding: 18px 14px;
+  overflow-y: auto;
+  z-index: 30;
 }
 .sidebar-logo {
   display: flex;
@@ -106,6 +108,7 @@
 .main {
   flex: 1;
   min-width: 0;
+  margin-left: var(--sidebar-w);
   display: flex;
   flex-direction: column;
 }
@@ -1038,13 +1041,20 @@ table.data tbody tr.clickable:hover {
 .nb-submit { border-top: 1px solid var(--green-border); background: var(--green-bg); color: var(--green); padding: 10px 14px; font-weight: 600; font-size: 13px; }
 
 /* Trajectory tab */
-.traj { position: relative; padding-left: 30px; }
-.traj::before { content: ""; position: absolute; left: 11px; top: 6px; bottom: 6px; width: 2px; background: var(--border); }
-.traj-step { position: relative; margin-bottom: 18px; }
-.traj-dot { position: absolute; left: -30px; top: 0; width: 24px; height: 24px; border-radius: 50%; background: var(--surface); border: 2px solid var(--border); display: grid; place-items: center; color: var(--text-dim); }
-.traj-dot.submit { border-color: var(--green); color: var(--green); }
-.traj-dot.validate { border-color: var(--blue); color: var(--blue); }
-.traj-card { border: 1px solid var(--border); border-radius: var(--r-md); padding: 14px; }
+.traj { display: flex; flex-direction: column; }
+.traj-step { display: flex; gap: 14px; align-items: flex-start; position: relative; }
+.traj-marker { flex: none; width: 30px; display: flex; justify-content: center; padding-top: 1px; }
+/* soft tinted badge with a centered line icon */
+/* opaque fills so the connector line never shows through the badge */
+.traj-dot { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; flex: none; position: relative; z-index: 1; background: var(--surface-2); color: var(--text-dim); border: 1px solid var(--border); }
+.traj-dot.validate { background: color-mix(in srgb, var(--blue) 16%, var(--surface)); color: var(--blue); border: 1px solid color-mix(in srgb, var(--blue) 30%, var(--surface)); }
+.traj-dot.submit { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
+/* connector spans the full row down to the next step's node */
+.traj-step:not(:last-child)::after {
+  content: ""; position: absolute; left: 15px; top: 32px; bottom: -12px;
+  width: 2px; transform: translateX(-50%); background: var(--border); z-index: 0;
+}
+.traj-card { flex: 1; min-width: 0; border: 1px solid var(--border); border-radius: var(--r-md); padding: 14px; margin-bottom: 12px; }
 .traj-card .th { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .traj-card .th .st { font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); }
 .fb { display: flex; gap: 8px; margin-top: 8px; align-items: flex-start; font-size: 13px; }
