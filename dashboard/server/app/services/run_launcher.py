@@ -89,6 +89,11 @@ def _runner_args(cfg: dict[str, Any]) -> list[str]:
             args += ["--max-steps", str(cfg["maxSteps"])]
     if mode == "repeated" and cfg.get("shots"):
         args += ["--shots", str(cfg["shots"])]
+    # The legacy single-shot/repeated runners default to a 60s execution timeout,
+    # too short for local thread-capped model training (→ "no candidate" on kill).
+    # Give them a generous timeout (env AUTOVIBE_DASHBOARD_TIMEOUT).
+    if mode in ("single", "repeated"):
+        args += ["--sandbox-timeout", os.getenv("AUTOVIBE_DASHBOARD_TIMEOUT", "300")]
     args += ["--experiment-name", cfg.get("experimentName", "autovibe-dashboard")]
     args += ["--run-name", cfg["runName"]]
     return args
