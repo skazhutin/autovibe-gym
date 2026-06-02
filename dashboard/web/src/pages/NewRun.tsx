@@ -38,6 +38,9 @@ export default function NewRun() {
   const nav = useNavigate();
   const { data: models } = useAsync(() => api.listModels(), []);
   const { data: datasets } = useAsync(() => api.listDatasets(), []);
+  const { data: settings } = useAsync(() => api.getSettings(), []);
+  const serverAvailable = !!(settings?.remote_ssh && settings?.remote_repo);
+  const [execution, setExecution] = useState<"local" | "server">("local");
 
   const [modelId, setModelId] = useState<string>("");
   const [mode, setMode] = useState<RunMode>("gym");
@@ -50,6 +53,10 @@ export default function NewRun() {
   const [shots, setShots] = useState(5);
   const [launching, setLaunching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (settings) setExecution(settings.remote_enabled && serverAvailable ? "server" : "local");
+  }, [settings, serverAvailable]);
 
   useEffect(() => {
     setMaxSteps(BUDGET_DEFAULTS[budgetMode].maxSteps);
@@ -79,6 +86,7 @@ export default function NewRun() {
         maxSteps: iterative ? maxSteps : undefined,
         maxTokens, temp, seed,
         shots: mode === "repeated" ? shots : undefined,
+        execution,
       });
       nav(`/runs/${run.id}`);
     } catch (e) {
@@ -90,6 +98,24 @@ export default function NewRun() {
   return (
     <div className="newrun">
       <div className="steps">
+        {/* 0. Execution location */}
+        <Card>
+          <div className="step-head"><span className="step-num">⚙</span><span className="step-title">Среда выполнения</span></div>
+          <div className="grid-2">
+            <div className={`pick${execution === "local" ? " pick-active" : ""}`} onClick={() => setExecution("local")}>
+              <div className="pick-title">На компьютере</div>
+              <div className="pick-desc">gym считается локально, LLM — на сервере. Работает с любого WiFi.</div>
+              {execution === "local" && <span className="pick-check"><Icon name="check" size={18} /></span>}
+            </div>
+            <div className={`pick${execution === "server" ? " pick-active" : ""}${!serverAvailable ? " pick-disabled" : ""}`}
+              onClick={() => serverAvailable && setExecution("server")}>
+              <div className="pick-title">На сервере (SSH)</div>
+              <div className="pick-desc">{serverAvailable ? "gym и обучение — на сервере, мак не нагружается." : "Не настроено — Настройки → «Выполнение на сервере (SSH)»."}</div>
+              {execution === "server" && <span className="pick-check"><Icon name="check" size={18} /></span>}
+            </div>
+          </div>
+        </Card>
+
         {/* 1. Model */}
         <Card>
           <div className="step-head"><span className="step-num">1</span><span className="step-title">Модель</span></div>
@@ -178,6 +204,7 @@ export default function NewRun() {
       {/* Preview */}
       <div className="preview">
         <h3>Превью конфигурации</h3>
+        <div className="preview-row"><span className="k">Среда</span><span className={`v${execution === "server" ? " acc" : ""}`}>{execution === "server" ? "на сервере" : "на компьютере"}</span></div>
         <div className="preview-row"><span className="k">Модель</span><span className="v">{model?.name ?? "—"}</span></div>
         <div className="preview-row"><span className="k">Провайдер</span><span className="v">{model?.provider ?? "—"}</span></div>
         <div className="preview-row"><span className="k">Режим</span><span className={`v${mode === "gym" ? " acc" : ""}`}>{MODE_LABELS[mode]}</span></div>
