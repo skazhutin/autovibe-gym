@@ -29,6 +29,7 @@ class LaunchPayload(BaseModel):
     shots: int | None = None
     temp: float | None = None
     seed: int | None = None
+    execution: str | None = None  # "server" | "local" | None (use default)
 
 
 def _target_col(dataset_id: str | None) -> str:

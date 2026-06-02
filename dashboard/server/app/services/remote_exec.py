@@ -36,9 +36,15 @@ def config() -> dict[str, Any]:
     }
 
 
+def is_configured() -> bool:
+    """Server mode is usable (ssh+repo set), regardless of the default toggle."""
+    rc = config()
+    return bool(rc["ssh"]) and bool(rc["repo"])
+
+
 def is_enabled() -> bool:
     rc = config()
-    return rc["enabled"] and bool(rc["ssh"]) and bool(rc["repo"])
+    return rc["enabled"] and is_configured()
 
 
 def _expect_wrap(argv: list[str], password: str, timeout: int) -> subprocess.CompletedProcess:

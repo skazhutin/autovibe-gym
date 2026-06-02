@@ -148,6 +148,11 @@ def launch(cfg: dict[str, Any]) -> dict[str, Any]:
         raise ValueError(f"Unsupported mode: {cfg['mode']}")
     if not _python_available(s.python_bin):
         raise ValueError(f"Python interpreter not found: {s.python_bin}")
+    # Per-run execution location: "server" (SSH) | "local" | None (use default).
+    exe = cfg.get("execution")
+    if exe == "server" and not remote_exec.is_configured():
+        raise ValueError("Серверный режим не настроен: Настройки → «Выполнение на сервере (SSH)».")
+    want_remote = (exe == "server") or (not exe and remote_exec.is_enabled())
     local_id = "live_" + uuid.uuid4().hex[:8]
     cfg["runName"] = f"dash_{local_id}"
     run_dir = _run_dir(local_id)
@@ -187,7 +192,7 @@ def launch(cfg: dict[str, Any]) -> dict[str, Any]:
     }
 
     # Remote mode: run the gym on the server over SSH; the Mac only syncs results.
-    if remote_exec.is_enabled():
+    if want_remote:
         return _launch_remote(cfg, meta, run_dir)
 
     cmd = _build_command(cfg)
