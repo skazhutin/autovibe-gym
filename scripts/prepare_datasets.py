@@ -17,7 +17,6 @@ CONFIG_FILENAMES = ("config.yaml", "config.yml")
 @dataclass(frozen=True)
 class DatasetConfig:
     name: str
-    suite: str
     source: dict[str, Any]
     raw_data: dict[str, Any]
     task: dict[str, Any]
@@ -48,7 +47,6 @@ def load_dataset_config(dataset_dir: Path) -> DatasetConfig:
         meta = json.loads((dataset_dir / "meta.json").read_text(encoding="utf-8"))
         return DatasetConfig(
             name=meta.get("name", dataset_dir.name),
-            suite="legacy",
             source={"type": "legacy"},
             raw_data={"files": []},
             task={"type": meta.get("task_type", "classification"), "target_col": meta["target_col"], "metric": meta.get("metric", "f1_weighted")},
@@ -62,7 +60,6 @@ def load_dataset_config(dataset_dir: Path) -> DatasetConfig:
         raise ValueError(f"Dataset config must be a mapping: {cfg_path}")
     return DatasetConfig(
         name=raw["name"],
-        suite=raw.get("suite", "example_datasets"),
         source=raw.get("source", {}),
         raw_data=raw["raw_data"],
         task=raw["task"],
@@ -313,7 +310,6 @@ def prepare_dataset(dataset_dir: Path, *, max_rows: int | None = None) -> dict[s
     n_classes = int(df[target].nunique(dropna=False))
     meta = {
         "name": config.name,
-        "suite": config.suite,
         "source": config.source,
         "raw_files": config.raw_data.get("files", []),
         "task_type": config.task.get("type"),
@@ -348,29 +344,26 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--list", action="store_true")
     parser.add_argument("--dataset")
-    parser.add_argument("--suite")
     parser.add_argument("--max-rows", type=int)
     args = parser.parse_args()
     discovered = discover_dataset_dirs(DATASETS_ROOT)
 
     if args.list:
-        print("name | suite | task_type | metric | split_strategy | raw_data_status | prepared_status | role")
+        print("name | task_type | metric | split_strategy | raw_data_status | prepared_status | role")
         for name, ds_dir in discovered.items():
             if _config_path(ds_dir) is not None:
                 cfg = load_dataset_config(ds_dir)
                 raw_ok = _raw_files_available(ds_dir, cfg.raw_data.get("files", []))
                 prepared_ok = (ds_dir / "prepared" / "meta.json").exists() or (ds_dir / "meta.json").exists()
-                print(f"{name} | {cfg.suite} | {cfg.task.get('type')} | {cfg.task.get('metric')} | {cfg.split.get('strategy')} | {'ok' if raw_ok else 'missing'} | {'ok' if prepared_ok else 'missing'} | {cfg.role}")
+                print(f"{name} | {cfg.task.get('type')} | {cfg.task.get('metric')} | {cfg.split.get('strategy')} | {'ok' if raw_ok else 'missing'} | {'ok' if prepared_ok else 'missing'} | {cfg.role}")
             else:
                 meta = json.loads((ds_dir / "meta.json").read_text(encoding="utf-8"))
-                print(f"{name} | legacy | {meta.get('task_type','classification')} | {meta.get('metric')} | {meta.get('split_strategy','fixed')} | n/a | ok | {meta.get('role')}")
+                print(f"{name} | {meta.get('task_type','classification')} | {meta.get('metric')} | {meta.get('split_strategy','fixed')} | n/a | ok | {meta.get('role')}")
         return
 
     to_process: list[Path]
     if args.dataset:
         to_process = [DATASETS_ROOT / args.dataset]
-    elif args.suite:
-        to_process = [d for _, d in discovered.items() if (load_dataset_config(d).suite == args.suite)]
     else:
         to_process = [d for _, d in discovered.items() if _config_path(d) is not None]
 

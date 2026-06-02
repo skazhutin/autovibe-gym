@@ -28,7 +28,6 @@ from gym.datasets import (
 def _write_config(dataset_dir: Path, overrides: dict | None = None) -> None:
     config = {
         "name": "demo",
-        "suite": "example_datasets",
         "source": {},
         "raw_data": {
             "files": ["data.csv"],
@@ -118,12 +117,11 @@ class DatasetPipelineTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             ds = Path(td) / "demo"
             ds.mkdir()
-            _write_config(ds, {"suite": "custom", "role": "smoke"})
+            _write_config(ds, {"role": "smoke"})
 
             cfg = load_dataset_config(ds)
 
             self.assertEqual(cfg.name, "demo")
-            self.assertEqual(cfg.suite, "custom")
             self.assertEqual(cfg.role, "smoke")
 
     def test_load_dataset_config_rejects_non_mapping_yaml(self):

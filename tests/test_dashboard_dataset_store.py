@@ -189,3 +189,58 @@ def test_old_prepared_meta_dataset_still_describes_correctly(isolated_store):
     assert ds["name"] == "Legacy"
     assert ds["target"] == "target"
     assert ds["rows"] == 6
+
+
+def test_empty_source_displays_dash(isolated_store):
+    root = isolated_store.datasets_dir / "empty-source"
+    prepared = root / "prepared"
+    prepared.mkdir(parents=True)
+    for split in ("train", "val", "test"):
+        pd.DataFrame({"x": [1, 2], "target": [0, 1]}).to_csv(prepared / f"{split}.csv", index=False)
+    (prepared / "meta.json").write_text(
+        json.dumps({"name": "Empty source", "target_col": "target", "metric_name": "f1_macro", "source": {"name": "", "url": ""}}),
+        encoding="utf-8",
+    )
+
+    ds = dataset_store.get_dataset("empty-source")
+
+    assert ds is not None
+    assert ds["source"] == "-"
+
+
+def test_config_yaml_metadata_fills_example_source_and_created_at(isolated_store):
+    root = isolated_store.datasets_dir / "example-config"
+    root.mkdir()
+    created = "2026-05-27T14:28:51+03:00"
+    (root / "config.yaml").write_text(
+        "\n".join(
+            [
+                "name: Example Config",
+                f"created_at: {created}",
+                "source:",
+                "  name: UCI Demo",
+                "  url: https://archive.ics.uci.edu/",
+                "raw_data:",
+                "  files:",
+                "    - data.csv",
+                "task:",
+                "  type: classification",
+                "  target_col: target",
+                "  metric: f1_macro",
+                "split:",
+                "  seed: 7",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    ds = dataset_store.get_dataset("example-config")
+    cfg = dataset_store.get_dataset_config("example-config")
+
+    assert ds is not None
+    assert cfg is not None
+    assert ds["source"] == "UCI Demo"
+    assert ds["createdAt"] == created
+    assert ds["target"] == "target"
+    assert ds["metric"] == "f1_macro"
+    assert cfg["sources"][0]["name"] == "UCI Demo"

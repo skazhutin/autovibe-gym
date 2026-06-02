@@ -38,7 +38,6 @@ class DatasetConfigPayload(BaseModel):
     agent_notes: dict[str, Any] = Field(default_factory=dict, alias="agentNotes")
     sources: list[dict[str, Any]] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
-    suite: str | None = None
     warnings: list[str] = Field(default_factory=list)
     desc: str | None = None
 

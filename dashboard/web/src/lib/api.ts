@@ -64,7 +64,6 @@ export interface Dataset {
   status?: DatasetStatus;
   datasetDir: string;
   seed?: number;
-  suite?: string | null;
   tags?: string[];
   createdAt?: string | null;
   updatedAt?: string | null;
@@ -170,7 +169,6 @@ export interface DatasetConfig {
   agent_notes: AgentNotes;
   sources: DatasetSource[];
   tags: string[];
-  suite?: string | null;
   warnings: string[];
 }
 
@@ -183,7 +181,6 @@ export interface DatasetCreatePayload {
   agentNotes: AgentNotes;
   sources: DatasetSource[];
   tags: string[];
-  suite?: string | null;
   warnings?: string[];
   desc?: string;
 }

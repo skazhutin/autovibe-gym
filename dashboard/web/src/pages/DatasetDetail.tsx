@@ -7,16 +7,40 @@ import { Icon } from "../components/Icon";
 import { MiniHist } from "../components/charts";
 
 const TABS = [
-  { id: "overview", label: "Overview", icon: "database" },
-  { id: "preview", label: "Preview", icon: "table" },
-  { id: "columns", label: "Columns", icon: "sliders" },
-  { id: "splits", label: "Splits", icon: "layers" },
-  { id: "config", label: "Config", icon: "settings" },
-  { id: "sources", label: "Sources", icon: "external" },
-  { id: "notes", label: "Agent notes", icon: "notebook" },
+  { id: "overview", label: "Обзор", icon: "database" },
+  { id: "preview", label: "Превью", icon: "table" },
+  { id: "columns", label: "Колонки", icon: "sliders" },
+  { id: "splits", label: "Сплиты", icon: "layers" },
+  { id: "config", label: "Конфиг", icon: "settings" },
+  { id: "sources", label: "Источники", icon: "external" },
+  { id: "notes", label: "Заметки агента", icon: "notebook" },
 ];
 
 type Split = "train" | "val" | "test";
+const STATUS_LABEL: Record<string, string> = {
+  prepared: "подготовлен",
+  partial: "частичный",
+  unprepared: "не подготовлен",
+};
+const TASK_LABEL: Record<string, string> = {
+  auto: "авто",
+  classification: "классификация",
+  regression: "регрессия",
+  unknown: "неизвестно",
+};
+const METRIC_GOAL_LABEL: Record<string, string> = {
+  max: "больше лучше",
+  min: "меньше лучше",
+};
+const SPLIT_MODE_LABEL: Record<string, string> = {
+  raw_split: "raw split",
+  prepared_files: "готовые файлы",
+};
+
+function sourceText(dataset: Dataset) {
+  const value = dataset.source && dataset.source !== "-" ? dataset.source : dataset.sources?.[0]?.name || dataset.sources?.[0]?.url || "-";
+  return !value || value === "source" ? "-" : value;
+}
 
 function SplitSelector({ split, onChange, dataset }: { split: Split; onChange: (s: Split) => void; dataset: Dataset }) {
   const flags = { train: dataset.hasTrain, val: dataset.hasVal, test: dataset.hasTest };
@@ -36,21 +60,20 @@ function OverviewTab({ dataset, config }: { dataset: Dataset; config: DatasetCon
   return (
     <div className="stack" style={{ gap: 16 }}>
       <div className="grid-4">
-        <Card className="metric-card"><span className="metric-label">Status</span><span className="metric-num" style={{ fontSize: 24 }}>{dataset.status ?? (dataset.prepared ? "prepared" : "partial")}</span></Card>
-        <Card className="metric-card"><span className="metric-label">Rows</span><span className="metric-num">{dataset.rows?.toLocaleString() ?? "-"}</span></Card>
-        <Card className="metric-card"><span className="metric-label">Features</span><span className="metric-num">{dataset.cols || "-"}</span></Card>
+        <Card className="metric-card"><span className="metric-label">Статус</span><span className="metric-num" style={{ fontSize: 24 }}>{STATUS_LABEL[dataset.status ?? (dataset.prepared ? "prepared" : "partial")]}</span></Card>
+        <Card className="metric-card"><span className="metric-label">Строки</span><span className="metric-num">{dataset.rows?.toLocaleString() ?? "-"}</span></Card>
+        <Card className="metric-card"><span className="metric-label">Признаки</span><span className="metric-num">{dataset.cols || "-"}</span></Card>
         <Card className="metric-card"><span className="metric-label">Seed</span><span className="metric-num">{dataset.seed ?? 42}</span></Card>
       </div>
       <Card>
         <div className="dataset-overview-grid">
-          <div><span className="k">id</span><span className="v mono">{dataset.id}</span></div>
-          <div><span className="k">task</span><span className="v">{dataset.task}</span></div>
+          <div><span className="k">ID</span><span className="v mono">{dataset.id}</span></div>
+          <div><span className="k">задача</span><span className="v">{TASK_LABEL[dataset.taskType ?? dataset.task] ?? dataset.task}</span></div>
           <div><span className="k">target</span><span className="v mono">{dataset.target}</span></div>
-          <div><span className="k">metric</span><span className="v mono">{dataset.metric} ({dataset.metricGoal})</span></div>
-          <div><span className="k">source</span><span className="v">{dataset.source}</span></div>
-          <div><span className="k">suite</span><span className="v">{dataset.suite ?? "-"}</span></div>
-          <div><span className="k">created</span><span className="v">{dataset.createdAt ? new Date(dataset.createdAt).toLocaleString() : "-"}</span></div>
-          <div><span className="k">updated</span><span className="v">{dataset.updatedAt ? new Date(dataset.updatedAt).toLocaleString() : "-"}</span></div>
+          <div><span className="k">метрика</span><span className="v mono">{dataset.metric} ({METRIC_GOAL_LABEL[dataset.metricGoal ?? "max"] ?? dataset.metricGoal})</span></div>
+          <div><span className="k">источник</span><span className="v">{sourceText(dataset)}</span></div>
+          <div><span className="k">создан</span><span className="v">{dataset.createdAt ? new Date(dataset.createdAt).toLocaleString() : "-"}</span></div>
+          <div><span className="k">обновлен</span><span className="v">{dataset.updatedAt ? new Date(dataset.updatedAt).toLocaleString() : "-"}</span></div>
         </div>
         <div className="split-pills" style={{ marginTop: 16 }}>
           <Tag tone={dataset.hasTrain ? "green" : "neutral"}>train</Tag>
@@ -60,7 +83,7 @@ function OverviewTab({ dataset, config }: { dataset: Dataset; config: DatasetCon
         </div>
       </Card>
       {warnings.length > 0 && <div className="warn-box">{warnings.join(" ")}</div>}
-      {dataset.desc && <Card><div className="metric-label">Description</div><p style={{ marginBottom: 0 }}>{dataset.desc}</p></Card>}
+      {dataset.desc && <Card><div className="metric-label">Описание</div><p style={{ marginBottom: 0 }}>{dataset.desc}</p></Card>}
     </div>
   );
 }
@@ -73,7 +96,7 @@ function PreviewTab({ id, dataset }: { id: string; dataset: Dataset }) {
     <div className="stack" style={{ gap: 12 }}>
       <SplitSelector split={split} onChange={setSplit} dataset={dataset} />
       {!data || !data.columns.length ? (
-        <EmptyState icon="table" title={`No ${split} data`} text={`${split}.csv is not available.`} />
+        <EmptyState icon="table" title={`Нет данных ${split}`} text={`${split}.csv недоступен.`} />
       ) : (
         <Card style={{ padding: 0 }}>
           <div className="table-wrap">
@@ -88,7 +111,7 @@ function PreviewTab({ id, dataset }: { id: string; dataset: Dataset }) {
                   <tr key={i}>
                     {row.map((v, j) => (
                       <td key={j} className={`mono${data.columns[j] === dataset.target ? " target-col" : ""}`} style={{ fontSize: 12.5 }}>
-                        {v === null ? <span className="faint">empty</span> : String(v)}
+                        {v === null ? <span className="faint">пусто</span> : String(v)}
                       </td>
                     ))}
                   </tr>
@@ -97,7 +120,7 @@ function PreviewTab({ id, dataset }: { id: string; dataset: Dataset }) {
             </table>
           </div>
           <div className="faint" style={{ padding: "10px 14px", fontSize: 12 }}>
-            shown {data.shown} of {data.total ?? "unknown"} rows
+            показано {data.shown} из {data.total ?? "неизвестно"} строк
           </div>
         </Card>
       )}
@@ -115,24 +138,24 @@ function ColumnsTab({ id, dataset, config }: { id: string; dataset: Dataset; con
     <div className="stack" style={{ gap: 12 }}>
       <SplitSelector split={split} onChange={setSplit} dataset={dataset} />
       {!data || !data.length ? (
-        <EmptyState icon="sliders" title={`No ${split} column stats`} />
+        <EmptyState icon="sliders" title={`Нет статистики колонок для ${split}`} />
       ) : (
         <Card style={{ padding: 0 }}>
           <div className="table-wrap">
             <table className="data">
-              <thead><tr><th>Column</th><th>Type</th><th>Kind</th><th>Missing</th><th>Unique</th><th>Markers</th><th>Distribution</th></tr></thead>
+              <thead><tr><th>Колонка</th><th>Тип</th><th>Вид</th><th>Пропуски</th><th>Уникальных</th><th>Маркеры</th><th>Распределение</th></tr></thead>
               <tbody>
                 {data.map((c) => (
                   <tr key={c.name}>
                     <td className="mono">{c.name}</td>
                     <td className="mono faint">{c.dtype}</td>
-                    <td><Tag tone={c.kind === "numeric" ? "blue" : "neutral"}>{c.kind}</Tag></td>
+                    <td><Tag tone={c.kind === "numeric" ? "blue" : "neutral"}>{c.kind === "numeric" ? "числовая" : "категориальная"}</Tag></td>
                     <td className="mono" style={{ color: c.missingPct > 0 ? "var(--orange)" : "var(--text-dim)" }}>{c.missingPct}%</td>
                     <td className="mono faint">{c.unique}</td>
                     <td>
                       <div className="split-pills">
-                        {c.name === dataset.target && <Tag tone="accent">target</Tag>}
-                        {(c.ignored || ignored.has(c.name)) && <Tag tone="red">ignored</Tag>}
+                        {c.name === dataset.target && <Tag tone="accent">цель</Tag>}
+                        {(c.ignored || ignored.has(c.name)) && <Tag tone="red">игнор</Tag>}
                         {(c.idColumn || idCols.has(c.name)) && <Tag tone="blue">id</Tag>}
                       </div>
                     </td>
@@ -155,7 +178,7 @@ function SplitsTab({ config }: { config: DatasetConfig | null }) {
     <Card style={{ padding: 0 }}>
       <div className="table-wrap">
         <table className="data">
-          <thead><tr><th>Split</th><th>Prepared path</th><th>Source path</th><th>Rows</th><th>Cols</th></tr></thead>
+          <thead><tr><th>Сплит</th><th>Подготовленный файл</th><th>Исходный файл</th><th>Строки</th><th>Колонки</th></tr></thead>
           <tbody>
             {(["train", "val", "test"] as const).map((split) => {
               const item = splits[split];
@@ -173,11 +196,11 @@ function SplitsTab({ config }: { config: DatasetConfig | null }) {
         </table>
       </div>
       <div className="dataset-split-meta">
-        <Tag mono>{splits.mode}</Tag>
+        <Tag mono>{SPLIT_MODE_LABEL[splits.mode] ?? splits.mode}</Tag>
         <span>seed: <span className="mono">{splits.seed}</span></span>
-        <span>shuffle: <span className="mono">{String(splits.shuffle ?? true)}</span></span>
-        <span>stratify: <span className="mono">{splits.stratify ?? "auto"}</span></span>
-        {splits.ratios && <span>ratios: <span className="mono">{splits.ratios.train}/{splits.ratios.val}/{splits.ratios.test}</span></span>}
+        <span>перемешивание: <span className="mono">{splits.shuffle ?? true ? "да" : "нет"}</span></span>
+        <span>стратификация: <span className="mono">{splits.stratify === "on" ? "вкл" : splits.stratify === "off" ? "выкл" : "авто"}</span></span>
+        {splits.ratios && <span>доли: <span className="mono">{splits.ratios.train}/{splits.ratios.val}/{splits.ratios.test}</span></span>}
       </div>
     </Card>
   );
@@ -212,35 +235,34 @@ function ConfigTab({ id, config, onSaved }: { id: string; config: DatasetConfig 
     <Card>
       <div className="stack" style={{ gap: 16 }}>
         <div className="grid-3">
-          <Field label="Name"><input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
-          <Field label="Task type">
+          <Field label="Имя"><input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
+          <Field label="Тип задачи">
             <select className="input" value={task.task_type} onChange={(e) => setTask({ task_type: e.target.value as typeof task.task_type })}>
-              <option value="auto">auto</option><option value="classification">classification</option><option value="regression">regression</option>
+              <option value="auto">авто</option><option value="classification">классификация</option><option value="regression">регрессия</option>
             </select>
           </Field>
-          <Field label="Metric goal">
+          <Field label="Цель метрики">
             <select className="input" value={task.metric_goal} onChange={(e) => setTask({ metric_goal: e.target.value as typeof task.metric_goal })}>
-              <option value="max">max</option><option value="min">min</option>
+              <option value="max">больше лучше</option><option value="min">меньше лучше</option>
             </select>
           </Field>
-          <Field label="Target"><input className="input mono" value={task.target_col} onChange={(e) => setTask({ target_col: e.target.value })} /></Field>
-          <Field label="Metric"><input className="input mono" value={task.metric_name} onChange={(e) => setTask({ metric_name: e.target.value })} /></Field>
-          <Field label="Suite"><input className="input" value={form.suite ?? ""} onChange={(e) => setForm({ ...form, suite: e.target.value })} /></Field>
+          <Field label="Target column"><input className="input mono" value={task.target_col} onChange={(e) => setTask({ target_col: e.target.value })} /></Field>
+          <Field label="Метрика"><input className="input mono" value={task.metric_name} onChange={(e) => setTask({ metric_name: e.target.value })} /></Field>
         </div>
         <details className="disclosure">
-          <summary>Advanced config</summary>
+          <summary>Расширенный конфиг</summary>
           <div className="grid-2" style={{ marginTop: 14 }}>
-            <Field label="ID columns"><input className="input mono" value={(task.id_columns ?? []).join(", ")} onChange={(e) => setTask({ id_columns: e.target.value.split(",").map((v) => v.trim()).filter(Boolean) })} /></Field>
-            <Field label="Ignore columns"><input className="input mono" value={(task.ignore_columns ?? []).join(", ")} onChange={(e) => setTask({ ignore_columns: e.target.value.split(",").map((v) => v.trim()).filter(Boolean) })} /></Field>
-            <Field label="Sample weight column"><input className="input mono" value={task.sample_weight_col ?? ""} onChange={(e) => setTask({ sample_weight_col: e.target.value || null })} /></Field>
+            <Field label="ID-колонки"><input className="input mono" value={(task.id_columns ?? []).join(", ")} onChange={(e) => setTask({ id_columns: e.target.value.split(",").map((v) => v.trim()).filter(Boolean) })} /></Field>
+            <Field label="Игнорируемые колонки"><input className="input mono" value={(task.ignore_columns ?? []).join(", ")} onChange={(e) => setTask({ ignore_columns: e.target.value.split(",").map((v) => v.trim()).filter(Boolean) })} /></Field>
+            <Field label="Колонка весов"><input className="input mono" value={task.sample_weight_col ?? ""} onChange={(e) => setTask({ sample_weight_col: e.target.value || null })} /></Field>
             <Field label="Group column"><input className="input mono" value={task.group_col ?? ""} onChange={(e) => setTask({ group_col: e.target.value || null })} /></Field>
-            <Field label="Time column"><input className="input mono" value={task.time_col ?? ""} onChange={(e) => setTask({ time_col: e.target.value || null })} /></Field>
-            <Field label="Positive label"><input className="input mono" value={task.positive_label ?? ""} onChange={(e) => setTask({ positive_label: e.target.value || null })} /></Field>
+            <Field label="Временная колонка"><input className="input mono" value={task.time_col ?? ""} onChange={(e) => setTask({ time_col: e.target.value || null })} /></Field>
+            <Field label="Положительный класс"><input className="input mono" value={task.positive_label ?? ""} onChange={(e) => setTask({ positive_label: e.target.value || null })} /></Field>
           </div>
         </details>
         <div className="row">
-          <Button variant="primary" onClick={save} disabled={busy}>{busy ? <Spinner /> : "Save config"}</Button>
-          {ok && <span className="success-inline"><Icon name="check" size={14} /> saved</span>}
+          <Button variant="primary" onClick={save} disabled={busy}>{busy ? <Spinner /> : "Сохранить конфиг"}</Button>
+          {ok && <span className="success-inline"><Icon name="check" size={14} /> сохранено</span>}
           {err && <span className="error-inline">{err}</span>}
         </div>
       </div>
@@ -268,21 +290,21 @@ function SourcesTab({ id, config, onSaved }: { id: string; config: DatasetConfig
       {sources.map((source, idx) => (
         <Card key={idx}>
           <div className="spread" style={{ marginBottom: 12 }}>
-            <strong>Source {idx + 1}</strong>
-            <Button size="sm" variant="ghost" icon="trash" onClick={() => setSources((s) => s.filter((_, i) => i !== idx))}>Remove</Button>
+            <strong>Источник {idx + 1}</strong>
+            <Button size="sm" variant="ghost" icon="trash" onClick={() => setSources((s) => s.filter((_, i) => i !== idx))}>Удалить</Button>
           </div>
           <div className="grid-2">
-            <Field label="Name"><input className="input" value={source.name ?? ""} onChange={(e) => update(idx, { name: e.target.value })} /></Field>
+            <Field label="Название"><input className="input" value={source.name ?? ""} onChange={(e) => update(idx, { name: e.target.value })} /></Field>
             <Field label="URL"><input className="input" value={source.url ?? ""} onChange={(e) => update(idx, { url: e.target.value })} /></Field>
-            <Field label="License"><input className="input" value={source.license ?? ""} onChange={(e) => update(idx, { license: e.target.value })} /></Field>
-            <Field label="Citation"><input className="input" value={source.citation ?? ""} onChange={(e) => update(idx, { citation: e.target.value })} /></Field>
+            <Field label="Лицензия"><input className="input" value={source.license ?? ""} onChange={(e) => update(idx, { license: e.target.value })} /></Field>
+            <Field label="Цитирование"><input className="input" value={source.citation ?? ""} onChange={(e) => update(idx, { citation: e.target.value })} /></Field>
           </div>
-          <Field label="Notes"><textarea className="input" rows={2} value={source.notes ?? ""} onChange={(e) => update(idx, { notes: e.target.value })} /></Field>
+          <Field label="Заметки"><textarea className="input" rows={2} value={source.notes ?? ""} onChange={(e) => update(idx, { notes: e.target.value })} /></Field>
         </Card>
       ))}
       <div className="row">
-        <Button icon="plus" onClick={() => setSources((s) => [...s, {}])}>Add source</Button>
-        <Button variant="primary" onClick={save} disabled={busy}>{busy ? <Spinner /> : "Save sources"}</Button>
+        <Button icon="plus" onClick={() => setSources((s) => [...s, {}])}>Добавить источник</Button>
+        <Button variant="primary" onClick={save} disabled={busy}>{busy ? <Spinner /> : "Сохранить источники"}</Button>
       </div>
     </div>
   );
@@ -315,15 +337,15 @@ function AgentNotesTab({ id, config, onSaved }: { id: string; config: DatasetCon
   return (
     <Card>
       <div className="stack" style={{ gap: 14 }}>
-        <div className="warn-box">These fields may be visible to the LLM-agent. Do not include test labels, hidden answers, or leakage.</div>
-        <label className="check-row"><input type="checkbox" checked={notes.visible_to_agent} onChange={(e) => set({ visible_to_agent: e.target.checked })} /> Visible to agent</label>
-        <Field label="Task description"><textarea className="input" rows={3} value={notes.task_description} onChange={(e) => set({ task_description: e.target.value })} /></Field>
-        <Field label="Data structure"><textarea className="input" rows={3} value={notes.data_structure} onChange={(e) => set({ data_structure: e.target.value })} /></Field>
-        <Field label="Column descriptions JSON"><textarea className="input mono" rows={6} value={cols} onChange={(e) => setCols(e.target.value)} /></Field>
-        <Field label="Additional comments"><textarea className="input" rows={3} value={notes.additional_comments} onChange={(e) => set({ additional_comments: e.target.value })} /></Field>
-        <Field label="Leakage warning"><textarea className="input" rows={2} value={notes.leakage_warning} onChange={(e) => set({ leakage_warning: e.target.value })} /></Field>
+        <div className="warn-box">Эти поля могут быть видны LLM-агенту. Не добавляйте тестовые метки, скрытые ответы или утечки.</div>
+        <label className="check-row"><input type="checkbox" checked={notes.visible_to_agent} onChange={(e) => set({ visible_to_agent: e.target.checked })} /> Видно агенту</label>
+        <Field label="Описание задачи"><textarea className="input" rows={3} value={notes.task_description} onChange={(e) => set({ task_description: e.target.value })} /></Field>
+        <Field label="Структура данных"><textarea className="input" rows={3} value={notes.data_structure} onChange={(e) => set({ data_structure: e.target.value })} /></Field>
+        <Field label="JSON описаний колонок"><textarea className="input mono" rows={6} value={cols} onChange={(e) => setCols(e.target.value)} /></Field>
+        <Field label="Дополнительные комментарии"><textarea className="input" rows={3} value={notes.additional_comments} onChange={(e) => set({ additional_comments: e.target.value })} /></Field>
+        <Field label="Предупреждение об утечке"><textarea className="input" rows={2} value={notes.leakage_warning} onChange={(e) => set({ leakage_warning: e.target.value })} /></Field>
         <div className="row">
-          <Button variant="primary" onClick={save} disabled={busy}>{busy ? <Spinner /> : "Save notes"}</Button>
+          <Button variant="primary" onClick={save} disabled={busy}>{busy ? <Spinner /> : "Сохранить заметки"}</Button>
           {err && <span className="error-inline">{err}</span>}
         </div>
       </div>
@@ -344,26 +366,26 @@ export default function DatasetDetail() {
   }
 
   if (loading && !data) return <Skeleton h={300} />;
-  if (!data) return <EmptyState icon="alert" title="Dataset not found" action={<Button onClick={() => nav("/datasets")}>Back to datasets</Button>} />;
+  if (!data) return <EmptyState icon="alert" title="Датасет не найден" action={<Button onClick={() => nav("/datasets")}>К датасетам</Button>} />;
 
   return (
     <div>
-      <button className="back-link" onClick={() => nav("/datasets")}><Icon name="chevronLeft" size={16} /> All datasets</button>
+      <button className="back-link" onClick={() => nav("/datasets")}><Icon name="chevronLeft" size={16} /> Все датасеты</button>
       <Card style={{ marginBottom: 20 }}>
         <div className="spread">
           <div>
             <div className="ds-title" style={{ fontSize: 18 }}>{data.name}</div>
             <div className="run-meta-line" style={{ margin: "10px 0 0" }}>
-              <Tag tone={data.status === "prepared" ? "green" : data.status === "partial" ? "blue" : "red"}>{data.status ?? (data.prepared ? "prepared" : "partial")}</Tag>
-              <span className="mono faint">metric: {data.metric}</span>
+              <Tag tone={data.status === "prepared" ? "green" : data.status === "partial" ? "blue" : "red"}>{STATUS_LABEL[data.status ?? (data.prepared ? "prepared" : "partial")]}</Tag>
+              <span className="mono faint">метрика: {data.metric}</span>
               <span className="mono faint">target: {data.target}</span>
-              <span className="mono faint">path: {data.datasetDir}</span>
+              <span className="mono faint">путь: {data.datasetDir}</span>
             </div>
           </div>
           <div className="chip-metrics">
-            <div className="chip-metric"><div><div className="cm-label">rows</div><div className="cm-val">{data.rows.toLocaleString()}</div></div></div>
+            <div className="chip-metric"><div><div className="cm-label">строки</div><div className="cm-val">{data.rows.toLocaleString()}</div></div></div>
             <span className="vline" />
-            <div className="chip-metric"><div><div className="cm-label">features</div><div className="cm-val">{data.cols}</div></div></div>
+            <div className="chip-metric"><div><div className="cm-label">признаки</div><div className="cm-val">{data.cols}</div></div></div>
           </div>
         </div>
       </Card>

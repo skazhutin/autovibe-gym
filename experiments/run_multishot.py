@@ -178,7 +178,6 @@ def main():
             "max_tokens": max_tokens,
             "sandbox_timeout": sandbox_timeout,
             "executor_backend": args.executor_backend or os.getenv("AUTOVIBE_EXECUTOR_BACKEND", "docker"),
-            "dataset_suite": splits.metadata.suite or "legacy",
             "dataset_split_strategy": splits.metadata.split_strategy,
             "dataset_role": splits.metadata.role,
             "dataset_sampled": str(splits.metadata.sampled),

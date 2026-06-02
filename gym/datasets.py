@@ -18,7 +18,6 @@ class DatasetMetadata:
     metric_name: str | None = None
     task_type: str | None = None
     source: dict | str | None = None
-    suite: str | None = None
     split_strategy: str | None = None
     role: str | None = None
     sampled: bool | None = None
@@ -36,7 +35,6 @@ class DatasetMetadata:
             metric_name=data.get("metric_name") or data.get("metric"),
             task_type=data.get("task_type"),
             source=data.get("source"),
-            suite=data.get("suite"),
             split_strategy=data.get("split_strategy"),
             role=data.get("role"),
             sampled=data.get("sampled"),

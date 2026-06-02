@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-02 (dashboard: full Dataset Center, dataset creation wizard, raw/prepared config workflow)
+**Last updated:** 2026-06-02 (dashboard: Dataset Center localization, metadata cleanup, and source polish)
 **Phase:** Hardening after first full H200 recon + building the local control-panel dashboard for configuring/launching/inspecting runs.
 
 ---
@@ -191,6 +191,11 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
   table preview, raw-table splitting, prepared-file mapping, rich
   `dataset_config.json`, compatible `prepared/meta.json`, editable sources and
   agent notes, and backward-compatible display for old prepared datasets.
+- **Dataset Center polish:** dataset cards render as a one-column list, the UI is
+  localized to Russian while preserving common ML terms (`target`, `seed`,
+  `raw`, `train/val/test`, `Target column`), dataset suite/group metadata is
+  removed from dashboard/project flows, empty sources display `-`, and example
+  configs now carry the repository creation timestamp plus UCI source metadata.
 - **Verified after hardening:** backend API smoke confirms `/api/health`,
   `/api/runs`, and `/api/runs/{id}/checklist` agree on `11/12` and `0.88` for a
   legacy MLflow run without episode events; browser smoke on desktop/mobile
@@ -224,6 +229,7 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 
 | Date | Change |
 |------|--------|
+| 2026-06-02 | Dataset Center polish: one-column dataset cards, Russian UI with common ML terms preserved, dataset suite/group metadata removed from project flows, example configs now include repository-created timestamp and UCI sources, and empty sources display `-` |
 | 2026-06-02 | Dataset Center full workflow: backend staged uploads/URL downloads/safe archive extraction/table preview/create-from-config/config editing, React Dataset Center search/filter/sort, full creation wizard, seven-tab detail page, docs and backend tests |
 | 2026-06-02 | Single-shot/repeated now show code + checklist coverage in the dashboard: the legacy runners emit a synthesized episode (solution.ipynb, notebook_events, feedback_trace, summary) into `--workspace-dir` and log `checklist_coverage` measured from the generated code, so Notebook/Trajectory/Checklist tabs populate for these modes too |
 | 2026-06-02 | Single-shot/repeated now produce a score locally: raised legacy executor timeout 60→300s, prompts require a fitted predict-ready model, and the runner auto-fits an unfitted submitted model before scoring (gpt-oss-120b left it unfitted). Verified single_shot=0.931 f1 on example_dry_bean |

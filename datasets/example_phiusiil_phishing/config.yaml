@@ -1,10 +1,13 @@
 name: example_phiusiil_phishing
-suite: example_datasets
 source:
-  type: local_file
-  provider: example dataset supplied by project team
-  reference: example_phiusiil_phishing
-  license: unknown
+  name: UCI PhiUSIIL Phishing URL (Website)
+  url: https://archive.ics.uci.edu/dataset/967/phiusiil+phishing+url+dataset
+  license: CC BY 4.0
+  citation: Prasad, A. & Chandra, S. (2024). PhiUSIIL Phishing URL (Website) [Dataset].
+    UCI Machine Learning Repository. https://doi.org/10.1016/j.cose.2023.103545.
+  doi: 10.1016/j.cose.2023.103545
+  provider: UCI Machine Learning Repository
+  reference: PhiUSIIL Phishing URL (Website)
 raw_data:
   files:
   - PhiUSIIL_Phishing_URL_Dataset.csv
@@ -33,3 +36,4 @@ notes:
   contamination_risk: reduced_vs_canonical_benchmarks
   inspect_suspicious_columns: true
   suspicious_columns: []
+created_at: '2026-05-27T14:28:51+03:00'

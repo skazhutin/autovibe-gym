@@ -25,7 +25,6 @@ def test_run_gym_load_dataset_returns_splits_and_metadata(tmp_path):
                 "name": "demo",
                 "target_col": "y",
                 "metric": "f1_macro",
-                "suite": "unit",
                 "split_strategy": "fixed",
                 "role": "test",
                 "sampled": False,
@@ -41,7 +40,6 @@ def test_run_gym_load_dataset_returns_splits_and_metadata(tmp_path):
     assert test.equals(df)
     assert meta["name"] == "demo"
     assert meta["metric"] == "f1_macro"
-    assert meta["suite"] == "unit"
 
 
 def test_run_gym_dataset_name_falls_back_to_file_stem():

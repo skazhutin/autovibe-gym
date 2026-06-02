@@ -1,10 +1,13 @@
 name: example_room_occupancy
-suite: example_datasets
 source:
-  type: local_file
-  provider: example dataset supplied by project team
-  reference: example_room_occupancy
-  license: unknown
+  name: UCI Room Occupancy Estimation
+  url: https://archive.ics.uci.edu/dataset/864/room+occupancy+estimation
+  license: CC BY 4.0
+  citation: Singh, A. & Chaudhari, S. (2018). Room Occupancy Estimation [Dataset].
+    UCI Machine Learning Repository. https://doi.org/10.24432/C5P605.
+  doi: 10.24432/C5P605
+  provider: UCI Machine Learning Repository
+  reference: Room Occupancy Estimation
 raw_data:
   files:
   - Occupancy_Estimation.csv
@@ -33,3 +36,4 @@ preparation:
 role: temporal_sensor_leakage_discipline
 notes:
   contamination_risk: reduced_vs_canonical_benchmarks
+created_at: '2026-05-27T14:28:51+03:00'

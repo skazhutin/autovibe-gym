@@ -21,6 +21,7 @@ from urllib.parse import unquote, urlparse
 from urllib.request import Request, urlopen
 
 import pandas as pd
+import yaml
 from sklearn.model_selection import train_test_split
 
 from ..config import get_settings
@@ -86,6 +87,29 @@ def _read_json(path: Path) -> dict[str, Any]:
         return {}
 
 
+def _read_yaml_config(dataset_root: Path) -> dict[str, Any]:
+    for filename in ("config.yaml", "config.yml"):
+        path = dataset_root / filename
+        if not path.exists():
+            continue
+        try:
+            data = yaml.safe_load(path.read_text("utf-8"))
+        except (OSError, yaml.YAMLError):
+            return {}
+        return data if isinstance(data, dict) else {}
+    return {}
+
+
+def _timestamp_value(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    if hasattr(value, "isoformat"):
+        return str(value.isoformat())
+    return str(value)
+
+
 def _write_json(path: Path, data: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False), "utf-8")
@@ -137,10 +161,12 @@ def _source_label(config: dict[str, Any], meta: dict[str, Any]) -> str:
     if isinstance(sources, list) and sources:
         first = sources[0] or {}
         if isinstance(first, dict):
-            return str(first.get("name") or first.get("url") or "source")
+            value = first.get("name") or first.get("url") or first.get("id") or first.get("provider")
+            return str(value) if value else "-"
     source = meta.get("source")
     if isinstance(source, dict):
-        return str(source.get("name") or source.get("url") or source.get("id") or "source")
+        value = source.get("name") or source.get("url") or source.get("id") or source.get("provider")
+        return str(value) if value else "-"
     return str(source) if source else "-"
 
 
@@ -185,15 +211,21 @@ def _describe_split(root: Path, split: str, deep: bool) -> dict[str, Any] | None
 
 
 def _config_from_legacy(dataset_root: Path, meta: dict[str, Any], deep: bool) -> dict[str, Any]:
+    yaml_config = _read_yaml_config(dataset_root)
+    yaml_task = dict(yaml_config.get("task") or {})
+    yaml_split = dict(yaml_config.get("split") or {})
+    yaml_raw = dict(yaml_config.get("raw_data") or {})
     status = _status_from_files(dataset_root, meta)
-    target = meta.get("target_col") or meta.get("target") or ""
-    metric = meta.get("metric_name") or meta.get("metric") or ""
-    task_type = _task_type(meta, {}, None)
+    target = meta.get("target_col") or meta.get("target") or yaml_task.get("target_col") or ""
+    metric = meta.get("metric_name") or meta.get("metric") or yaml_task.get("metric") or ""
+    task_type = meta.get("task_type") or yaml_task.get("type") or _task_type(meta, {}, None)
+    source = meta.get("source") or yaml_config.get("source")
+    sources = [source] if source else []
     return {
         "id": dataset_root.name,
-        "name": meta.get("name") or dataset_root.name,
-        "created_at": None,
-        "updated_at": None,
+        "name": meta.get("name") or yaml_config.get("name") or dataset_root.name,
+        "created_at": _timestamp_value(meta.get("created_at") or yaml_config.get("created_at")),
+        "updated_at": _timestamp_value(meta.get("updated_at")),
         "version": 1,
         "status": status,
         "task": {
@@ -215,11 +247,11 @@ def _config_from_legacy(dataset_root: Path, meta: dict[str, Any], deep: bool) ->
             "val": _describe_split(dataset_root, "val", deep),
             "test": _describe_split(dataset_root, "test", deep),
             "ratios": None,
-            "seed": int(meta.get("seed", 42)),
+            "seed": int(meta.get("seed") or yaml_split.get("seed") or 42),
             "shuffle": True,
             "stratify": "auto",
         },
-        "raw_files": [],
+        "raw_files": [{"path": f"raw_data/{path}", "name": Path(path).name} for path in yaml_raw.get("files", [])],
         "agent_notes": {
             "task_description": (meta.get("notes") or {}).get("description", ""),
             "data_structure": "",
@@ -228,9 +260,8 @@ def _config_from_legacy(dataset_root: Path, meta: dict[str, Any], deep: bool) ->
             "leakage_warning": "",
             "visible_to_agent": True,
         },
-        "sources": [meta["source"]] if meta.get("source") else [],
+        "sources": sources,
         "tags": list(meta.get("tags") or []),
-        "suite": meta.get("suite"),
         "warnings": [],
     }
 
@@ -309,10 +340,9 @@ def describe_dataset(dataset_root: Path, *, deep: bool = False) -> dict[str, Any
         "dir": str(dataset_root),
         "datasetDir": str(dataset_root),
         "seed": int(splits.get("seed") or meta.get("seed", 42)),
-        "suite": config.get("suite") or meta.get("suite"),
         "tags": list(config.get("tags") or meta.get("tags") or []),
-        "createdAt": config.get("created_at"),
-        "updatedAt": config.get("updated_at"),
+        "createdAt": config.get("created_at") or meta.get("created_at"),
+        "updatedAt": config.get("updated_at") or meta.get("updated_at"),
         "hasTrain": has_train,
         "hasVal": has_val,
         "hasTest": has_test,
@@ -848,8 +878,6 @@ def _compatible_meta(config: dict[str, Any]) -> dict[str, Any]:
     sources = config.get("sources") or []
     if sources:
         meta["source"] = sources[0]
-    if config.get("suite"):
-        meta["suite"] = config["suite"]
     return {k: v for k, v in meta.items() if v is not None}
 
 
@@ -991,7 +1019,6 @@ def create_from_config(payload: dict[str, Any]) -> dict[str, Any]:
         },
         "sources": list(payload.get("sources") or []),
         "tags": list(payload.get("tags") or []),
-        "suite": payload.get("suite"),
         "warnings": warnings,
     }
     _write_json(_config_path(dataset_root), final_config)

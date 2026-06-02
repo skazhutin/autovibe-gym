@@ -1,10 +1,12 @@
 name: example_dry_bean
-suite: example_datasets
 source:
-  type: local_file
-  provider: example dataset supplied by project team
-  reference: example_dry_bean
-  license: unknown
+  name: UCI Dry Bean
+  url: https://archive.ics.uci.edu/dataset/602/dry+bean+dataset
+  license: CC BY 4.0
+  citation: Dry Bean [Dataset]. (2020). UCI Machine Learning Repository. https://doi.org/10.24432/C50S4B.
+  doi: 10.24432/C50S4B
+  provider: UCI Machine Learning Repository
+  reference: Dry Bean
 raw_data:
   files:
   - DryBeanDataset/Dry_Bean_Dataset.xlsx
@@ -28,3 +30,4 @@ role: fast_numeric_multiclass_smoke_test
 notes:
   contamination_risk: reduced_vs_canonical_benchmarks
   usage: smoke_test_for_dataset_pipeline
+created_at: '2026-05-27T14:28:51+03:00'

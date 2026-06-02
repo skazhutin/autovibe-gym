@@ -1,10 +1,14 @@
 name: example_student_dropout
-suite: example_datasets
 source:
-  type: local_file
-  provider: example dataset supplied by project team
-  reference: example_student_dropout
-  license: unknown
+  name: UCI Predict Students' Dropout and Academic Success
+  url: https://archive.ics.uci.edu/dataset/697/predict+students+dropout+and+academic+success
+  license: CC BY 4.0
+  citation: Realinho, V., Vieira Martins, M., Machado, J., & Baptista, L. (2021).
+    Predict Students' Dropout and Academic Success [Dataset]. UCI Machine Learning
+    Repository. https://doi.org/10.24432/C5MC89.
+  doi: 10.24432/C5MC89
+  provider: UCI Machine Learning Repository
+  reference: Predict Students' Dropout and Academic Success
 raw_data:
   files:
   - data.csv
@@ -30,3 +34,4 @@ role: mixed_features_imbalanced_multiclass
 notes:
   contamination_risk: reduced_vs_canonical_benchmarks
   task_definition: outcome prediction after observed semesters
+created_at: '2026-05-27T14:28:51+03:00'

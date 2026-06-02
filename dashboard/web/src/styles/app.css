@@ -1109,8 +1109,9 @@ table.data tbody tr.clickable:hover {
 .ds-title { font-family: var(--font-mono); font-weight: 600; font-size: 15px; }
 .ds-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; font-size: 12.5px; }
 .ds-stats.rich { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.ds-stat { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; }
 .ds-stat .k { color: var(--text-faint); }
-.ds-stat .v { font-family: var(--font-mono); font-weight: 600; }
+.ds-stat .v { font-family: var(--font-mono); font-weight: 600; text-align: right; overflow-wrap: anywhere; }
 .ds-actions { display: flex; gap: 8px; border-top: 1px solid var(--border); padding-top: 12px; margin-top: auto; }
 .upload-tile { border: 2px dashed var(--border); border-radius: var(--r-lg); display: grid; place-items: center; min-height: 100%; cursor: pointer; color: var(--text-dim); transition: border-color .15s, color .15s; text-align: center; padding: 24px; }
 .upload-tile:hover { border-color: var(--accent-ink); color: var(--accent-ink); }
@@ -1119,9 +1120,11 @@ table.data tbody tr.clickable:hover {
 .dropzone.has { border-color: var(--green); color: var(--green); background: var(--green-bg); }
 .page-title { margin: 0 0 4px; font-size: 22px; font-weight: 800; }
 .dataset-center-head { align-items: flex-start; }
+.dataset-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
 .dataset-toolbar { padding: 14px; }
 .dataset-filters-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
 .dataset-card-rich .muted { font-size: 13px; line-height: 1.45; }
+.dataset-card-rich .ds-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dataset-id { font-size: 12px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; }
 .clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .split-pills { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }

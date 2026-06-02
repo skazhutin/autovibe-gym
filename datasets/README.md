@@ -36,7 +36,6 @@ Commands:
 ```bash
 python scripts/prepare_datasets.py --list
 python scripts/prepare_datasets.py --dataset example_dry_bean
-python scripts/prepare_datasets.py --suite example_datasets
 ```
 
 These examples are for pipeline validation, not canonical benchmark claims.

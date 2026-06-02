@@ -119,7 +119,6 @@ def main():
 
     with mlflow.start_run(run_name=run_name):
         mlflow.log_params({
-            "dataset_suite": splits.metadata.suite or "legacy",
             "dataset_split_strategy": splits.metadata.split_strategy,
             "dataset_role": splits.metadata.role,
             "dataset_sampled": str(splits.metadata.sampled),

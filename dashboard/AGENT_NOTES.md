@@ -33,7 +33,7 @@ yellow `#FFDD2D` + dark `#333333`.
   - iterative → run_gym.py --episode-mode iterative_no_checklist
   - gym → run_gym.py --episode-mode gym_with_checklist
 - MLflow run params logged (run_gym): mode, episode_mode/experiment_type, model, dataset,
-  protocol_version, max_steps, max_tokens, sandbox_timeout, dataset_suite/split/role/sampled...
+  protocol_version, max_steps, max_tokens, sandbox_timeout, split/role/sampled...
 - MLflow metrics: checklist_coverage, private_checklist_coverage, steps_used, error_count,
   has_test_metric, valid_submit, submit_failed, input_tokens, output_tokens, elapsed_seconds,
   notebook_cells_final, ..., best_validation_metric, final_test_metric / test_metric.
@@ -48,7 +48,7 @@ yellow `#FFDD2D` + dark `#333333`.
 - `datasets/<name>/prepared/{train,val,test}.csv + meta.json` is the runnable form.
   Some only have `raw_data/ + config.yaml` (need `scripts/prepare_datasets.py`).
 - meta.json (DatasetMetadata.from_dict): `target_col`/`target` (req), `metric_name`/`metric`,
-  `task_type`, `source`, `suite`, `split_strategy`, `role`, `sampled`, `seed`(=42), `notes`.
+  `task_type`, `source`, `split_strategy`, `role`, `sampled`, `seed`(=42), `notes`.
 - metric_from_name supports: f1_weighted, f1_macro, neg_rmse. infer: <=10 unique→f1_weighted else neg_rmse.
 - Example datasets: example_student_dropout, example_room_occupancy, example_dry_bean,
   example_naticusdroid, example_phiusiil_phishing.
