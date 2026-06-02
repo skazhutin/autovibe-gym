@@ -47,6 +47,9 @@ Requirements for the final model:
 - As the LAST lines, verify it works and only then keep `model`:
       _ = model.predict(val_df.drop(columns=[target_col]).head())
 - n_jobs=-1 is allowed.
+- Target scikit-learn 1.7: rely on DEFAULT parameters and do NOT pass deprecated
+  or removed arguments (e.g. `loss='auto'`, `multi_class=...`). If unsure about a
+  parameter, omit it and use the estimator's defaults.
 
 Output only a single ```python ... ``` block, nothing else."""
 
