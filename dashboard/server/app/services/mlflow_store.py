@@ -356,10 +356,11 @@ def _replay_checklist(episode_dir: Path | None, target_col: str = "") -> tuple[d
 
 
 def checklist(episode_dir: Path | None, target_col: str = "", fallback_coverage: float | None = None) -> dict[str, Any]:
-    closed_step, coverage = _replay_checklist(episode_dir, target_col)
+    closed_step, replay_coverage = _replay_checklist(episode_dir, target_col)
     replay_closed = sum(1 for step in closed_step.values() if step is not None)
-    if fallback_coverage is not None and (coverage is None or replay_closed == 0):
-        coverage = fallback_coverage
+    # Single source of truth: the run's recorded coverage (same metric the banner
+    # uses). Heuristic replay is only a fallback when no recorded coverage exists.
+    coverage = fallback_coverage if fallback_coverage is not None else replay_coverage
     items_meta = [{"id": k, "label": _CHECK_LABELS[k], "desc": ""} for k in _CHECK_LABELS]
     try:
         from gym.feedback import GENERIC_CHECKLIST_HINTS
