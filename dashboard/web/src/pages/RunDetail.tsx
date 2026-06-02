@@ -71,7 +71,9 @@ function TrajectoryTab({ id, live }: { id: string; live: boolean }) {
         <div key={i} className="traj-step">
           <div className="traj-marker">
             <div className={`traj-dot ${s.action}`}>
-              <Icon name={s.action === "submit" ? "check2" : s.action === "validate" ? "check" : "code"} size={14} />
+              {s.action === "submit" ? <Icon name="check2" size={13} />
+                : s.action === "validate" ? <Icon name="check" size={14} />
+                : <span className="traj-pip" />}
             </div>
           </div>
           <div className="traj-card">
