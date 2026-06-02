@@ -261,6 +261,39 @@ def test_old_prepared_meta_dataset_still_describes_correctly(isolated_store):
     assert ds["rows"] == 6
 
 
+def test_list_datasets_reuses_cached_descriptions_until_metadata_changes(isolated_store, monkeypatch):
+    root = isolated_store.datasets_dir / "cached"
+    prepared = root / "prepared"
+    prepared.mkdir(parents=True)
+    for split in ("train", "val", "test"):
+        pd.DataFrame({"x": [1, 2], "target": [0, 1]}).to_csv(prepared / f"{split}.csv", index=False)
+    (prepared / "meta.json").write_text(
+        json.dumps({"name": "Cached", "target_col": "target", "metric_name": "f1_macro"}),
+        encoding="utf-8",
+    )
+
+    calls = 0
+    original = dataset_store.describe_dataset
+
+    def counted(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(dataset_store, "describe_dataset", counted)
+    dataset_store._invalidate_dataset_cache()
+
+    first = dataset_store.list_datasets()
+    second = dataset_store.list_datasets()
+    dataset_store.update_meta("cached", {"desc": "changed"})
+    third = dataset_store.list_datasets()
+
+    assert first[0]["name"] == "Cached"
+    assert second[0]["name"] == "Cached"
+    assert third[0]["desc"] == "changed"
+    assert calls == 3
+
+
 def test_legacy_root_dataset_edit_does_not_create_shadow_prepared_meta(isolated_store):
     root = isolated_store.datasets_dir / "legacy-root"
     root.mkdir()

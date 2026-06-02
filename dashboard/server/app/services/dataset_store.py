@@ -45,6 +45,7 @@ _TABLE_EXTS = {
 }
 _ARCHIVE_EXTS = {".zip", ".tar", ".tgz", ".gz"}
 _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,79}$")
+_DATASET_CACHE: dict[tuple[str, bool], tuple[tuple[tuple[str, int, int], ...], dict[str, Any]]] = {}
 
 
 def _now_iso() -> str:
@@ -175,13 +176,45 @@ def _source_label(config: dict[str, Any], meta: dict[str, Any]) -> str:
 def _csv_shape(path: Path) -> tuple[int, int]:
     if not path.exists():
         return (0, 0)
-    df = pd.read_csv(path)
-    return (int(df.shape[0]), int(df.shape[1]))
+    cols = len(pd.read_csv(path, nrows=0).columns)
+    try:
+        with path.open("rb") as fh:
+            rows = max(sum(1 for _ in fh) - 1, 0)
+    except OSError:
+        rows = 0
+    return (int(rows), int(cols))
 
 
 def _split_paths(root: Path) -> dict[str, Path]:
     meta_dir = _meta_dir(root)
     return {split: meta_dir / f"{split}.csv" for split in ("train", "val", "test")}
+
+
+def _dataset_fingerprint(root: Path) -> tuple[tuple[str, int, int], ...]:
+    """Fingerprint files that affect the dataset card/detail summary."""
+    paths = [
+        _config_path(root),
+        _meta_dir(root) / "meta.json",
+        *_split_paths(root).values(),
+        root / "config.yaml",
+        root / "config.yml",
+    ]
+    out: list[tuple[str, int, int]] = []
+    for path in paths:
+        try:
+            stat = path.stat()
+        except OSError:
+            continue
+        out.append((path.relative_to(root).as_posix(), stat.st_mtime_ns, stat.st_size))
+    return tuple(out)
+
+
+def _invalidate_dataset_cache(dataset_id: str | None = None) -> None:
+    if dataset_id is None:
+        _DATASET_CACHE.clear()
+        return
+    for key in [key for key in _DATASET_CACHE if key[0] == dataset_id]:
+        _DATASET_CACHE.pop(key, None)
 
 
 def _status_from_files(root: Path, meta: dict[str, Any] | None = None) -> str:
@@ -303,7 +336,8 @@ def describe_dataset(dataset_root: Path, *, deep: bool = False) -> dict[str, Any
                 "rows": sr,
                 "cols": sc,
             }
-        if target and has_train:
+        target_unique_needed = _task_type(meta, config, None) == "unknown"
+        if target and has_train and target_unique_needed:
             try:
                 col = pd.read_csv(paths["train"], usecols=[target])[target]
                 target_unique = int(col.nunique())
@@ -360,7 +394,20 @@ def list_datasets(deep: bool = True) -> list[dict[str, Any]]:
     root = get_settings().datasets_dir
     if not root.exists():
         return []
-    return [describe_dataset(child, deep=deep) for child in sorted(root.iterdir()) if child.is_dir()]
+    datasets: list[dict[str, Any]] = []
+    for child in sorted(root.iterdir()):
+        if not child.is_dir():
+            continue
+        fingerprint = _dataset_fingerprint(child)
+        key = (child.name, deep)
+        cached = _DATASET_CACHE.get(key)
+        if cached and cached[0] == fingerprint:
+            datasets.append(dict(cached[1]))
+            continue
+        described = describe_dataset(child, deep=deep)
+        _DATASET_CACHE[key] = (fingerprint, described)
+        datasets.append(dict(described))
+    return datasets
 
 
 def _dataset_root(dataset_id: str) -> Path:
@@ -1111,6 +1158,7 @@ def _create_from_config_in_root(
     if final_root.exists():
         raise ValueError(f"Dataset '{dataset_id}' already exists.")
     dataset_root.rename(final_root)
+    _invalidate_dataset_cache(dataset_id)
     return describe_dataset(final_root, deep=True)
 
 
@@ -1143,6 +1191,7 @@ def update_dataset_config(dataset_id: str, updates: dict[str, Any]) -> dict[str,
     merged["status"] = _status_from_files(root, _read_json(_meta_dir(root) / "meta.json"))
     _write_json(_config_path(root), merged)
     _write_json(_meta_dir(root) / "meta.json", _compatible_meta(merged))
+    _invalidate_dataset_cache(dataset_id)
     return describe_dataset(root, deep=True)
 
 
@@ -1269,6 +1318,7 @@ def prepare_dataset(dataset_id: str) -> dict[str, Any] | None:
     config["status"] = _status_from_prepared(frames)
     _write_json(_config_path(root), config)
     _write_json(root / "prepared" / "meta.json", _compatible_meta(config))
+    _invalidate_dataset_cache(dataset_id)
     return describe_dataset(root, deep=True)
 
 
@@ -1280,4 +1330,5 @@ def delete_dataset(dataset_id: str) -> bool:
     if not root.is_dir():
         return False
     shutil.rmtree(root)
+    _invalidate_dataset_cache(dataset_id)
     return True
