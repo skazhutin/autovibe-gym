@@ -1050,7 +1050,7 @@ table.data tbody tr.clickable:hover {
   content: ""; position: absolute; left: 13px; top: 26px; bottom: -12px;
   width: 2px; transform: translateX(-50%); background: var(--border); z-index: 0;
 }
-.traj-pip { width: 8px; height: 8px; border-radius: 50%; background: var(--text-faint); }
+.traj-pip { display: block; width: 9px; height: 9px; border-radius: 50%; background: var(--accent-ink); }
 .traj-dot.submit { border-color: var(--green); color: var(--green); }
 .traj-dot.validate { border-color: var(--blue); color: var(--blue); }
 .traj-card { flex: 1; min-width: 0; border: 1px solid var(--border); border-radius: var(--r-md); padding: 14px; margin-bottom: 12px; }
