@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-02 (dashboard: local/server execution modes, SSH remote exec, live updates, checklist consistency)
+**Last updated:** 2026-06-02 (dashboard: full Dataset Center, dataset creation wizard, raw/prepared config workflow)
 **Phase:** Hardening after first full H200 recon + building the local control-panel dashboard for configuring/launching/inspecting runs.
 
 ---
@@ -186,6 +186,11 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
   episode artifacts are absent, and the run detail donut uses that authoritative
   coverage value. The responsive shell now switches to compact top navigation on
   mobile so the dashboard has no page-level horizontal overflow.
+- **Dataset Center expansion:** `/datasets` now manages raw and prepared data
+  with search/filter/sort, staged file and URL uploads, safe archive extraction,
+  table preview, raw-table splitting, prepared-file mapping, rich
+  `dataset_config.json`, compatible `prepared/meta.json`, editable sources and
+  agent notes, and backward-compatible display for old prepared datasets.
 - **Verified after hardening:** backend API smoke confirms `/api/health`,
   `/api/runs`, and `/api/runs/{id}/checklist` agree on `11/12` and `0.88` for a
   legacy MLflow run without episode events; browser smoke on desktop/mobile
@@ -219,6 +224,7 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 
 | Date | Change |
 |------|--------|
+| 2026-06-02 | Dataset Center full workflow: backend staged uploads/URL downloads/safe archive extraction/table preview/create-from-config/config editing, React Dataset Center search/filter/sort, full creation wizard, seven-tab detail page, docs and backend tests |
 | 2026-06-02 | Single-shot/repeated now show code + checklist coverage in the dashboard: the legacy runners emit a synthesized episode (solution.ipynb, notebook_events, feedback_trace, summary) into `--workspace-dir` and log `checklist_coverage` measured from the generated code, so Notebook/Trajectory/Checklist tabs populate for these modes too |
 | 2026-06-02 | Single-shot/repeated now produce a score locally: raised legacy executor timeout 60→300s, prompts require a fitted predict-ready model, and the runner auto-fits an unfitted submitted model before scoring (gpt-oss-120b left it unfitted). Verified single_shot=0.931 f1 on example_dry_bean |
 | 2026-06-02 | Dashboard local-execution fix: single-shot/repeated use the legacy executor which defaulted to `docker` from .env → "no candidate" on a Mac without Docker. Local launches now force the in-process `subprocess` executor + local kernel (env `AUTOVIBE_DASHBOARD_EXECUTOR`) |
