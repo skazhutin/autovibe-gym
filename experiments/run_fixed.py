@@ -479,7 +479,6 @@ def main():
             "sandbox_timeout": sandbox_timeout,
             "n_stages": len(stages),
             "stage_budgets": json.dumps({s["name"]: s["budget"] for s in stages}),
-            "dataset_suite": splits.metadata.suite or "legacy",
             "dataset_split_strategy": splits.metadata.split_strategy,
             "dataset_role": splits.metadata.role,
             "dataset_sampled": str(splits.metadata.sampled),

@@ -1,10 +1,13 @@
 name: example_naticusdroid
-suite: example_datasets
 source:
-  type: local_file
-  provider: example dataset supplied by project team
-  reference: example_naticusdroid
-  license: unknown
+  name: UCI NATICUSdroid (Android Permissions)
+  url: https://archive.ics.uci.edu/dataset/722/naticusdroid+android+permissions+dataset
+  license: CC BY 4.0
+  citation: Mathur, A. (2021). NATICUSdroid (Android Permissions) [Dataset]. UCI Machine
+    Learning Repository. https://doi.org/10.24432/C5FS64.
+  doi: 10.24432/C5FS64
+  provider: UCI Machine Learning Repository
+  reference: NATICUSdroid (Android Permissions)
 raw_data:
   files:
   - data.csv
@@ -29,3 +32,4 @@ preparation:
 role: high_dimensional_binary_security_domain
 notes:
   contamination_risk: reduced_vs_canonical_benchmarks
+created_at: '2026-05-27T14:28:51+03:00'

@@ -131,7 +131,6 @@ datasets/
 ```json
 {
   "name": "my_dataset",
-  "suite": "example_datasets",
   "source": {"type": "local_file", "provider": "...", "license": "..."},
   "raw_data": {
     "files": ["data.csv"],

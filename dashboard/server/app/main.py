@@ -12,9 +12,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.formparsers import MultiPartParser
 
 from .config import get_settings
 from .routers import datasets, health, models, runs, settings as settings_router
+
+# Keep dashboard uploads useful for real tabular files while preserving a cap.
+MultiPartParser.max_part_size = 250 * 1024 * 1024
 
 settings = get_settings()
 
