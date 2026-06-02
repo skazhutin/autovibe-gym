@@ -231,10 +231,15 @@ def main():
             raw_validation_ready = False
             preflight_error = None
             if model_obj is not None:
+                X_val = val.drop(columns=[target_col])
+                y_val = val[target_col]
                 try:
-                    X_val = val.drop(columns=[target_col])
-                    y_val = val[target_col]
-                    val_preds = model_obj.predict(X_val)
+                    try:
+                        val_preds = model_obj.predict(X_val)
+                    except Exception:
+                        # Safety net: fit the LLM's model if it was left unfitted.
+                        model_obj.fit(train.drop(columns=[target_col]), train[target_col])
+                        val_preds = model_obj.predict(X_val)
                     raw_validation_ready = True
                     val_metric = score_with_coercion(metric_fn, y_val, val_preds)
                     if best_val is None or val_metric > best_val:

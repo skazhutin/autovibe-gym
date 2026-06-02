@@ -162,17 +162,26 @@ def main():
                     model_obj = value
                     break
         if model_obj is not None:
+            X_val = val.drop(columns=[target_col]).head(32)
+            preflight_ok = True
             try:
-                X_val = val.drop(columns=[target_col]).head(32)
                 model_obj.predict(X_val)
-            except Exception as exc:
-                final_status = "submit_blocked_preflight"
-                null_reason = f"{type(exc).__name__}: {exc}"
-                submit_failure_type = type(exc).__name__
-                finalize_path = "submit_preflight"
-                submit_error = null_reason
-                stderr += f"\n[submit preflight error] {submit_error}"
-            else:
+            except Exception:
+                # Safety net: the LLM defined the model but may not have fitted it.
+                # Fit the chosen architecture on train and retry before rejecting.
+                try:
+                    model_obj.fit(train.drop(columns=[target_col]), train[target_col])
+                    model_obj.predict(X_val)
+                    finalize_path = "single_shot_autofit"
+                except Exception as exc:
+                    preflight_ok = False
+                    final_status = "submit_blocked_preflight"
+                    null_reason = f"{type(exc).__name__}: {exc}"
+                    submit_failure_type = type(exc).__name__
+                    finalize_path = "submit_preflight"
+                    submit_error = null_reason
+                    stderr += f"\n[submit preflight error] {submit_error}"
+            if preflight_ok:
                 try:
                     X_test = test.drop(columns=[target_col])
                     y_test = test[target_col]
