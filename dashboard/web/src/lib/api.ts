@@ -52,6 +52,7 @@ export interface Dataset {
   id: string;
   name: string;
   task: string;
+  taskType?: "classification" | "regression" | "auto" | "unknown";
   metric: string;
   metricGoal: "min" | "max";
   rows: number;
@@ -60,9 +61,160 @@ export interface Dataset {
   source: string;
   desc: string;
   prepared: boolean;
+  status?: DatasetStatus;
   datasetDir: string;
   seed?: number;
   suite?: string | null;
+  tags?: string[];
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  hasTrain?: boolean;
+  hasVal?: boolean;
+  hasTest?: boolean;
+  rawFiles?: UploadedFileNode[];
+  warnings?: string[];
+  warningsCount?: number;
+  sources?: DatasetSource[];
+  splits?: Record<string, DatasetSplitFile | null>;
+}
+
+export type DatasetStatus = "prepared" | "partial" | "unprepared";
+
+export interface DatasetSource {
+  name?: string;
+  url?: string;
+  license?: string;
+  citation?: string;
+  author?: string;
+  organization?: string;
+  original_download_date?: string;
+  upload_date?: string;
+  notes?: string;
+}
+
+export interface AgentNotes {
+  task_description: string;
+  data_structure: string;
+  column_descriptions: Record<string, string>;
+  additional_comments: string;
+  leakage_warning: string;
+  visible_to_agent: boolean;
+}
+
+export interface DatasetTaskConfig {
+  task_type: "auto" | "classification" | "regression";
+  target_col: string;
+  metric_name: string;
+  metric_goal: "min" | "max";
+  positive_label?: string | null;
+  class_labels?: string[];
+  id_columns?: string[];
+  ignore_columns?: string[];
+  sample_weight_col?: string | null;
+  group_col?: string | null;
+  time_col?: string | null;
+  max_runtime?: number | null;
+  max_steps?: number | null;
+  allowed_libraries?: string[];
+  constraints?: string;
+}
+
+export interface DatasetSplitFile {
+  path: string;
+  source_path?: string | null;
+  rows: number;
+  cols: number;
+}
+
+export interface DatasetSplitConfig {
+  mode: "raw_split" | "prepared_files";
+  train?: DatasetSplitFile | null;
+  val?: DatasetSplitFile | null;
+  test?: DatasetSplitFile | null;
+  raw_path?: string;
+  mapping?: Record<string, string>;
+  ratios?: { train: number; val: number; test: number } | null;
+  seed: number;
+  shuffle?: boolean;
+  stratify?: "auto" | "on" | "off";
+  create_val_from_train?: boolean;
+  val_ratio?: number | null;
+}
+
+export interface UploadedFileNode {
+  id: string;
+  path: string;
+  name: string;
+  size: number;
+  format: string;
+  kind: "file" | "dir";
+  readable: boolean;
+  rows?: number | null;
+  cols?: number | null;
+  status: string;
+  warnings: string[];
+  children?: UploadedFileNode[];
+  original_name?: string;
+}
+
+export interface DatasetConfig {
+  id: string;
+  name: string;
+  created_at?: string | null;
+  updated_at?: string | null;
+  version: number;
+  status: DatasetStatus;
+  task: DatasetTaskConfig;
+  splits: DatasetSplitConfig;
+  raw_files: UploadedFileNode[];
+  agent_notes: AgentNotes;
+  sources: DatasetSource[];
+  tags: string[];
+  suite?: string | null;
+  warnings: string[];
+}
+
+export interface DatasetCreatePayload {
+  id: string;
+  name: string;
+  uploadId?: string | null;
+  task: DatasetTaskConfig;
+  splits: DatasetSplitConfig;
+  agentNotes: AgentNotes;
+  sources: DatasetSource[];
+  tags: string[];
+  suite?: string | null;
+  warnings?: string[];
+  desc?: string;
+}
+
+export interface DatasetPreview {
+  columns: string[];
+  rows: unknown[][];
+  total: number | null;
+  shown: number;
+  dtypes?: Record<string, string>;
+  missing?: Record<string, number>;
+  warnings?: string[];
+}
+
+export interface DatasetColumnStats {
+  name: string;
+  dtype: string;
+  kind: "numeric" | "categorical";
+  missingPct: number;
+  unique: number;
+  hist: number[];
+  target?: boolean;
+  ignored?: boolean;
+  idColumn?: boolean;
+}
+
+export interface DatasetUpload {
+  upload_id: string;
+  file?: UploadedFileNode;
+  files: UploadedFileNode[];
+  flat: UploadedFileNode[];
 }
 
 export interface NotebookCell {
@@ -187,6 +339,20 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function reqForm<T>(path: string, body: FormData): Promise<T> {
+  const res = await fetch(BASE + path, { method: "POST", body });
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      detail = (await res.json()).detail ?? detail;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(detail);
+  }
+  return res.json() as Promise<T>;
+}
+
 export interface ServerHealth {
   online: boolean;
   configured: boolean;
@@ -219,30 +385,46 @@ export const api = {
 
   listDatasets: () => req<Dataset[]>("/datasets"),
   getDataset: (id: string) => req<Dataset>(`/datasets/${id}`),
+  getDatasetConfig: (id: string) => req<DatasetConfig>(`/datasets/${id}/config`),
+  updateDatasetConfig: (id: string, body: Partial<DatasetConfig>) =>
+    req<DatasetConfig>(`/datasets/${id}/config`, { method: "PUT", body: JSON.stringify(body) }),
+  uploadDatasetFile: (file: File, uploadId?: string | null) => {
+    const form = new FormData();
+    form.append("file", file);
+    if (uploadId) form.append("upload_id", uploadId);
+    return reqForm<DatasetUpload>("/datasets/uploads", form);
+  },
+  uploadDatasetFromUrl: (url: string, uploadId?: string | null) =>
+    req<DatasetUpload>("/datasets/uploads/from-url", {
+      method: "POST",
+      body: JSON.stringify({ url, uploadId }),
+    }),
+  listUploadedFiles: (uploadId: string) => req<DatasetUpload>(`/datasets/uploads/${uploadId}/files`),
+  extractUploadedArchive: (uploadId: string, path?: string) =>
+    req<DatasetUpload>(`/datasets/uploads/${uploadId}/extract`, {
+      method: "POST",
+      body: JSON.stringify({ path }),
+    }),
+  previewUploadedTable: (uploadId: string, path: string, limit = 50) =>
+    req<DatasetPreview>(
+      `/datasets/uploads/${uploadId}/preview?path=${encodeURIComponent(path)}&limit=${limit}`
+    ),
+  createDatasetFromConfig: (body: DatasetCreatePayload) =>
+    req<Dataset>("/datasets/create-from-config", { method: "POST", body: JSON.stringify(body) }),
+  prepareDataset: (id: string) =>
+    req<Dataset>(`/datasets/${id}/prepare`, { method: "POST", body: JSON.stringify({}) }),
   datasetPreview: (id: string, split = "train", limit = 50) =>
-    req<{ columns: string[]; rows: unknown[][]; total: number; shown: number }>(
+    req<DatasetPreview>(
       `/datasets/${id}/preview?split=${split}&limit=${limit}`
     ),
   datasetColumns: (id: string, split = "train") =>
-    req<
-      {
-        name: string;
-        dtype: string;
-        kind: "numeric" | "categorical";
-        missingPct: number;
-        unique: number;
-        hist: number[];
-      }[]
-    >(`/datasets/${id}/columns?split=${split}`),
+    req<DatasetColumnStats[]>(`/datasets/${id}/columns?split=${split}`),
   updateDataset: (id: string, body: Record<string, unknown>) =>
     req<Dataset>(`/datasets/${id}`, { method: "PUT", body: JSON.stringify(body) }),
   deleteDataset: (id: string) =>
     req<{ deleted: string }>(`/datasets/${id}`, { method: "DELETE" }),
   uploadDataset: (form: FormData) =>
-    fetch(BASE + "/datasets", { method: "POST", body: form }).then((r) => {
-      if (!r.ok) throw new Error("upload failed");
-      return r.json() as Promise<Dataset>;
-    }),
+    reqForm<Dataset>("/datasets", form),
 
   listModels: () => req<ModelRec[]>("/models"),
   providers: () => req<string[]>("/models/providers"),

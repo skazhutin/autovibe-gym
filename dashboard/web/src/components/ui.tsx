@@ -251,7 +251,7 @@ export function Modal({
 }
 
 /* ---------------- Form field ---------------- */
-export function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+export function Field({ label, hint, children }: { label: ReactNode; hint?: string; children: ReactNode }) {
   return (
     <label className="field">
       <span className="field-label">{label}</span>

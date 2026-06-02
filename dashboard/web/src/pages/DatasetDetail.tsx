@@ -1,95 +1,330 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { api } from "../lib/api";
+import { api, type AgentNotes, type Dataset, type DatasetConfig, type DatasetSource } from "../lib/api";
 import { useAsync } from "../lib/hooks";
 import { Button, Card, EmptyState, Field, Skeleton, Spinner, Tabs, Tag } from "../components/ui";
 import { Icon } from "../components/Icon";
 import { MiniHist } from "../components/charts";
 
 const TABS = [
-  { id: "preview", label: "Превью данных", icon: "table" },
-  { id: "columns", label: "Статистика колонок", icon: "sliders" },
-  { id: "meta", label: "Метаданные", icon: "settings" },
+  { id: "overview", label: "Overview", icon: "database" },
+  { id: "preview", label: "Preview", icon: "table" },
+  { id: "columns", label: "Columns", icon: "sliders" },
+  { id: "splits", label: "Splits", icon: "layers" },
+  { id: "config", label: "Config", icon: "settings" },
+  { id: "sources", label: "Sources", icon: "external" },
+  { id: "notes", label: "Agent notes", icon: "notebook" },
 ];
 
-function PreviewTab({ id }: { id: string }) {
-  const { data, loading } = useAsync(() => api.datasetPreview(id, "train", 50), [id]);
+type Split = "train" | "val" | "test";
+
+function SplitSelector({ split, onChange, dataset }: { split: Split; onChange: (s: Split) => void; dataset: Dataset }) {
+  const flags = { train: dataset.hasTrain, val: dataset.hasVal, test: dataset.hasTest };
+  return (
+    <div className="segmented small">
+      {(["train", "val", "test"] as const).map((s) => (
+        <button key={s} className={split === s ? "active" : ""} onClick={() => onChange(s)} disabled={!flags[s]}>
+          {s}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function OverviewTab({ dataset, config }: { dataset: Dataset; config: DatasetConfig | null }) {
+  const warnings = config?.warnings ?? dataset.warnings ?? [];
+  return (
+    <div className="stack" style={{ gap: 16 }}>
+      <div className="grid-4">
+        <Card className="metric-card"><span className="metric-label">Status</span><span className="metric-num" style={{ fontSize: 24 }}>{dataset.status ?? (dataset.prepared ? "prepared" : "partial")}</span></Card>
+        <Card className="metric-card"><span className="metric-label">Rows</span><span className="metric-num">{dataset.rows?.toLocaleString() ?? "-"}</span></Card>
+        <Card className="metric-card"><span className="metric-label">Features</span><span className="metric-num">{dataset.cols || "-"}</span></Card>
+        <Card className="metric-card"><span className="metric-label">Seed</span><span className="metric-num">{dataset.seed ?? 42}</span></Card>
+      </div>
+      <Card>
+        <div className="dataset-overview-grid">
+          <div><span className="k">id</span><span className="v mono">{dataset.id}</span></div>
+          <div><span className="k">task</span><span className="v">{dataset.task}</span></div>
+          <div><span className="k">target</span><span className="v mono">{dataset.target}</span></div>
+          <div><span className="k">metric</span><span className="v mono">{dataset.metric} ({dataset.metricGoal})</span></div>
+          <div><span className="k">source</span><span className="v">{dataset.source}</span></div>
+          <div><span className="k">suite</span><span className="v">{dataset.suite ?? "-"}</span></div>
+          <div><span className="k">created</span><span className="v">{dataset.createdAt ? new Date(dataset.createdAt).toLocaleString() : "-"}</span></div>
+          <div><span className="k">updated</span><span className="v">{dataset.updatedAt ? new Date(dataset.updatedAt).toLocaleString() : "-"}</span></div>
+        </div>
+        <div className="split-pills" style={{ marginTop: 16 }}>
+          <Tag tone={dataset.hasTrain ? "green" : "neutral"}>train</Tag>
+          <Tag tone={dataset.hasVal ? "green" : "neutral"}>val</Tag>
+          <Tag tone={dataset.hasTest ? "green" : "neutral"}>test</Tag>
+          {(dataset.tags ?? []).map((tag) => <Tag key={tag}>{tag}</Tag>)}
+        </div>
+      </Card>
+      {warnings.length > 0 && <div className="warn-box">{warnings.join(" ")}</div>}
+      {dataset.desc && <Card><div className="metric-label">Description</div><p style={{ marginBottom: 0 }}>{dataset.desc}</p></Card>}
+    </div>
+  );
+}
+
+function PreviewTab({ id, dataset }: { id: string; dataset: Dataset }) {
+  const [split, setSplit] = useState<Split>("train");
+  const { data, loading } = useAsync(() => api.datasetPreview(id, split, 50), [id, split]);
   if (loading && !data) return <Skeleton h={240} />;
-  if (!data || !data.columns.length) return <EmptyState icon="table" title="Нет данных" text="train.csv недоступен." />;
+  return (
+    <div className="stack" style={{ gap: 12 }}>
+      <SplitSelector split={split} onChange={setSplit} dataset={dataset} />
+      {!data || !data.columns.length ? (
+        <EmptyState icon="table" title={`No ${split} data`} text={`${split}.csv is not available.`} />
+      ) : (
+        <Card style={{ padding: 0 }}>
+          <div className="table-wrap">
+            <table className="data">
+              <thead>
+                <tr>
+                  {data.columns.map((c) => <th key={c} className={c === dataset.target ? "target-col" : undefined}>{c}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {data.rows.map((row, i) => (
+                  <tr key={i}>
+                    {row.map((v, j) => (
+                      <td key={j} className={`mono${data.columns[j] === dataset.target ? " target-col" : ""}`} style={{ fontSize: 12.5 }}>
+                        {v === null ? <span className="faint">empty</span> : String(v)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="faint" style={{ padding: "10px 14px", fontSize: 12 }}>
+            shown {data.shown} of {data.total ?? "unknown"} rows
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function ColumnsTab({ id, dataset, config }: { id: string; dataset: Dataset; config: DatasetConfig | null }) {
+  const [split, setSplit] = useState<Split>("train");
+  const { data, loading } = useAsync(() => api.datasetColumns(id, split), [id, split]);
+  const ignored = new Set(config?.task.ignore_columns ?? []);
+  const idCols = new Set(config?.task.id_columns ?? []);
+  if (loading && !data) return <Skeleton h={240} />;
+  return (
+    <div className="stack" style={{ gap: 12 }}>
+      <SplitSelector split={split} onChange={setSplit} dataset={dataset} />
+      {!data || !data.length ? (
+        <EmptyState icon="sliders" title={`No ${split} column stats`} />
+      ) : (
+        <Card style={{ padding: 0 }}>
+          <div className="table-wrap">
+            <table className="data">
+              <thead><tr><th>Column</th><th>Type</th><th>Kind</th><th>Missing</th><th>Unique</th><th>Markers</th><th>Distribution</th></tr></thead>
+              <tbody>
+                {data.map((c) => (
+                  <tr key={c.name}>
+                    <td className="mono">{c.name}</td>
+                    <td className="mono faint">{c.dtype}</td>
+                    <td><Tag tone={c.kind === "numeric" ? "blue" : "neutral"}>{c.kind}</Tag></td>
+                    <td className="mono" style={{ color: c.missingPct > 0 ? "var(--orange)" : "var(--text-dim)" }}>{c.missingPct}%</td>
+                    <td className="mono faint">{c.unique}</td>
+                    <td>
+                      <div className="split-pills">
+                        {c.name === dataset.target && <Tag tone="accent">target</Tag>}
+                        {(c.ignored || ignored.has(c.name)) && <Tag tone="red">ignored</Tag>}
+                        {(c.idColumn || idCols.has(c.name)) && <Tag tone="blue">id</Tag>}
+                      </div>
+                    </td>
+                    <td><MiniHist data={c.hist} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function SplitsTab({ config }: { config: DatasetConfig | null }) {
+  if (!config) return <Skeleton h={220} />;
+  const splits = config.splits;
   return (
     <Card style={{ padding: 0 }}>
       <div className="table-wrap">
         <table className="data">
-          <thead><tr>{data.columns.map((c) => <th key={c}>{c}</th>)}</tr></thead>
+          <thead><tr><th>Split</th><th>Prepared path</th><th>Source path</th><th>Rows</th><th>Cols</th></tr></thead>
           <tbody>
-            {data.rows.map((row, i) => (
-              <tr key={i}>{row.map((v, j) => <td key={j} className="mono" style={{ fontSize: 12.5 }}>{v === null ? <span className="faint">∅</span> : String(v)}</td>)}</tr>
-            ))}
+            {(["train", "val", "test"] as const).map((split) => {
+              const item = splits[split];
+              return (
+                <tr key={split}>
+                  <td><Tag tone={item ? "green" : "neutral"}>{split}</Tag></td>
+                  <td className="mono">{item?.path ?? "-"}</td>
+                  <td className="mono faint">{item?.source_path ?? "-"}</td>
+                  <td className="mono">{item?.rows ?? "-"}</td>
+                  <td className="mono">{item?.cols ?? "-"}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
-      <div className="faint" style={{ padding: "10px 14px", fontSize: 12 }}>показано {data.shown} из {data.total.toLocaleString()} строк</div>
-    </Card>
-  );
-}
-
-function ColumnsTab({ id }: { id: string }) {
-  const { data, loading } = useAsync(() => api.datasetColumns(id, "train"), [id]);
-  if (loading && !data) return <Skeleton h={240} />;
-  if (!data || !data.length) return <EmptyState icon="sliders" title="Нет статистики" />;
-  return (
-    <Card style={{ padding: 0 }}>
-      <div className="table-wrap">
-        <table className="data">
-          <thead><tr><th>Колонка</th><th>Тип</th><th>Вид</th><th>Пропуски</th><th>Уникальных</th><th>Распределение</th></tr></thead>
-          <tbody>
-            {data.map((c) => (
-              <tr key={c.name}>
-                <td className="mono">{c.name}</td>
-                <td className="mono faint">{c.dtype}</td>
-                <td><Tag tone={c.kind === "numeric" ? "blue" : "neutral"}>{c.kind === "numeric" ? "число" : "категория"}</Tag></td>
-                <td className="mono" style={{ color: c.missingPct > 0 ? "var(--orange)" : "var(--text-dim)" }}>{c.missingPct}%</td>
-                <td className="mono faint">{c.unique}</td>
-                <td><MiniHist data={c.hist} /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="dataset-split-meta">
+        <Tag mono>{splits.mode}</Tag>
+        <span>seed: <span className="mono">{splits.seed}</span></span>
+        <span>shuffle: <span className="mono">{String(splits.shuffle ?? true)}</span></span>
+        <span>stratify: <span className="mono">{splits.stratify ?? "auto"}</span></span>
+        {splits.ratios && <span>ratios: <span className="mono">{splits.ratios.train}/{splits.ratios.val}/{splits.ratios.test}</span></span>}
       </div>
     </Card>
   );
 }
 
-function MetaTab({ id, onSaved }: { id: string; onSaved: () => void }) {
-  const { data, loading } = useAsync(() => api.getDataset(id), [id]);
-  const [form, setForm] = useState<Record<string, string>>({});
+function ConfigTab({ id, config, onSaved }: { id: string; config: DatasetConfig | null; onSaved: () => void }) {
+  const [form, setForm] = useState<DatasetConfig | null>(config);
   const [busy, setBusy] = useState(false);
   const [ok, setOk] = useState(false);
-  if (loading && !data) return <Skeleton h={200} />;
-  if (!data) return null;
-  const val = (k: keyof typeof data, f: string) => form[f] ?? String((data as unknown as Record<string, unknown>)[k] ?? "");
-
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => setForm(config), [config]);
+  if (!form) return <Skeleton h={240} />;
+  const task = form.task;
+  const setTask = (patch: Partial<typeof task>) => setForm((s) => s && { ...s, task: { ...s.task, ...patch } });
   async function save() {
-    setBusy(true); setOk(false);
+    const current = form;
+    if (!current) return;
+    setBusy(true);
+    setOk(false);
+    setErr(null);
     try {
-      await api.updateDataset(id, {
-        name: val("name", "name"), target: val("target", "target"),
-        metric: val("metric", "metric"), desc: val("desc", "desc"),
-      });
-      setOk(true); onSaved();
-    } finally { setBusy(false); }
+      await api.updateDatasetConfig(id, current);
+      setOk(true);
+      onSaved();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
   }
-
   return (
     <Card>
-      <div className="stack" style={{ gap: 14, maxWidth: 520 }}>
-        <Field label="Имя"><input className="input" value={val("name", "name")} onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))} /></Field>
-        <Field label="Target-колонка"><input className="input mono" value={val("target", "target")} onChange={(e) => setForm((s) => ({ ...s, target: e.target.value }))} /></Field>
-        <Field label="Метрика"><input className="input mono" value={val("metric", "metric")} onChange={(e) => setForm((s) => ({ ...s, metric: e.target.value }))} /></Field>
-        <Field label="Описание"><textarea className="input" rows={3} value={val("desc", "desc")} onChange={(e) => setForm((s) => ({ ...s, desc: e.target.value }))} /></Field>
+      <div className="stack" style={{ gap: 16 }}>
+        <div className="grid-3">
+          <Field label="Name"><input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
+          <Field label="Task type">
+            <select className="input" value={task.task_type} onChange={(e) => setTask({ task_type: e.target.value as typeof task.task_type })}>
+              <option value="auto">auto</option><option value="classification">classification</option><option value="regression">regression</option>
+            </select>
+          </Field>
+          <Field label="Metric goal">
+            <select className="input" value={task.metric_goal} onChange={(e) => setTask({ metric_goal: e.target.value as typeof task.metric_goal })}>
+              <option value="max">max</option><option value="min">min</option>
+            </select>
+          </Field>
+          <Field label="Target"><input className="input mono" value={task.target_col} onChange={(e) => setTask({ target_col: e.target.value })} /></Field>
+          <Field label="Metric"><input className="input mono" value={task.metric_name} onChange={(e) => setTask({ metric_name: e.target.value })} /></Field>
+          <Field label="Suite"><input className="input" value={form.suite ?? ""} onChange={(e) => setForm({ ...form, suite: e.target.value })} /></Field>
+        </div>
+        <details className="disclosure">
+          <summary>Advanced config</summary>
+          <div className="grid-2" style={{ marginTop: 14 }}>
+            <Field label="ID columns"><input className="input mono" value={(task.id_columns ?? []).join(", ")} onChange={(e) => setTask({ id_columns: e.target.value.split(",").map((v) => v.trim()).filter(Boolean) })} /></Field>
+            <Field label="Ignore columns"><input className="input mono" value={(task.ignore_columns ?? []).join(", ")} onChange={(e) => setTask({ ignore_columns: e.target.value.split(",").map((v) => v.trim()).filter(Boolean) })} /></Field>
+            <Field label="Sample weight column"><input className="input mono" value={task.sample_weight_col ?? ""} onChange={(e) => setTask({ sample_weight_col: e.target.value || null })} /></Field>
+            <Field label="Group column"><input className="input mono" value={task.group_col ?? ""} onChange={(e) => setTask({ group_col: e.target.value || null })} /></Field>
+            <Field label="Time column"><input className="input mono" value={task.time_col ?? ""} onChange={(e) => setTask({ time_col: e.target.value || null })} /></Field>
+            <Field label="Positive label"><input className="input mono" value={task.positive_label ?? ""} onChange={(e) => setTask({ positive_label: e.target.value || null })} /></Field>
+          </div>
+        </details>
         <div className="row">
-          <Button variant="primary" onClick={save} disabled={busy}>{busy ? <Spinner /> : "Сохранить"}</Button>
-          {ok && <span style={{ color: "var(--green)", fontSize: 13 }}><Icon name="check" size={14} /> сохранено</span>}
+          <Button variant="primary" onClick={save} disabled={busy}>{busy ? <Spinner /> : "Save config"}</Button>
+          {ok && <span className="success-inline"><Icon name="check" size={14} /> saved</span>}
+          {err && <span className="error-inline">{err}</span>}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function SourcesTab({ id, config, onSaved }: { id: string; config: DatasetConfig | null; onSaved: () => void }) {
+  const [sources, setSources] = useState<DatasetSource[]>(config?.sources ?? []);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => setSources(config?.sources ?? []), [config]);
+  if (!config) return <Skeleton h={200} />;
+  const update = (idx: number, patch: DatasetSource) => setSources((all) => all.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
+  async function save() {
+    setBusy(true);
+    try {
+      await api.updateDatasetConfig(id, { sources } as Partial<DatasetConfig>);
+      onSaved();
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="stack" style={{ gap: 12 }}>
+      {sources.map((source, idx) => (
+        <Card key={idx}>
+          <div className="spread" style={{ marginBottom: 12 }}>
+            <strong>Source {idx + 1}</strong>
+            <Button size="sm" variant="ghost" icon="trash" onClick={() => setSources((s) => s.filter((_, i) => i !== idx))}>Remove</Button>
+          </div>
+          <div className="grid-2">
+            <Field label="Name"><input className="input" value={source.name ?? ""} onChange={(e) => update(idx, { name: e.target.value })} /></Field>
+            <Field label="URL"><input className="input" value={source.url ?? ""} onChange={(e) => update(idx, { url: e.target.value })} /></Field>
+            <Field label="License"><input className="input" value={source.license ?? ""} onChange={(e) => update(idx, { license: e.target.value })} /></Field>
+            <Field label="Citation"><input className="input" value={source.citation ?? ""} onChange={(e) => update(idx, { citation: e.target.value })} /></Field>
+          </div>
+          <Field label="Notes"><textarea className="input" rows={2} value={source.notes ?? ""} onChange={(e) => update(idx, { notes: e.target.value })} /></Field>
+        </Card>
+      ))}
+      <div className="row">
+        <Button icon="plus" onClick={() => setSources((s) => [...s, {}])}>Add source</Button>
+        <Button variant="primary" onClick={save} disabled={busy}>{busy ? <Spinner /> : "Save sources"}</Button>
+      </div>
+    </div>
+  );
+}
+
+function AgentNotesTab({ id, config, onSaved }: { id: string; config: DatasetConfig | null; onSaved: () => void }) {
+  const [notes, setNotes] = useState<AgentNotes | null>(config?.agent_notes ?? null);
+  const [cols, setCols] = useState("{}");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    setNotes(config?.agent_notes ?? null);
+    setCols(JSON.stringify(config?.agent_notes?.column_descriptions ?? {}, null, 2));
+  }, [config]);
+  if (!notes) return <Skeleton h={220} />;
+  const set = (patch: Partial<AgentNotes>) => setNotes((n) => n && { ...n, ...patch });
+  async function save() {
+    setBusy(true);
+    setErr(null);
+    try {
+      const parsed = JSON.parse(cols || "{}");
+      await api.updateDatasetConfig(id, { agent_notes: { ...notes, column_descriptions: parsed } } as Partial<DatasetConfig>);
+      onSaved();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Card>
+      <div className="stack" style={{ gap: 14 }}>
+        <div className="warn-box">These fields may be visible to the LLM-agent. Do not include test labels, hidden answers, or leakage.</div>
+        <label className="check-row"><input type="checkbox" checked={notes.visible_to_agent} onChange={(e) => set({ visible_to_agent: e.target.checked })} /> Visible to agent</label>
+        <Field label="Task description"><textarea className="input" rows={3} value={notes.task_description} onChange={(e) => set({ task_description: e.target.value })} /></Field>
+        <Field label="Data structure"><textarea className="input" rows={3} value={notes.data_structure} onChange={(e) => set({ data_structure: e.target.value })} /></Field>
+        <Field label="Column descriptions JSON"><textarea className="input mono" rows={6} value={cols} onChange={(e) => setCols(e.target.value)} /></Field>
+        <Field label="Additional comments"><textarea className="input" rows={3} value={notes.additional_comments} onChange={(e) => set({ additional_comments: e.target.value })} /></Field>
+        <Field label="Leakage warning"><textarea className="input" rows={2} value={notes.leakage_warning} onChange={(e) => set({ leakage_warning: e.target.value })} /></Field>
+        <div className="row">
+          <Button variant="primary" onClick={save} disabled={busy}>{busy ? <Spinner /> : "Save notes"}</Button>
+          {err && <span className="error-inline">{err}</span>}
         </div>
       </div>
     </Card>
@@ -99,40 +334,48 @@ function MetaTab({ id, onSaved }: { id: string; onSaved: () => void }) {
 export default function DatasetDetail() {
   const { id = "" } = useParams();
   const nav = useNavigate();
-  const [tab, setTab] = useState("preview");
+  const [tab, setTab] = useState("overview");
   const { data, loading, reload } = useAsync(() => api.getDataset(id), [id]);
+  const { data: config, loading: configLoading, reload: reloadConfig } = useAsync(() => api.getDatasetConfig(id), [id]);
+
+  function refresh() {
+    reload();
+    reloadConfig();
+  }
 
   if (loading && !data) return <Skeleton h={300} />;
-  if (!data) return <EmptyState icon="alert" title="Датасет не найден" action={<Button onClick={() => nav("/datasets")}>К датасетам</Button>} />;
+  if (!data) return <EmptyState icon="alert" title="Dataset not found" action={<Button onClick={() => nav("/datasets")}>Back to datasets</Button>} />;
 
   return (
     <div>
-      <button className="back-link" onClick={() => nav("/datasets")}><Icon name="chevronLeft" size={16} /> Все датасеты</button>
+      <button className="back-link" onClick={() => nav("/datasets")}><Icon name="chevronLeft" size={16} /> All datasets</button>
       <Card style={{ marginBottom: 20 }}>
         <div className="spread">
           <div>
             <div className="ds-title" style={{ fontSize: 18 }}>{data.name}</div>
             <div className="run-meta-line" style={{ margin: "10px 0 0" }}>
-              <Tag tone={data.task === "Регрессия" ? "blue" : "neutral"}>{data.task}</Tag>
-              <span className="mono faint">метрика: {data.metric}</span>
+              <Tag tone={data.status === "prepared" ? "green" : data.status === "partial" ? "blue" : "red"}>{data.status ?? (data.prepared ? "prepared" : "partial")}</Tag>
+              <span className="mono faint">metric: {data.metric}</span>
               <span className="mono faint">target: {data.target}</span>
-              {!data.prepared && <Tag tone="red">не подготовлен</Tag>}
+              <span className="mono faint">path: {data.datasetDir}</span>
             </div>
           </div>
-          {data.prepared && (
-            <div className="chip-metrics">
-              <div className="chip-metric"><div><div className="cm-label">строк</div><div className="cm-val">{data.rows.toLocaleString()}</div></div></div>
-              <span className="vline" />
-              <div className="chip-metric"><div><div className="cm-label">признаков</div><div className="cm-val">{data.cols}</div></div></div>
-            </div>
-          )}
+          <div className="chip-metrics">
+            <div className="chip-metric"><div><div className="cm-label">rows</div><div className="cm-val">{data.rows.toLocaleString()}</div></div></div>
+            <span className="vline" />
+            <div className="chip-metric"><div><div className="cm-label">features</div><div className="cm-val">{data.cols}</div></div></div>
+          </div>
         </div>
       </Card>
 
       <Tabs tabs={TABS} active={tab} onChange={setTab} />
-      {tab === "preview" && <PreviewTab id={id} />}
-      {tab === "columns" && <ColumnsTab id={id} />}
-      {tab === "meta" && <MetaTab id={id} onSaved={reload} />}
+      {tab === "overview" && <OverviewTab dataset={data} config={config} />}
+      {tab === "preview" && <PreviewTab id={id} dataset={data} />}
+      {tab === "columns" && <ColumnsTab id={id} dataset={data} config={config} />}
+      {tab === "splits" && (configLoading ? <Skeleton h={220} /> : <SplitsTab config={config} />)}
+      {tab === "config" && <ConfigTab id={id} config={config} onSaved={refresh} />}
+      {tab === "sources" && <SourcesTab id={id} config={config} onSaved={refresh} />}
+      {tab === "notes" && <AgentNotesTab id={id} config={config} onSaved={refresh} />}
     </div>
   );
 }
