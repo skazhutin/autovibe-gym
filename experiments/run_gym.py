@@ -13,6 +13,7 @@ from experiments.mlflow_config import configure_mlflow_tracking
 from gym import GymAgent, NotebookGymEnv
 from gym.datasets import (
     DatasetSplits,
+    format_dataset_context,
     load_dataset_splits,
     metric_from_name,
     resolve_metric,
@@ -46,6 +47,7 @@ def load_dataset(dataset_dir: str):
         "source": splits.metadata.source,
         "seed": splits.metadata.seed,
         "notes": splits.metadata.notes,
+        "dataset_notes": splits.metadata.dataset_notes,
         "suite": splits.metadata.suite,
         "split_strategy": splits.metadata.split_strategy,
         "role": splits.metadata.role,
@@ -116,6 +118,7 @@ def main():
     dataset_name = _dataset_name(splits, args.dataset)
     model_name = args.model or default_model_name()
     run_name = args.run_name or f"gym_{dataset_name}_{model_name.split('/')[-1]}"
+    dataset_context = format_dataset_context(splits.metadata)
 
     import mlflow
 
@@ -157,6 +160,7 @@ def main():
             workspace_dir=args.workspace_dir,
             mode=args.episode_mode,
             kernel_timeout=sandbox_timeout,
+            dataset_context=dataset_context,
         )
 
         agent = GymAgent(env=env, model=model_name, max_tokens=max_tokens)

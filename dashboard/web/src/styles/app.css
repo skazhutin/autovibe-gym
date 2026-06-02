@@ -821,6 +821,134 @@ table.data tbody tr.clickable:hover {
   color: var(--text);
 }
 
+.dataset-hero {
+  align-items: flex-start;
+}
+
+.dataset-file-card,
+.join-card,
+.dataset-inline-card,
+.issue-card {
+  padding: 16px;
+}
+
+.checkbox-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.checkbox-row input {
+  accent-color: var(--accent-ink);
+}
+
+.statbox {
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 12px 14px;
+  background: var(--surface-2);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.statbox .k {
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.statbox .v {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.issue-card.red {
+  border-color: var(--red-border);
+  background: color-mix(in srgb, var(--red-bg) 45%, var(--surface));
+}
+
+.issue-card.blue {
+  border-color: color-mix(in srgb, var(--blue) 25%, var(--border));
+  background: color-mix(in srgb, var(--blue) 7%, var(--surface));
+}
+
+.issue-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.splitbar-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.splitbar {
+  height: 12px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+  display: flex;
+  border: 1px solid var(--border);
+}
+
+.splitbar-segment {
+  height: 100%;
+  display: block;
+}
+
+.splitbar-segment.train {
+  background: var(--accent);
+}
+
+.splitbar-segment.val {
+  background: color-mix(in srgb, var(--blue) 65%, white);
+}
+
+.splitbar-segment.test {
+  background: color-mix(in srgb, var(--green) 80%, white);
+}
+
+.splitbar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+.splitbar-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.splitbar-legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.splitbar-legend i.train {
+  background: var(--accent);
+}
+
+.splitbar-legend i.val {
+  background: color-mix(in srgb, var(--blue) 65%, white);
+}
+
+.splitbar-legend i.test {
+  background: color-mix(in srgb, var(--green) 80%, white);
+}
+
 /* ============ Code block ============ */
 .code {
   font-family: var(--font-mono);

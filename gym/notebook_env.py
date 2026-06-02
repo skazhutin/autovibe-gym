@@ -174,6 +174,7 @@ class NotebookGymEnv:
         mode: str | EpisodeMode | None = None,
         backend: KernelExecutionBackend | None = None,
         kernel_timeout: int = 60,
+        dataset_context: str = "",
     ):
         self.state = NotebookEnvState(
             train=train.reset_index(drop=True),
@@ -193,6 +194,7 @@ class NotebookGymEnv:
         ).resolve()
         self.backend = backend or _default_kernel_backend()
         self.kernel_timeout = kernel_timeout
+        self.dataset_context = dataset_context.strip()
         self.kernel = self.backend.create_session(self.workspace_dir)
         self.notebook = NotebookDocument.create(self.workspace_dir / "solution.ipynb")
         self.checklist = NotebookChecklist(target_col=target_col)
@@ -2147,6 +2149,7 @@ with open(_AutovibePath({self.kernel.kernel_visible_path(tmp_path)!r}), "rb") as
             self.state.metric_name,
             max_chars=4500,
         )
+        dataset_context_block = f"{self.dataset_context}\n\n" if self.dataset_context else ""
         return {
             "task": (
                 "You are solving a supervised ML task in a real Jupyter notebook.\n"
@@ -2154,6 +2157,7 @@ with open(_AutovibePath({self.kernel.kernel_visible_path(tmp_path)!r}), "rb") as
                 f"Metric: {self.state.metric_name}\n"
                 f"Max turns: {self.state.max_steps}\n\n"
                 f"{dataset_card}\n\n"
+                f"{dataset_context_block}"
                 "A real .ipynb document is the source of truth for your solution. "
                 "You may add, update, delete, move, inspect, and execute cells. "
                 "The notebook uses a persistent Jupyter kernel, so variables survive "

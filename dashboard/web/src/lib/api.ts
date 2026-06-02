@@ -63,6 +63,100 @@ export interface Dataset {
   datasetDir: string;
   seed?: number;
   suite?: string | null;
+  ingestionMode?: string | null;
+}
+
+export interface DatasetFileEntry {
+  logical_name: string;
+  role: string;
+  source_type: string;
+  url: string;
+  path: string;
+  format: string;
+  read_options: Record<string, unknown>;
+  optional: boolean;
+  archive_member: string;
+}
+
+export interface DatasetJoin {
+  left_table: string;
+  right_table: string;
+  how: string;
+  left_on: string[];
+  right_on: string[];
+}
+
+export interface DatasetConfig {
+  name: string;
+  suite: string;
+  source: Record<string, unknown>;
+  dataset_notes: Record<string, unknown>;
+  ingestion: {
+    mode: string;
+    files: DatasetFileEntry[];
+  };
+  relations?: {
+    base_table?: string;
+    joins?: DatasetJoin[];
+  };
+  task: Record<string, unknown>;
+  split: Record<string, unknown>;
+  preparation: Record<string, unknown>;
+  role?: string | null;
+  notes?: Record<string, unknown>;
+}
+
+export interface DatasetFileRecord {
+  path: string;
+  name: string;
+  size: number;
+  format: string;
+  url?: string;
+  archive_members?: { member: string; format: string; size: number }[];
+}
+
+export interface DatasetDetail extends Dataset {
+  config: DatasetConfig | null;
+  preparedMeta: Record<string, unknown>;
+  files: DatasetFileRecord[];
+}
+
+export interface DatasetPreview {
+  logical_name?: string;
+  format: string;
+  path?: string;
+  columns: string[];
+  rows: unknown[][];
+  shape: { rows: number | null; cols: number | null };
+  shape_is_approximate: boolean;
+  dtypes: Record<string, string>;
+  missing_counts: Record<string, number>;
+  target_distribution: Record<string, unknown> | null;
+  warnings: string[];
+  archive_members?: { member: string; format: string; size: number }[];
+  join_diagnostics?: Record<string, unknown>[];
+}
+
+export interface DatasetValidationIssue {
+  message: string;
+  field?: string;
+  logical_name?: string;
+}
+
+export interface DatasetValidation {
+  ok: boolean;
+  errors: DatasetValidationIssue[];
+  warnings: DatasetValidationIssue[];
+  diagnostics: Record<string, unknown>;
+}
+
+export interface DatasetPrepareResult {
+  dataset: string;
+  status: string;
+  reason?: string;
+  prepared_dir?: string;
+  meta?: Record<string, unknown>;
+  warnings?: string[];
 }
 
 export interface NotebookCell {
@@ -217,7 +311,30 @@ export const api = {
   logs: (id: string) => req<LogsData>(`/runs/${id}/logs`),
 
   listDatasets: () => req<Dataset[]>("/datasets"),
-  getDataset: (id: string) => req<Dataset>(`/datasets/${id}`),
+  createDataset: (name: string) =>
+    req<DatasetDetail>("/datasets/create", { method: "POST", body: JSON.stringify({ name }) }),
+  getDataset: (id: string) => req<DatasetDetail>(`/datasets/${id}`),
+  getDatasetConfig: (id: string) => req<DatasetConfig>(`/datasets/${id}/config`),
+  saveDatasetConfig: (id: string, body: DatasetConfig) =>
+    req<DatasetDetail>(`/datasets/${id}/config`, { method: "PUT", body: JSON.stringify(body) }),
+  uploadDatasetFiles: (id: string, form: FormData) =>
+    fetch(BASE + `/datasets/${id}/files`, { method: "POST", body: form }).then((r) => {
+      if (!r.ok) throw new Error("upload failed");
+      return r.json() as Promise<DatasetFileRecord[]>;
+    }),
+  downloadDatasetFiles: (id: string, body: { url: string; suggested_name?: string }[]) =>
+    req<DatasetFileRecord[]>(`/datasets/${id}/downloads`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  previewDatasetSource: (
+    id: string,
+    body: { logical_name?: string; split_role?: string; joined?: boolean; limit?: number }
+  ) => req<DatasetPreview>(`/datasets/${id}/preview`, { method: "POST", body: JSON.stringify(body) }),
+  validateDataset: (id: string) =>
+    req<DatasetValidation>(`/datasets/${id}/validate`, { method: "POST" }),
+  prepareDataset: (id: string) =>
+    req<DatasetPrepareResult>(`/datasets/${id}/prepare`, { method: "POST" }),
   datasetPreview: (id: string, split = "train", limit = 50) =>
     req<{ columns: string[]; rows: unknown[][]; total: number; shown: number }>(
       `/datasets/${id}/preview?split=${split}&limit=${limit}`

@@ -3,8 +3,11 @@ from __future__ import annotations
 import sys
 from types import SimpleNamespace
 
+from fastapi.testclient import TestClient
+
+from dashboard.server.app.main import app
 from dashboard.server.app.config import default_python_bin
-from dashboard.server.app.services import mlflow_store, run_launcher
+from dashboard.server.app.services import dataset_store, mlflow_store, run_launcher
 
 
 def _fake_run(params: dict, metrics: dict, status: str = "FINISHED"):
@@ -125,3 +128,52 @@ def test_run_launcher_planned_steps_match_dashboard_modes():
 def test_run_launcher_python_available_accepts_paths_and_rejects_missing(tmp_path):
     assert run_launcher._python_available(sys.executable)
     assert not run_launcher._python_available(str(tmp_path / "missing-python"))
+
+
+def test_dataset_api_supports_create_upload_validate_and_prepare(tmp_path, monkeypatch):
+    monkeypatch.setattr(dataset_store, "get_settings", lambda: SimpleNamespace(datasets_dir=tmp_path))
+    client = TestClient(app)
+
+    created = client.post("/api/datasets/create", json={"name": "demo_ds"})
+    assert created.status_code == 200
+    dataset = created.json()
+    assert dataset["id"] == "demo_ds"
+
+    upload = client.post(
+        "/api/datasets/demo_ds/files",
+        files=[("files", ("data.csv", b"x,y\n1,0\n2,1\n3,0\n4,1\n", "text/csv"))],
+    )
+    assert upload.status_code == 200
+    uploaded_path = upload.json()[0]["path"]
+
+    config = dataset["config"]
+    config["ingestion"]["files"] = [
+        {
+            "logical_name": "table_1",
+            "role": "base",
+            "source_type": "upload",
+            "url": "",
+            "path": uploaded_path,
+            "format": "auto",
+            "read_options": {},
+            "optional": False,
+            "archive_member": "",
+        }
+    ]
+    config["task"]["target_col"] = "y"
+    config["task"]["metric"] = "f1_macro"
+    saved = client.put("/api/datasets/demo_ds/config", json=config)
+    assert saved.status_code == 200
+
+    preview = client.post("/api/datasets/demo_ds/preview", json={"logical_name": "table_1", "limit": 2})
+    assert preview.status_code == 200
+    assert preview.json()["columns"] == ["x", "y"]
+
+    validation = client.post("/api/datasets/demo_ds/validate")
+    assert validation.status_code == 200
+    assert validation.json()["ok"] is True
+
+    prepared = client.post("/api/datasets/demo_ds/prepare")
+    assert prepared.status_code == 200
+    assert prepared.json()["status"] == "ok"
+    assert (tmp_path / "demo_ds" / "prepared" / "meta.json").exists()

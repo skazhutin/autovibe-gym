@@ -1,15 +1,15 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-02 (dashboard: local/server execution modes, SSH remote exec, live updates, checklist consistency)
-**Phase:** Hardening after first full H200 recon + building the local control-panel dashboard for configuring/launching/inspecting runs.
+**Last updated:** 2026-06-02 (dashboard execution modes + config-driven dataset ingestion verified end-to-end)
+**Phase:** Extending the local control-panel dashboard from run inspection/launch into full dataset configuration/preparation while keeping the notebook + Docker stack green.
 
 ---
 
 ## Current Sprint Goal
 
-Harden the merged real Jupyter + Docker-backed kernel environment with
-behavioral privacy tests, deterministic PR CI, and minimal fixes for discovered
-test, sandbox, and logging gaps.
+Ship config-driven dataset ingestion across CLI + dashboard, including richer
+dataset context for agents, safe multi-format readers, and raw/pre-split
+preparation flows without regressing the notebook/Docker environment.
 
 ---
 
@@ -21,7 +21,10 @@ test, sandbox, and logging gaps.
 |------|--------|-------|
 | `notebook.py` | Done | nbformat v4 document editing, stable cell ids, revisions, outputs, Python export |
 | `jupyter_kernel.py` | Done | persistent local `ipykernel`; Docker kernel backend with loopback-only ZMQ ports and workspace path translation |
-| `notebook_env.py` | Done | real notebook action loop, clean restart-and-run-all, validate, submit, public/private artifacts |
+| `notebook_env.py` | Done | real notebook action loop, clean restart-and-run-all, validate, submit, public/private artifacts, and dataset-context injection into prompts |
+| `datasets.py` | Done | metadata loader now carries `dataset_notes` and formats safe dataset context blocks for agent-facing prompts |
+| `dataset_ingestion.py` | Done | shared YAML-backed ingestion pipeline for raw/pre_split/multi-table datasets, validation, preview, URL download, and preparation |
+| `tabular_io.py` | Done | safe tabular readers for CSV/TSV/TXT, Excel, JSON/JSONL, Parquet/Feather/ORC, and archive members |
 | `feedback.py` | Done | runtime/contract/checklist/terminal feedback items and generic hidden checklist policy |
 | `candidates.py` | Done | candidate records and validation registry |
 | `modes.py` | Done | `gym_with_checklist` and `iterative_no_checklist` share the same backend |
@@ -35,9 +38,9 @@ test, sandbox, and logging gaps.
 
 | File | Status | Notes |
 |------|--------|-------|
-| `run_gym.py` | Done | uses `NotebookGymEnv`, logs notebook/process/private metrics, artifacts to MLflow |
-| `run_baseline.py` | Done | single-shot control preserved; prompts require raw-DataFrame pipelines; missing score is not logged as zero |
-| `run_multishot.py` | Done | logged as `repeated_single_shot`; prompts require raw-DataFrame pipelines; not the fair checklist control |
+| `run_gym.py` | Done | uses `NotebookGymEnv`, logs notebook/process/private metrics, artifacts to MLflow, and passes structured dataset context into the agent prompt |
+| `run_baseline.py` | Done | single-shot control preserved; prompts require raw-DataFrame pipelines, include dataset context, and missing score is not logged as zero |
+| `run_multishot.py` | Done | logged as `repeated_single_shot`; prompts require raw-DataFrame pipelines, include dataset context, and are not the fair checklist control |
 | `run_fixed.py` | Done | fixed-transition control preserved; failed submit is not logged as real score 0.0 |
 | `compare.py` | Done | handles missing metrics without zero substitution |
 
@@ -62,23 +65,32 @@ test, sandbox, and logging gaps.
 | Clean run / validate / submit tests | Passing |
 | Checklist privacy/fairness tests | Passing |
 | Hidden-test privacy tests | Passing |
-| Docker kernel integration | Runs in GitHub Actions after sandbox image build |
+| Dataset ingestion / preparation pipeline | Passing |
+| Dashboard dataset API flow | Passing |
+| Docker kernel integration | Passing locally after sandbox image build; also runs in GitHub Actions when Docker is available |
 | Step-budget semantics | Passing |
 
 ---
 
 ## Current Verification
 
-Last local run:
+Latest local verification:
 
 ```bash
-python -m pytest --cov=gym --cov=experiments --cov=scripts --cov-report=term-missing --cov-report=xml --cov-fail-under=70
+python3 -m pytest tests/test_dataset_pipeline.py -q
+cd dashboard/web && npm run build
+python3 -m pytest -q
 ```
 
-Result after dashboard hardening: `198 passed`, coverage `74.70%`.
-The Docker-backed notebook integration test ran locally in this Windows
-workspace and passed. GitHub Actions remains the source of truth for the Linux
-sandbox image build.
+Results:
+
+- `tests/test_dataset_pipeline.py`: `37 passed`
+- `dashboard/web` production build: passed
+- full suite: `209 passed, 1 warning in 252.96s`
+
+The Docker-backed notebook integration now passes locally against a freshly
+built `autovibe-gym-sandbox:latest` image. GitHub Actions remains the source of
+truth for the Linux sandbox path.
 
 ---
 
@@ -142,9 +154,9 @@ Single-shot / repeated multishot failures — addressed in this PR (branch
 
 Still open (need server-side iteration):
 
-- **Sandbox image name.** Default is `autovibe-gym-sandbox:latest`; the server only
-  had `autovibe-gym:latest` built, and rootless Docker can't pull from docker.io.
-  Server setup task: build the image under the expected tag.
+- **Sandbox image name.** Default is `autovibe-gym-sandbox:latest`; local
+  verification passed after building that tag explicitly. Any remote host that
+  only has `autovibe-gym:latest` still needs the expected tag built locally.
 
 ## Web Dashboard (`dashboard/`, branch `dev/claude/web-dashboard`)
 
@@ -153,10 +165,12 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 - **Backend** (`dashboard/server`, FastAPI): reads runs from MLflow and parses
   episode artifacts into notebook/trajectory/checklist/errors/logs (per-item
   checklist closure reconstructed by replaying public notebook events through the
-  gym's own `NotebookChecklist`); datasets CRUD + CSV upload over `datasets/`;
-  models JSON registry seeded from `.env` with OpenAI-compatible health probe;
-  run launcher spawning `run_baseline/run_multishot/run_gym` subprocesses (shared
-  MLflow store), live status + process-log tail + stop.
+  gym's own `NotebookChecklist`); models JSON registry seeded from `.env` with
+  OpenAI-compatible health probe; run launcher spawning
+  `run_baseline/run_multishot/run_gym` subprocesses (shared MLflow store), live
+  status + process-log tail + stop; datasets now reuse the shared ingestion
+  layer for config/file/URL management, source preview, validation, and
+  preparation while keeping the legacy prepared-upload path compatible.
 - **Frontend** (`dashboard/web`, Vite+React+TS): all 8 screens built to the
   T-Bank design tokens — Dashboard, New Run, Runs, Run Detail (5 tabs), Compare,
   Datasets (+detail/upload/delete), Models, Settings. Light/dark theme + accent.
@@ -168,6 +182,12 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 - **Models:** registry seeded with the team's gemma/deepseek on the shared LLM
   server; any OpenAI-compatible endpoint (e.g. Cerebras/Groq/Gemini) can be added.
   Header pill shows LLM server reachability.
+- **Dataset UX** (`dashboard/web`): the datasets list now creates empty dataset
+  configs first, then opens a full editor with config/preview/validate/prepared
+  tabs; supports raw vs pre-split ingestion, multi-table joins, per-file format
+  and read options, uploads, URL downloads, dataset notes/LLM context, and a
+  proportion bar for split ratios that matches the existing dashboard design
+  language.
 - **Live updates:** runs launch into a known `data/runs/<id>/workspace` dir; the
   gym already flushes public artifacts after every step, so while a run is in
   progress the dashboard reads that dir directly — step counter, checklist
@@ -191,13 +211,17 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
   legacy MLflow run without episode events; browser smoke on desktop/mobile
   confirms `11/12`, `88%`, no stale `92%`, no console errors, and no page-level
   horizontal overflow.
-- **Run:** `dashboard/server/run.sh` (API :8000) + `cd dashboard/web && npm i && npm run dev` (:5173).
+- **Verified for dataset ingestion:** API tests cover create, upload, save,
+  preview, validate, and prepare flows; the frontend build passes with the new
+  dataset editor, split-visualization UI, richer preview diagnostics, and
+  prepared meta summary.
+- **Run:** `dashboard/server/run.sh` (API :8000) + `cd dashboard/web && npm install && npm run dev` (:5173).
 
 ## Blocked / Needs Decision
 
-- Local Docker CLI is available in this Windows workspace as of 2026-06-02; the
-  Docker-backed notebook integration test passed locally. GitHub Actions still
-  verifies the Linux sandbox image path.
+- Local Docker CLI is available in this workspace; the Docker-backed notebook
+  integration test now passes locally with the expected sandbox image tag.
+  GitHub Actions still verifies the Linux sandbox image path.
 - Existing `GymEnv` remains for compatibility, but new iterative experiments
   should use `NotebookGymEnv`.
 - Repository owner still needs to confirm the `main` ruleset requires the
@@ -208,10 +232,11 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 
 ## Next Actions
 
-1. [x] Все PR смержены в main
-2. [x] TZ.md, PROTOCOL.md, EXPERIMENT_REPORT.md синхронизированы
-3. [ ] Запустить `python -m experiments.run_matrix --mode local` на H200 → получить notebook-era experiment results и подтвердить fixed single-shot/repeated multishot сабмиты
-4. [ ] Обновить EXPERIMENT_REPORT.md с новыми результатами после п.3
+1. [x] Dashboard datasets moved from CSV-only upload to shared config-driven ingestion
+2. [x] Local verification now includes a passing Docker-backed full test suite (`209 passed`)
+3. [ ] Run dashboard smoke on a real multi-table dataset and a URL-ingested dataset
+4. [ ] Open/land the dataset-ingestion PR after manual dashboard verification and CI
+5. [ ] Запустить `python -m experiments.run_matrix --mode local` на H200 и обновить `EXPERIMENT_REPORT.md`
 
 ---
 
@@ -224,6 +249,7 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 | 2026-06-02 | Dashboard remote execution: run the gym on the GPU server over SSH while the site stays local (`services/remote_exec.py`: ssh/rsync launch + artifact sync + run-summary parse; key auth or optional expect password); configurable in Settings with a connectivity probe |
 | 2026-06-02 | Dashboard single-app server mode: FastAPI serves the built SPA (one process) so the whole dashboard can run on the server; added `serve.sh` and deploy docs |
 | 2026-06-02 | Dashboard live updates: launches write to a known workspace dir and the backend reads in-flight artifacts, so step/checklist/notebook/trajectory/logs advance during a run (2.5s polling); models registry seeded with team gemma/deepseek; header pill switched to LLM "Сервер онлайн/офлайн" |
+| 2026-06-02 | Added shared dataset ingestion (`gym/dataset_ingestion.py`, `gym/tabular_io.py`), passed dataset context into agent prompts, rebuilt the dashboard dataset flow around config/preview/validate/prepare, added matching split visualization in raw mode plus preview diagnostics/meta summary, and verified the full suite locally with the sandbox image (`209 passed`) |
 | 2026-06-02 | Dashboard polish: fixed Windows Python discovery for run launches, stabilized single-shot/repeated launch progress, reconciled checklist list/detail coverage for legacy MLflow runs, hid placeholder failed-submit scores, pinned `scikit-learn==1.7.2` in `pyproject.toml`, added dashboard regression tests, and fixed mobile layout overflow |
 | 2026-06-01 | Dashboard run fixes: dedup the MLflow twin of a live launch by run-name; reconcile orphaned 'running' metas (server reload mid-run) against MLflow; live per-second duration on client; cap launch threads (OMP/BLAS/MKL + AUTOVIBE_SANDBOX_THREADS, sequential joblib) to stop CPU/fan spikes; `run.sh` reload off by default (gym `.py` artifact writes were restarting uvicorn mid-run) |
 | 2026-06-01 | Added local web dashboard (`dashboard/`): FastAPI backend (MLflow runs, episode-artifact parsing, datasets/models CRUD, subprocess run launcher) + Vite/React/TS frontend with all 8 screens on the T-Bank design system |

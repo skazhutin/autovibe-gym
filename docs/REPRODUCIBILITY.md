@@ -115,75 +115,141 @@ mlflow ui --backend-store-uri mlruns/ --port 5000
 
 ## Adding a New Tabular Dataset
 
-### Step 1 — Add raw data
+The project now has one shared ingestion system for CLI preparation and the web
+dashboard. Inputs may be raw or already split, may come from local files or
+HTTP(S) URLs, and may use multiple related tables.
 
-Place the raw file(s) under `datasets/<name>/raw_data/`:
+### Supported input formats
 
+- `.csv`
+- `.csv.gz`
+- `.tsv`
+- `.txt` with delimiter detection or explicit `read_options.sep`
+- `.parquet`
+- `.xlsx`
+- `.xls`
+- `.json`
+- `.jsonl`
+- `.ndjson`
+- `.zip` containing supported tabular members
+- optional when deps are installed: `.feather`, `.orc`
+
+### Minimal raw-mode config
+
+```yaml
+name: my_dataset
+suite: custom
+
+source:
+  title: "Dataset title"
+  url: ""
+  license: ""
+  citation: ""
+  description: ""
+
+dataset_notes:
+  short_description: "Short human summary"
+  llm_context: |
+    Optional safe context for the LLM. This can include domain meaning,
+    leakage warnings, or even the human-written task text.
+  warnings: []
+  known_pitfalls: []
+
+ingestion:
+  mode: raw
+  files:
+    - logical_name: table_1
+      role: base
+      source_type: local
+      url: ""
+      path: raw_data/data.csv
+      format: auto
+      read_options:
+        sep: ","
+        encoding: utf-8
+      optional: false
+      archive_member: ""
+
+relations:
+  base_table: table_1
+  joins: []
+
+task:
+  type: classification
+  target_col: label
+  metric: f1_macro
+  forbidden_columns: []
+
+split:
+  strategy: stratified_random
+  seed: 42
+  train_fraction: 0.7
+  val_fraction: 0.15
+  test_fraction: 0.15
+
+preparation:
+  drop_columns: []
+  rename_columns: {}
+  target_mapping: {}
 ```
-datasets/
-  my_dataset/
-    raw_data/
-      data.csv
+
+### Already split mode
+
+Use `ingestion.mode: pre_split` and declare file roles `train`, `test`, and
+optionally `val`. When `val` is missing, set:
+
+```yaml
+split:
+  strategy: pre_split
+  seed: 42
+  create_val_from_train_if_missing: true
+  val_fraction_from_train: 0.15
 ```
 
-### Step 2 — Write `config.json`
+### Multi-table relational mode
 
-```json
-{
-  "name": "my_dataset",
-  "suite": "example_datasets",
-  "source": {"type": "local_file", "provider": "...", "license": "..."},
-  "raw_data": {
-    "files": ["data.csv"],
-    "format": "csv",
-    "read_options": {"sep": ",", "encoding": "utf-8"}
-  },
-  "task": {
-    "type": "classification",
-    "target_col": "label",
-    "metric": "f1_macro"
-  },
-  "split": {
-    "strategy": "stratified_random",
-    "seed": 42,
-    "train_fraction": 0.7,
-    "val_fraction": 0.15,
-    "test_fraction": 0.15
-  },
-  "preparation": {
-    "drop_columns": [],
-    "deduplicate": false
-  },
-  "role": "short_description_of_dataset_type",
-  "notes": {}
-}
-```
+Declare multiple `ingestion.files` entries and connect them with
+`relations.base_table` plus `relations.joins`. The loader validates join keys,
+records row counts before/after joins, and warns or errors when joins multiply
+rows too aggressively.
 
-**Supported split strategies:**
-- `stratified_random` — class-balanced random split (classification)
-- `temporal` — chronological split using a timestamp column (requires `split.timestamp` block)
-
-**Supported preparation options:**
-- `drop_columns`: list of column names to remove before splitting
-- `deduplicate`: `true` removes exact duplicate rows before splitting
-- `target_mapping`: dict to remap target values (e.g. `{"0": "neg", "1": "pos"}`)
-- `rename_columns`: dict to rename columns
-- `sampling.allowed: true` + `sampling.strategy`: enables `--max-rows` sampling
-
-### Step 3 — Prepare splits
+### Prepare splits
 
 ```bash
-python -m scripts.prepare_datasets --dataset my_dataset
+python3 scripts/prepare_datasets.py --dataset my_dataset
 ```
 
-Verify the output:
+Prepared output stays compatible with existing experiment runners:
 
-```
+```text
 datasets/my_dataset/prepared/
-  train.csv    val.csv    test.csv    meta.json
+  train.csv
+  val.csv
+  test.csv
+  meta.json
 ```
 
-### Step 4 — Run experiments
+`meta.json` now includes `source`, `dataset_notes`, input file metadata, join
+diagnostics, warnings, and forbidden/dropped columns in addition to the task
+metadata used by the runners.
+
+### Dashboard flow
+
+The dashboard can now:
+
+- create/edit dataset configs;
+- upload raw files;
+- download raw files from URL into `raw_data/`;
+- preview individual tables or the joined modeling dataframe;
+- validate config and joins before preparation;
+- prepare the standard `prepared/` layout from the UI.
+
+Human users may preview uploaded data in the dashboard. Agent-facing runtimes
+still receive only `train_df`, `val_df`, `target_col`, and safe metadata; they
+do not receive hidden test labels, hidden metrics, private evaluator artifacts,
+or hidden checklist answers.
+
+### Run experiments
 
 ```bash
 python -m experiments.run_baseline \

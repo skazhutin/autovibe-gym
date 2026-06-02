@@ -1,12 +1,18 @@
 import json
+import io
 import tempfile
 import zipfile
 from pathlib import Path
 import unittest
+from unittest import mock
 
 import pandas as pd
 import yaml
 
+from gym.dataset_ingestion import (
+    download_dataset_url,
+    validate_dataset_config,
+)
 from scripts.prepare_datasets import (
     apply_declared_preparation,
     discover_dataset_dirs,
@@ -17,6 +23,7 @@ from scripts.prepare_datasets import (
 )
 from gym.datasets import (
     DatasetMetadata,
+    format_dataset_context,
     infer_metric,
     load_dataset_splits,
     load_splits_from_dir,
@@ -56,6 +63,70 @@ def _write_config(dataset_dir: Path, overrides: dict | None = None) -> None:
                 config[key] = {**config[key], **value}
             else:
                 config[key] = value
+    (dataset_dir / "config.yaml").write_text(
+        yaml.safe_dump(config, sort_keys=False),
+        encoding="utf-8",
+    )
+
+
+def _write_modern_config(dataset_dir: Path, overrides: dict | None = None) -> None:
+    config = {
+        "name": "demo",
+        "suite": "custom",
+        "source": {
+            "title": "Synthetic dataset",
+            "url": "",
+            "license": "",
+            "citation": "",
+            "description": "",
+        },
+        "dataset_notes": {
+            "short_description": "Demo dataset",
+            "llm_context": "Predict the target column.",
+            "warnings": [],
+            "known_pitfalls": [],
+        },
+        "ingestion": {
+            "mode": "raw",
+            "files": [
+                {
+                    "logical_name": "table_1",
+                    "role": "base",
+                    "source_type": "local",
+                    "url": "",
+                    "path": "raw_data/data.csv",
+                    "format": "auto",
+                    "read_options": {},
+                    "optional": False,
+                    "archive_member": "",
+                }
+            ],
+        },
+        "relations": {"base_table": "table_1", "joins": []},
+        "task": {
+            "type": "classification",
+            "target_col": "y",
+            "metric": "f1_macro",
+            "forbidden_columns": [],
+        },
+        "split": {
+            "strategy": "stratified_random",
+            "seed": 42,
+            "train_fraction": 0.5,
+            "val_fraction": 0.25,
+            "test_fraction": 0.25,
+            "create_val_from_train_if_missing": True,
+            "val_fraction_from_train": 0.2,
+        },
+        "preparation": {
+            "drop_columns": [],
+            "rename_columns": {},
+            "target_mapping": {},
+        },
+    }
+    if overrides:
+        for key, value in overrides.items():
+            config[key] = value
     (dataset_dir / "config.yaml").write_text(
         yaml.safe_dump(config, sort_keys=False),
         encoding="utf-8",
@@ -196,7 +267,7 @@ class DatasetPipelineTests(unittest.TestCase):
                 zf.writestr("../data.csv", "x,y\n1,0\n2,1\n")
             _write_config(ds, {"raw_data": {"files": ["../data.csv"], "format": "csv", "read_options": {"sep": ","}}})
 
-            with self.assertRaisesRegex(ValueError, "Unsafe zip member"):
+            with self.assertRaisesRegex(ValueError, "Unsafe (zip member|relative path)"):
                 load_raw_dataframe(ds, load_dataset_config(ds))
 
     def test_raw_loader_reports_missing_configured_file(self):
@@ -213,9 +284,9 @@ class DatasetPipelineTests(unittest.TestCase):
             ds = Path(td) / "demo"
             (ds / "raw_data").mkdir(parents=True)
             (ds / "raw_data" / "data.csv").write_text("x,y\n1,0\n", encoding="utf-8")
-            _write_config(ds, {"raw_data": {"files": ["data.csv"], "format": "json", "read_options": {}}})
+            _write_config(ds, {"raw_data": {"files": ["data.csv"], "format": "xml", "read_options": {}}})
 
-            with self.assertRaisesRegex(ValueError, "Unsupported raw format"):
+            with self.assertRaisesRegex(ValueError, "Unsupported format"):
                 load_raw_dataframe(ds, load_dataset_config(ds))
 
     def test_dataset_folder_config_is_discovered(self):
@@ -379,6 +450,453 @@ class DatasetPipelineTests(unittest.TestCase):
                     "timestamp": {"source_columns": ["date"], "format": None},
                 },
             )
+
+    def test_prepare_dataset_supports_tsv_and_txt_with_delimiter_detection(self):
+        with tempfile.TemporaryDirectory() as td:
+            ds = Path(td) / "demo"
+            raw_dir = ds / "raw_data"
+            raw_dir.mkdir(parents=True)
+            (raw_dir / "data.txt").write_text("a|y\n1|0\n2|1\n3|0\n4|1\n", encoding="utf-8")
+            _write_modern_config(
+                ds,
+                {
+                    "ingestion": {
+                        "mode": "raw",
+                        "files": [
+                            {
+                                "logical_name": "table_1",
+                                "role": "base",
+                                "source_type": "local",
+                                "url": "",
+                                "path": "raw_data/data.txt",
+                                "format": "txt",
+                                "read_options": {"sep": "|"},
+                                "optional": False,
+                                "archive_member": "",
+                            }
+                        ],
+                    },
+                },
+            )
+
+            result = prepare_dataset(ds)
+
+            self.assertEqual(result["status"], "ok")
+            train = pd.read_csv(ds / "prepared" / "train.csv")
+            self.assertListEqual(list(train.columns), ["a", "y"])
+
+    def test_prepare_dataset_supports_excel(self):
+        with tempfile.TemporaryDirectory() as td:
+            ds = Path(td) / "demo"
+            raw_dir = ds / "raw_data"
+            raw_dir.mkdir(parents=True)
+            df = pd.DataFrame({"feature": [1, 2, 3, 4], "y": [0, 1, 0, 1]})
+            try:
+                df.to_excel(raw_dir / "data.xlsx", index=False)
+            except ImportError as exc:
+                self.skipTest(str(exc))
+
+            _write_modern_config(
+                ds,
+                {
+                    "ingestion": {
+                        "mode": "raw",
+                        "files": [
+                            {
+                                "logical_name": "table_1",
+                                "role": "base",
+                                "source_type": "local",
+                                "url": "",
+                                "path": "raw_data/data.xlsx",
+                                "format": "auto",
+                                "read_options": {"sheet_name": 0},
+                                "optional": False,
+                                "archive_member": "",
+                            }
+                        ],
+                    },
+                },
+            )
+
+            result = prepare_dataset(ds)
+
+            self.assertEqual(result["status"], "ok")
+            meta = json.loads((ds / "prepared" / "meta.json").read_text(encoding="utf-8"))
+            self.assertEqual(meta["input_formats"]["table_1"], "xlsx")
+
+    def test_prepare_dataset_supports_parquet(self):
+        with tempfile.TemporaryDirectory() as td:
+            ds = Path(td) / "demo"
+            raw_dir = ds / "raw_data"
+            raw_dir.mkdir(parents=True)
+            df = pd.DataFrame({"feature": [1, 2, 3, 4], "y": [0, 1, 0, 1]})
+            try:
+                df.to_parquet(raw_dir / "data.parquet", index=False)
+            except (ImportError, ValueError) as exc:
+                self.skipTest(str(exc))
+
+            _write_modern_config(
+                ds,
+                {
+                    "ingestion": {
+                        "mode": "raw",
+                        "files": [
+                            {
+                                "logical_name": "table_1",
+                                "role": "base",
+                                "source_type": "local",
+                                "url": "",
+                                "path": "raw_data/data.parquet",
+                                "format": "auto",
+                                "read_options": {},
+                                "optional": False,
+                                "archive_member": "",
+                            }
+                        ],
+                    },
+                },
+            )
+
+            result = prepare_dataset(ds)
+
+            self.assertEqual(result["status"], "ok")
+            meta = json.loads((ds / "prepared" / "meta.json").read_text(encoding="utf-8"))
+            self.assertEqual(meta["input_formats"]["table_1"], "parquet")
+
+    def test_prepare_dataset_supports_jsonl(self):
+        with tempfile.TemporaryDirectory() as td:
+            ds = Path(td) / "demo"
+            raw_dir = ds / "raw_data"
+            raw_dir.mkdir(parents=True)
+            (raw_dir / "data.jsonl").write_text(
+                "\n".join([
+                    '{"feature": 1, "y": 0}',
+                    '{"feature": 2, "y": 1}',
+                    '{"feature": 3, "y": 0}',
+                    '{"feature": 4, "y": 1}',
+                ]),
+                encoding="utf-8",
+            )
+            _write_modern_config(
+                ds,
+                {
+                    "ingestion": {
+                        "mode": "raw",
+                        "files": [
+                            {
+                                "logical_name": "table_1",
+                                "role": "base",
+                                "source_type": "local",
+                                "url": "",
+                                "path": "raw_data/data.jsonl",
+                                "format": "auto",
+                                "read_options": {"lines": True},
+                                "optional": False,
+                                "archive_member": "",
+                            }
+                        ],
+                    },
+                },
+            )
+
+            result = prepare_dataset(ds)
+
+            self.assertEqual(result["status"], "ok")
+            meta = json.loads((ds / "prepared" / "meta.json").read_text(encoding="utf-8"))
+            self.assertEqual(meta["input_formats"]["table_1"], "jsonl")
+
+    def test_prepare_dataset_supports_pre_split_and_creates_val_from_train(self):
+        with tempfile.TemporaryDirectory() as td:
+            ds = Path(td) / "demo"
+            raw_dir = ds / "raw_data"
+            raw_dir.mkdir(parents=True)
+            train_df = pd.DataFrame({"x": list(range(12)), "y": [0, 1] * 6})
+            test_df = pd.DataFrame({"x": list(range(12, 16)), "y": [0, 1, 0, 1]})
+            train_df.to_csv(raw_dir / "train.csv", index=False)
+            test_df.to_csv(raw_dir / "test.csv", index=False)
+            _write_modern_config(
+                ds,
+                {
+                    "ingestion": {
+                        "mode": "pre_split",
+                        "files": [
+                            {
+                                "logical_name": "train",
+                                "role": "train",
+                                "source_type": "local",
+                                "url": "",
+                                "path": "raw_data/train.csv",
+                                "format": "auto",
+                                "read_options": {},
+                                "optional": False,
+                                "archive_member": "",
+                            },
+                            {
+                                "logical_name": "test",
+                                "role": "test",
+                                "source_type": "local",
+                                "url": "",
+                                "path": "raw_data/test.csv",
+                                "format": "auto",
+                                "read_options": {},
+                                "optional": False,
+                                "archive_member": "",
+                            },
+                        ],
+                    },
+                    "split": {
+                        "strategy": "pre_split",
+                        "seed": 42,
+                        "train_fraction": 0.7,
+                        "val_fraction": 0.15,
+                        "test_fraction": 0.15,
+                        "create_val_from_train_if_missing": True,
+                        "val_fraction_from_train": 0.25,
+                    },
+                },
+            )
+
+            result = prepare_dataset(ds)
+
+            self.assertEqual(result["status"], "ok")
+            self.assertTrue((ds / "prepared" / "val.csv").exists())
+            meta = json.loads((ds / "prepared" / "meta.json").read_text(encoding="utf-8"))
+            self.assertEqual(meta["split_strategy"], "pre_split")
+
+    def test_prepare_dataset_supports_multi_table_join_and_forbidden_columns(self):
+        with tempfile.TemporaryDirectory() as td:
+            ds = Path(td) / "demo"
+            raw_dir = ds / "raw_data"
+            raw_dir.mkdir(parents=True)
+            pd.DataFrame(
+                {
+                    "accident_index": [1, 2, 3, 4],
+                    "vehicle_reference": [11, 22, 33, 44],
+                    "target": [0, 1, 0, 1],
+                }
+            ).to_csv(raw_dir / "casualties.csv", index=False)
+            pd.DataFrame(
+                {
+                    "accident_index": [1, 2, 3, 4],
+                    "weather": ["rain", "sun", "fog", "wind"],
+                    "accident_severity": [3, 2, 1, 2],
+                }
+            ).to_csv(raw_dir / "collisions.csv", index=False)
+            pd.DataFrame(
+                {
+                    "accident_index": [1, 2, 3, 4],
+                    "vehicle_reference": [11, 22, 33, 44],
+                    "vehicle_type": ["car", "van", "bike", "bus"],
+                }
+            ).to_csv(raw_dir / "vehicles.csv", index=False)
+
+            _write_modern_config(
+                ds,
+                {
+                    "ingestion": {
+                        "mode": "raw",
+                        "files": [
+                            {
+                                "logical_name": "casualties",
+                                "role": "base",
+                                "source_type": "local",
+                                "url": "",
+                                "path": "raw_data/casualties.csv",
+                                "format": "auto",
+                                "read_options": {},
+                                "optional": False,
+                                "archive_member": "",
+                            },
+                            {
+                                "logical_name": "collisions",
+                                "role": "table",
+                                "source_type": "local",
+                                "url": "",
+                                "path": "raw_data/collisions.csv",
+                                "format": "auto",
+                                "read_options": {},
+                                "optional": False,
+                                "archive_member": "",
+                            },
+                            {
+                                "logical_name": "vehicles",
+                                "role": "table",
+                                "source_type": "local",
+                                "url": "",
+                                "path": "raw_data/vehicles.csv",
+                                "format": "auto",
+                                "read_options": {},
+                                "optional": False,
+                                "archive_member": "",
+                            },
+                        ],
+                    },
+                    "relations": {
+                        "base_table": "casualties",
+                        "joins": [
+                            {
+                                "left_table": "casualties",
+                                "right_table": "collisions",
+                                "how": "left",
+                                "left_on": ["accident_index"],
+                                "right_on": ["accident_index"],
+                            },
+                            {
+                                "left_table": "casualties",
+                                "right_table": "vehicles",
+                                "how": "left",
+                                "left_on": ["accident_index", "vehicle_reference"],
+                                "right_on": ["accident_index", "vehicle_reference"],
+                            },
+                        ],
+                    },
+                    "task": {
+                        "type": "classification",
+                        "target_col": "target",
+                        "metric": "f1_macro",
+                        "forbidden_columns": ["accident_severity", "accident_index"],
+                    },
+                },
+            )
+
+            result = prepare_dataset(ds)
+
+            self.assertEqual(result["status"], "ok")
+            train = pd.read_csv(ds / "prepared" / "train.csv")
+            self.assertNotIn("accident_index", train.columns)
+            self.assertNotIn("accident_severity", train.columns)
+            meta = json.loads((ds / "prepared" / "meta.json").read_text(encoding="utf-8"))
+            self.assertEqual(len(meta["join_diagnostics"]), 2)
+
+    def test_validate_dataset_reports_join_multiplication(self):
+        with tempfile.TemporaryDirectory() as td:
+            ds = Path(td) / "demo"
+            raw_dir = ds / "raw_data"
+            raw_dir.mkdir(parents=True)
+            pd.DataFrame({"id": [1, 2, 3], "y": [0, 1, 0]}).to_csv(raw_dir / "base.csv", index=False)
+            pd.DataFrame({"id": [1] * 10 + [2, 3], "v": list(range(12))}).to_csv(raw_dir / "detail.csv", index=False)
+            _write_modern_config(
+                ds,
+                {
+                    "ingestion": {
+                        "mode": "raw",
+                        "files": [
+                            {
+                                "logical_name": "base",
+                                "role": "base",
+                                "source_type": "local",
+                                "url": "",
+                                "path": "raw_data/base.csv",
+                                "format": "auto",
+                                "read_options": {},
+                                "optional": False,
+                                "archive_member": "",
+                            },
+                            {
+                                "logical_name": "detail",
+                                "role": "table",
+                                "source_type": "local",
+                                "url": "",
+                                "path": "raw_data/detail.csv",
+                                "format": "auto",
+                                "read_options": {},
+                                "optional": False,
+                                "archive_member": "",
+                            },
+                        ],
+                    },
+                    "relations": {
+                        "base_table": "base",
+                        "joins": [
+                            {
+                                "left_table": "base",
+                                "right_table": "detail",
+                                "how": "left",
+                                "left_on": ["id"],
+                                "right_on": ["id"],
+                            }
+                        ],
+                    },
+                },
+            )
+
+            validation = validate_dataset_config(ds)
+
+            self.assertFalse(validation["ok"])
+            self.assertTrue(any("multiplied rows" in item["message"] for item in validation["errors"]))
+
+    def test_prepare_dataset_writes_dataset_notes_and_source_to_meta(self):
+        with tempfile.TemporaryDirectory() as td:
+            ds = Path(td) / "demo"
+            raw_dir = ds / "raw_data"
+            raw_dir.mkdir(parents=True)
+            pd.DataFrame({"x": list(range(8)), "y": [0, 1] * 4}).to_csv(raw_dir / "data.csv", index=False)
+            _write_modern_config(
+                ds,
+                {
+                    "source": {
+                        "title": "UCI Demo",
+                        "url": "https://example.com/demo.csv",
+                        "license": "CC-BY",
+                        "citation": "Doe 2026",
+                        "description": "Synthetic source",
+                    },
+                    "dataset_notes": {
+                        "short_description": "Demo classification task",
+                        "llm_context": "Task text may live here.",
+                        "warnings": ["Do not leak ids."],
+                        "known_pitfalls": ["Temporal drift matters."],
+                    },
+                },
+            )
+
+            prepare_dataset(ds)
+            meta = json.loads((ds / "prepared" / "meta.json").read_text(encoding="utf-8"))
+
+            self.assertEqual(meta["source"]["title"], "UCI Demo")
+            self.assertEqual(meta["dataset_notes"]["llm_context"], "Task text may live here.")
+
+    def test_format_dataset_context_includes_llm_notes_and_source(self):
+        metadata = DatasetMetadata(
+            name="demo",
+            target_col="y",
+            metric_name="f1_macro",
+            source={"title": "UCI Demo", "license": "CC-BY"},
+            dataset_notes={
+                "short_description": "Demo task",
+                "llm_context": "Predict churn from raw features.",
+                "warnings": ["Avoid leakage columns."],
+                "known_pitfalls": ["Class imbalance."],
+            },
+        )
+
+        text = format_dataset_context(metadata)
+
+        self.assertIn("[DATASET CONTEXT]", text)
+        self.assertIn("Predict churn", text)
+        self.assertIn("Avoid leakage", text)
+        self.assertIn("UCI Demo", text)
+
+    def test_download_dataset_url_saves_file_with_mocked_response(self):
+        with tempfile.TemporaryDirectory() as td:
+            ds = Path(td) / "demo"
+            ds.mkdir()
+
+            class FakeResponse(io.BytesIO):
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, exc_type, exc, tb):
+                    return False
+
+            with mock.patch("gym.dataset_ingestion._validate_download_url"), mock.patch(
+                "urllib.request.urlopen",
+                return_value=FakeResponse(b"a,b\n1,0\n2,1\n"),
+            ):
+                saved = download_dataset_url(ds, "https://example.com/data.csv")
+
+            self.assertTrue((ds / saved["path"]).exists())
+            self.assertEqual(saved["format"], "csv")
 
 
 def load_dataset_config_from_dict(overrides: dict):

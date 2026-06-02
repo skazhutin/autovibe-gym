@@ -1,347 +1,22 @@
 import argparse
 import json
-import zipfile
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
-import pandas as pd
-import yaml
-from sklearn.model_selection import train_test_split
+from gym.dataset_ingestion import (
+    DatasetConfig,
+    FRACTION_TOLERANCE as _FRACTION_TOLERANCE,
+    apply_declared_preparation,
+    config_path as _config_path,
+    discover_dataset_dirs,
+    load_dataset_config,
+    load_raw_dataframe,
+    prepare_dataset,
+    raw_inputs_available,
+    split_temporal,
+)
+
 
 DATASETS_ROOT = Path("datasets")
-_FRACTION_TOLERANCE = 1e-6
-CONFIG_FILENAMES = ("config.yaml", "config.yml")
-
-
-@dataclass(frozen=True)
-class DatasetConfig:
-    name: str
-    suite: str
-    source: dict[str, Any]
-    raw_data: dict[str, Any]
-    task: dict[str, Any]
-    split: dict[str, Any]
-    preparation: dict[str, Any]
-    role: str | None
-    notes: dict[str, Any]
-
-
-def discover_dataset_dirs(datasets_root: Path) -> dict[str, Path]:
-    discovered: dict[str, Path] = {}
-    if not datasets_root.exists():
-        return discovered
-    for child in datasets_root.iterdir():
-        if not child.is_dir():
-            continue
-        if _config_path(child) is not None:
-            discovered[child.name] = child
-        elif (child / "meta.json").exists() and (child / "train.csv").exists():
-            discovered[child.name] = child
-    return dict(sorted(discovered.items()))
-
-
-def load_dataset_config(dataset_dir: Path) -> DatasetConfig:
-    cfg_path = _config_path(dataset_dir)
-    if cfg_path is None:
-        # legacy
-        meta = json.loads((dataset_dir / "meta.json").read_text(encoding="utf-8"))
-        return DatasetConfig(
-            name=meta.get("name", dataset_dir.name),
-            suite="legacy",
-            source={"type": "legacy"},
-            raw_data={"files": []},
-            task={"type": meta.get("task_type", "classification"), "target_col": meta["target_col"], "metric": meta.get("metric", "f1_weighted")},
-            split={"strategy": meta.get("split_strategy", "stratified_random"), "seed": meta.get("seed", 42), "train_fraction": 0.7, "val_fraction": 0.15, "test_fraction": 0.15},
-            preparation={},
-            role=meta.get("role"),
-            notes=meta.get("notes", {}),
-        )
-    raw = yaml.safe_load(cfg_path.read_text(encoding="utf-8"))
-    if not isinstance(raw, dict):
-        raise ValueError(f"Dataset config must be a mapping: {cfg_path}")
-    return DatasetConfig(
-        name=raw["name"],
-        suite=raw.get("suite", "example_datasets"),
-        source=raw.get("source", {}),
-        raw_data=raw["raw_data"],
-        task=raw["task"],
-        split=raw["split"],
-        preparation=raw.get("preparation", {}),
-        role=raw.get("role"),
-        notes=raw.get("notes", {}),
-    )
-
-
-def _config_path(dataset_dir: Path) -> Path | None:
-    for filename in CONFIG_FILENAMES:
-        path = dataset_dir / filename
-        if path.exists():
-            return path
-    return None
-
-
-def load_raw_dataframe(dataset_dir: Path, config: DatasetConfig) -> pd.DataFrame:
-    files = config.raw_data.get("files", [])
-    if not files:
-        raise FileNotFoundError(f"No raw_data.files in config for {dataset_dir}")
-    _ensure_raw_files_available(dataset_dir, files)
-    frames = []
-    opts = config.raw_data.get("read_options", {})
-    fmt = config.raw_data.get("format", "csv")
-    for file_name in files:
-        path = dataset_dir / "raw_data" / file_name
-        if not path.exists():
-            raise FileNotFoundError(f"Missing raw file: {path}")
-        if fmt == "csv":
-            frames.append(pd.read_csv(path, **opts))
-        elif fmt in {"xlsx", "excel"}:
-            frames.append(pd.read_excel(path, **opts))
-        else:
-            raise ValueError(f"Unsupported raw format: {fmt}")
-    if len(frames) == 1:
-        return frames[0]
-    return pd.concat(frames, ignore_index=True)
-
-
-def _ensure_raw_files_available(dataset_dir: Path, files: list[str]) -> None:
-    missing = [file_name for file_name in files if not (dataset_dir / "raw_data" / file_name).exists()]
-    if not missing:
-        return
-
-    raw_dir = dataset_dir / "raw_data"
-    for archive_path in sorted(raw_dir.glob("*.zip")):
-        with zipfile.ZipFile(archive_path) as archive:
-            _safe_extract_zip(archive, raw_dir, missing)
-        missing = [file_name for file_name in files if not (raw_dir / file_name).exists()]
-        if not missing:
-            return
-
-
-def _raw_files_available(dataset_dir: Path, files: list[str]) -> bool:
-    if not files:
-        return False
-    raw_dir = dataset_dir / "raw_data"
-    missing = [file_name for file_name in files if not (raw_dir / file_name).exists()]
-    if not missing:
-        return True
-    normalized_missing = {Path(file_name).as_posix() for file_name in missing}
-    for archive_path in raw_dir.glob("*.zip"):
-        with zipfile.ZipFile(archive_path) as archive:
-            members = {Path(name).as_posix() for name in archive.namelist()}
-        normalized_missing -= members
-        if not normalized_missing:
-            return True
-    return False
-
-
-def _safe_extract_zip(archive: zipfile.ZipFile, destination: Path, members: list[str]) -> None:
-    destination = destination.resolve()
-    requested = {Path(member).as_posix() for member in members}
-    archive_members = {
-        Path(info.filename).as_posix(): info
-        for info in archive.infolist()
-    }
-    for member_name in requested & archive_members.keys():
-        member = archive_members[member_name]
-        target = (destination / member.filename).resolve()
-        try:
-            target.relative_to(destination)
-        except ValueError as exc:
-            raise ValueError(f"Unsafe zip member path: {member.filename}")
-        archive.extract(member, destination)
-
-
-def apply_declared_preparation(
-    df: pd.DataFrame, config: DatasetConfig, *, max_rows: int | None
-) -> tuple[pd.DataFrame, dict[str, Any]]:
-    info = {"sampled": False}
-    prep = config.preparation or {}
-
-    if prep.get("deduplicate", False):
-        before = len(df)
-        df = df.drop_duplicates().reset_index(drop=True)
-        info["deduplicated"] = True
-        info["duplicates_removed"] = before - len(df)
-
-    rename_columns = prep.get("rename_columns") or {}
-    if rename_columns:
-        df = df.rename(columns=rename_columns)
-
-    drop_columns = prep.get("drop_columns") or []
-    if drop_columns:
-        df = df.drop(columns=drop_columns, errors="ignore")
-
-    target_col = config.task["target_col"]
-    if target_col not in df.columns:
-        raise ValueError(
-            f"Missing target column '{target_col}' after preparation in {config.name}"
-        )
-
-    mapping = prep.get("target_mapping")
-    if mapping:
-        df[target_col] = df[target_col].map(mapping)
-
-    sampling = prep.get("sampling")
-    if max_rows is not None:
-        if not sampling or not sampling.get("allowed", False):
-            raise ValueError(f"--max-rows is not allowed for dataset '{config.name}'")
-        if len(df) > max_rows:
-            seed = sampling.get("seed", config.split.get("seed", 42))
-            if config.task.get("type") == "classification":
-                df, _ = train_test_split(
-                    df,
-                    train_size=max_rows,
-                    random_state=seed,
-                    stratify=df[target_col],
-                )
-            else:
-                df, _ = train_test_split(df, train_size=max_rows, random_state=seed)
-            df = df.reset_index(drop=True)
-            info.update({"sampled": True, "max_rows": max_rows})
-    return df, info
-
-
-def _validate_split_fractions(
-    *, train_fraction: float, val_fraction: float, test_fraction: float
-) -> None:
-    fractions = [train_fraction, val_fraction, test_fraction]
-    if any(f < 0 or f > 1 for f in fractions):
-        raise ValueError("Split fractions must be in [0, 1].")
-    total = sum(fractions)
-    if abs(total - 1.0) > _FRACTION_TOLERANCE:
-        raise ValueError(
-            f"Split fractions must sum to 1.0, got {total:.6f} "
-            f"(train={train_fraction}, val={val_fraction}, test={test_fraction})."
-        )
-
-
-def split_stratified_random(
-    df: pd.DataFrame,
-    target_col: str,
-    seed: int,
-    train_fraction: float,
-    val_fraction: float,
-    test_fraction: float,
-):
-    _validate_split_fractions(
-        train_fraction=train_fraction,
-        val_fraction=val_fraction,
-        test_fraction=test_fraction,
-    )
-    train, temp = train_test_split(
-        df,
-        test_size=val_fraction + test_fraction,
-        random_state=seed,
-        stratify=df[target_col],
-    )
-    relative_test_fraction = test_fraction / (val_fraction + test_fraction)
-    val, test = train_test_split(
-        temp,
-        test_size=relative_test_fraction,
-        random_state=seed,
-        stratify=temp[target_col],
-    )
-    return train.reset_index(drop=True), val.reset_index(drop=True), test.reset_index(drop=True), {}
-
-
-def split_temporal(df: pd.DataFrame, split_cfg: dict[str, Any]):
-    _validate_split_fractions(
-        train_fraction=split_cfg["train_fraction"],
-        val_fraction=split_cfg["val_fraction"],
-        test_fraction=split_cfg["test_fraction"],
-    )
-    timestamp_cfg = split_cfg["timestamp"]
-    cols = timestamp_cfg["source_columns"]
-    fmt = timestamp_cfg.get("format")
-    technical_col = "__technical_timestamp__"
-    if len(cols) == 1:
-        built = df[cols[0]].astype(str)
-    else:
-        built = df[cols].astype(str).agg(" ".join, axis=1)
-    ts = pd.to_datetime(built, format=fmt, errors="coerce")
-    if ts.isna().any():
-        raise ValueError("Temporal split failed: timestamp parsing produced NaT values")
-    df = df.copy()
-    df[technical_col] = ts
-    df = df.sort_values(technical_col).reset_index(drop=True)
-    n = len(df)
-    n_train = int(n * split_cfg["train_fraction"])
-    n_val = int(n * split_cfg["val_fraction"])
-    train = df.iloc[:n_train].copy()
-    val = df.iloc[n_train:n_train + n_val].copy()
-    test = df.iloc[n_train + n_val:].copy()
-    bounds = {"train_start": str(train[technical_col].min()), "train_end": str(train[technical_col].max()), "val_start": str(val[technical_col].min()), "val_end": str(val[technical_col].max()), "test_start": str(test[technical_col].min()), "test_end": str(test[technical_col].max())}
-    for chunk in (train, val, test):
-        chunk.drop(columns=[technical_col], inplace=True)
-    return train.reset_index(drop=True), val.reset_index(drop=True), test.reset_index(drop=True), {"temporal_boundaries": bounds}
-
-
-def _normalized_value_counts(series: pd.Series) -> dict[str, float]:
-    vc = series.value_counts(normalize=True, dropna=False)
-    return {str(key): float(value) for key, value in vc.items()}
-
-
-def prepare_dataset(dataset_dir: Path, *, max_rows: int | None = None) -> dict[str, Any]:
-    config = load_dataset_config(dataset_dir)
-    if _config_path(dataset_dir) is None:
-        return {"dataset": dataset_dir.name, "status": "skipped", "reason": "legacy dataset"}
-    df = load_raw_dataframe(dataset_dir, config)
-    n_rows_source = len(df)
-    df, prep_info = apply_declared_preparation(df, config, max_rows=max_rows)
-    target = config.task["target_col"]
-    split_cfg = config.split
-    if split_cfg["strategy"] == "stratified_random":
-        train, val, test, split_info = split_stratified_random(
-            df,
-            target,
-            split_cfg.get("seed", 42),
-            split_cfg["train_fraction"],
-            split_cfg["val_fraction"],
-            split_cfg["test_fraction"],
-        )
-    elif split_cfg["strategy"] == "temporal":
-        train, val, test, split_info = split_temporal(df, split_cfg)
-    else:
-        raise ValueError(f"Unsupported split strategy: {split_cfg['strategy']}")
-    out_dir = dataset_dir / "prepared"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    train.to_csv(out_dir / "train.csv", index=False)
-    val.to_csv(out_dir / "val.csv", index=False)
-    test.to_csv(out_dir / "test.csv", index=False)
-    n_features = df.drop(columns=[target]).shape[1]
-    n_classes = int(df[target].nunique(dropna=False))
-    meta = {
-        "name": config.name,
-        "suite": config.suite,
-        "source": config.source,
-        "raw_files": config.raw_data.get("files", []),
-        "task_type": config.task.get("type"),
-        "target_col": target,
-        "metric": config.task.get("metric"),
-        "split_strategy": split_cfg.get("strategy"),
-        "seed": split_cfg.get("seed", 42),
-        "n_rows_source": n_rows_source,
-        "n_rows_prepared": len(df),
-        "n_train": len(train),
-        "n_val": len(val),
-        "n_test": len(test),
-        "n_features": n_features,
-        "n_classes": n_classes,
-        "class_distribution": {
-            "all": _normalized_value_counts(df[target]),
-            "train": _normalized_value_counts(train[target]),
-            "val": _normalized_value_counts(val[target]),
-            "test": _normalized_value_counts(test[target]),
-        },
-        "sampled": prep_info.get("sampled", False),
-        "role": config.role,
-        "notes": config.notes,
-    }
-    meta.update(prep_info)
-    meta.update(split_info)
-    (out_dir / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
-    return {"dataset": config.name, "status": "ok", "reason": "", "prepared_dir": str(out_dir)}
 
 
 def main():
@@ -358,33 +33,50 @@ def main():
         for name, ds_dir in discovered.items():
             if _config_path(ds_dir) is not None:
                 cfg = load_dataset_config(ds_dir)
-                raw_ok = _raw_files_available(ds_dir, cfg.raw_data.get("files", []))
+                raw_ok = raw_inputs_available(ds_dir, cfg)
                 prepared_ok = (ds_dir / "prepared" / "meta.json").exists() or (ds_dir / "meta.json").exists()
-                print(f"{name} | {cfg.suite} | {cfg.task.get('type')} | {cfg.task.get('metric')} | {cfg.split.get('strategy')} | {'ok' if raw_ok else 'missing'} | {'ok' if prepared_ok else 'missing'} | {cfg.role}")
+                print(
+                    f"{name} | {cfg.suite} | {cfg.task.get('type')} | {cfg.task.get('metric')} | "
+                    f"{cfg.split.get('strategy')} | {'ok' if raw_ok else 'missing'} | "
+                    f"{'ok' if prepared_ok else 'missing'} | {cfg.role}"
+                )
             else:
                 meta = json.loads((ds_dir / "meta.json").read_text(encoding="utf-8"))
-                print(f"{name} | legacy | {meta.get('task_type','classification')} | {meta.get('metric')} | {meta.get('split_strategy','fixed')} | n/a | ok | {meta.get('role')}")
+                print(
+                    f"{name} | legacy | {meta.get('task_type','classification')} | "
+                    f"{meta.get('metric')} | {meta.get('split_strategy','fixed')} | n/a | ok | {meta.get('role')}"
+                )
         return
 
-    to_process: list[Path]
     if args.dataset:
         to_process = [DATASETS_ROOT / args.dataset]
     elif args.suite:
-        to_process = [d for _, d in discovered.items() if (load_dataset_config(d).suite == args.suite)]
+        to_process = [
+            ds_dir
+            for _, ds_dir in discovered.items()
+            if _config_path(ds_dir) is not None and load_dataset_config(ds_dir).suite == args.suite
+        ]
     else:
-        to_process = [d for _, d in discovered.items() if _config_path(d) is not None]
+        to_process = [ds_dir for _, ds_dir in discovered.items() if _config_path(ds_dir) is not None]
 
     summary = []
     for ds_dir in to_process:
         try:
-            res = prepare_dataset(ds_dir, max_rows=args.max_rows)
+            result = prepare_dataset(ds_dir, max_rows=args.max_rows)
         except Exception as exc:
-            res = {"dataset": ds_dir.name, "status": "error", "reason": str(exc), "prepared_dir": str(ds_dir / 'prepared')}
-        summary.append(res)
+            result = {
+                "dataset": ds_dir.name,
+                "status": "error",
+                "reason": str(exc),
+                "prepared_dir": str(ds_dir / "prepared"),
+            }
+        summary.append(result)
 
     print("dataset | status | reason | prepared_dir")
     for row in summary:
-        print(f"{row['dataset']} | {row['status']} | {row.get('reason','')} | {row.get('prepared_dir','')}")
+        print(
+            f"{row['dataset']} | {row['status']} | {row.get('reason','')} | {row.get('prepared_dir','')}"
+        )
 
 
 if __name__ == "__main__":

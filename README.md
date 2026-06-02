@@ -368,11 +368,35 @@ Datasets can be organized as `datasets/<name>/{config.yaml,raw_data/,prepared/}`
 Run preparation with:
 
 ```bash
-python scripts/prepare_datasets.py --list
-python scripts/prepare_datasets.py --dataset example_dry_bean
-python scripts/prepare_datasets.py --suite example_datasets
+python3 scripts/prepare_datasets.py --list
+python3 scripts/prepare_datasets.py --dataset example_dry_bean
+python3 scripts/prepare_datasets.py --suite example_datasets
 ```
 
 The repository commits only the five curated `datasets/example_*` datasets. Any
 other dataset folders under `datasets/` are treated as local-only data and are
 ignored by git.
+
+Config-driven ingestion now supports:
+
+- raw single-table datasets;
+- already split `train/test[/val]` datasets;
+- multi-table relational datasets with declared joins;
+- local uploads and HTTP(S) URL downloads through the dashboard;
+- tabular formats: `.csv`, `.csv.gz`, `.tsv`, `.txt`, `.parquet`, `.xlsx`, `.xls`, `.json`, `.jsonl`, `.ndjson`, `.zip` and, when optional deps are available, `.feather` / `.orc`.
+
+Prepared output remains backward-compatible for experiment runners:
+
+```text
+datasets/<dataset_name>/prepared/
+  train.csv
+  val.csv
+  test.csv
+  meta.json
+```
+
+`meta.json` now also carries safe dataset context such as `source`,
+`dataset_notes`, input file metadata, split diagnostics, join diagnostics, and
+forbidden columns. This context is visible to humans in the dashboard and the
+safe subset is included in agent prompts; hidden test labels, hidden metrics,
+private evaluator artifacts, and hidden checklist internals remain excluded.

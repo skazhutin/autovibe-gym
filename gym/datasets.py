@@ -24,6 +24,7 @@ class DatasetMetadata:
     sampled: bool | None = None
     seed: int = 42
     notes: dict = field(default_factory=dict)
+    dataset_notes: dict = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, data: dict, fallback_name: str) -> "DatasetMetadata":
@@ -42,6 +43,7 @@ class DatasetMetadata:
             sampled=data.get("sampled"),
             seed=int(data.get("seed", 42)),
             notes=dict(data.get("notes") or {}),
+            dataset_notes=dict(data.get("dataset_notes") or data.get("notes") or {}),
         )
 
 
@@ -132,3 +134,45 @@ def metric_from_name(metric_name: str) -> MetricFn:
     if normalized == "neg_rmse":
         return lambda y, p: -mean_squared_error(y, p) ** 0.5
     raise ValueError(f"Unsupported metric: {metric_name}")
+
+
+def format_dataset_context(metadata: DatasetMetadata, *, max_chars: int = 1800) -> str:
+    notes = dict(metadata.dataset_notes or {})
+    source = metadata.source if isinstance(metadata.source, dict) else {}
+
+    lines: list[str] = []
+    short_description = str(notes.get("short_description") or "").strip()
+    llm_context = str(notes.get("llm_context") or "").strip()
+    warnings = [str(item).strip() for item in notes.get("warnings") or [] if str(item).strip()]
+    pitfalls = [str(item).strip() for item in notes.get("known_pitfalls") or [] if str(item).strip()]
+
+    source_title = str(source.get("title") or source.get("name") or "").strip()
+    source_description = str(source.get("description") or "").strip()
+    source_license = str(source.get("license") or "").strip()
+
+    if short_description or llm_context or warnings or pitfalls or source_title or source_description:
+        lines.append("[DATASET CONTEXT]")
+    if short_description:
+        lines.append(f"Summary: {short_description}")
+    if llm_context:
+        lines.append("Additional dataset/task context:")
+        lines.append(llm_context)
+    if warnings:
+        lines.append("Warnings:")
+        lines.extend(f"- {item}" for item in warnings)
+    if pitfalls:
+        lines.append("Known pitfalls:")
+        lines.extend(f"- {item}" for item in pitfalls)
+    if source_title or source_description or source_license:
+        lines.append("Source:")
+        if source_title:
+            lines.append(f"- {source_title}")
+        if source_description:
+            lines.append(f"- {source_description}")
+        if source_license:
+            lines.append(f"- license: {source_license}")
+
+    text = "\n".join(lines).strip()
+    if len(text) <= max_chars:
+        return text
+    return text[: max_chars - 3].rstrip() + "..."

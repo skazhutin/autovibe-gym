@@ -91,7 +91,12 @@ BUILD=1 PORT=8011 HOST=0.0.0.0 dashboard/server/serve.sh
   артефактов эпизода (`solution.ipynb`, `validation_trajectory.json`, `episode_summary.json`).
 - 4 режима UI → 3 раннера: single→baseline, repeated→multishot,
   iterative→`run_gym --episode-mode iterative_no_checklist`, gym→`run_gym --episode-mode gym_with_checklist`.
-- Датасеты читаются из `datasets/<name>/prepared/meta.json`; загрузка кладёт CSV туда же.
+- Датасеты управляются через общий ingestion/config слой:
+  `datasets/<name>/{config.yaml,raw_data/,prepared/}`.
+  Dashboard умеет:
+  создавать конфиг, загружать raw-файлы, скачивать их по URL, настраивать
+  raw vs pre-split режим, multi-table joins, preview/validate/prepare и потом
+  запускать эксперименты на стандартном `prepared/` layout.
 - Реестр моделей хранится в `dashboard/server/data/models.json` (у gym своего реестра нет).
 
 Дизайн-референс: `~/Desktop/design` (hi-fi прототип + токены). Воссоздаём в этом стеке.

@@ -21,7 +21,7 @@ except ImportError:
 
 from experiments.mlflow_config import configure_mlflow_tracking
 from gym.data_profile import build_dataset_card
-from gym.datasets import load_dataset_splits, resolve_metric
+from gym.datasets import format_dataset_context, load_dataset_splits, resolve_metric
 from gym.executor import CodeExecutor
 from gym.llm import default_model_name, make_llm_client
 from gym.scoring import score_with_coercion
@@ -93,11 +93,16 @@ def main():
     run_name = args.run_name or f"baseline_{dataset_name}_{model_name.split('/')[-1]}"
 
     dataset_card = build_dataset_card(train, val, target_col, metric_name, max_chars=4500)
+    dataset_context = format_dataset_context(splits.metadata)
     task_prompt = (
         f"Solve a supervised ML task.\n"
         f"Target column: '{target_col}'\n"
         f"Metric: {metric_name}\n\n"
         f"{dataset_card}\n\n"
+    )
+    if dataset_context:
+        task_prompt += f"{dataset_context}\n\n"
+    task_prompt += (
         "Variables available: train_df, val_df, target_col, pd, np\n"
         "Assign your best trained model to: model"
     )
