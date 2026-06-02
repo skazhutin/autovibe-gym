@@ -73,6 +73,7 @@ def main():
     parser.add_argument("--max-tokens", type=int, default=None)
     parser.add_argument("--executor-backend", default=None)
     parser.add_argument("--sandbox-image", default=None)
+    parser.add_argument("--workspace-dir", default=None, help="Emit dashboard episode artifacts here.")
     parser.add_argument("--sandbox-timeout", type=int, default=60)
     parser.add_argument("--experiment-name", default="autovibe-gym")
     parser.add_argument("--run-name", default=None)
@@ -220,6 +221,18 @@ def main():
             "code_length": len(code),
         }
 
+        # Checklist coverage is a comparison metric for every mode (even though
+        # single-shot gets no hints): measure it from the generated code.
+        from experiments.dashboard_artifacts import checklist_coverage, write_episode_artifacts
+        coverage = checklist_coverage(code, stdout, target_col)
+        summary["checklist_coverage"] = coverage
+        summary["steps_used"] = 1
+        if args.workspace_dir:
+            err_name = (submit_failure_type or "Error") if (test_metric is None and stderr.strip()) else None
+            write_episode_artifacts(args.workspace_dir, code=code, stdout=stdout,
+                                    stderr=stderr, error_name=err_name,
+                                    target_col=target_col, coverage=coverage, steps=1)
+
         metrics = {
             "has_test_metric": int(test_metric is not None),
             "valid_submit": int(test_metric is not None),
@@ -227,7 +240,10 @@ def main():
             "input_tokens": summary["input_tokens"],
             "output_tokens": summary["output_tokens"],
             "elapsed_seconds": elapsed,
+            "steps_used": 1,
         }
+        if coverage is not None:
+            metrics["checklist_coverage"] = coverage
         mlflow.set_tags({
             "final_status": final_status,
             "null_reason": null_reason or "",

@@ -102,9 +102,10 @@ def _runner_args(cfg: dict[str, Any]) -> list[str]:
 def _build_command(cfg: dict[str, Any]) -> list[str]:
     s = get_settings()
     cmd = [s.python_bin, *_runner_args(cfg), "--dataset-dir", cfg["datasetDir"]]
-    # Notebook modes flush artifacts after each step here so the dashboard can
-    # read the in-flight notebook/trajectory/checklist live.
-    if _MODE_TO_RUNNER[cfg["mode"]][1] and cfg.get("workspaceDir"):
+    # All modes write episode artifacts here so the dashboard can show the
+    # notebook/trajectory/checklist (notebook modes flush per step; single-shot/
+    # repeated emit a synthesized episode at the end).
+    if cfg.get("workspaceDir"):
         cmd += ["--workspace-dir", cfg["workspaceDir"]]
     return cmd
 
