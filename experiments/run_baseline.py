@@ -38,9 +38,15 @@ Requirements for the final model:
   scikit-learn Pipeline / ColumnTransformer and assign that fitted Pipeline to
   `model`, so `model.predict(df)` works on raw, unprocessed DataFrame rows.
   Do NOT transform features outside the model — the hidden test set is raw.
-- Keep any hyperparameter search small (cv<=3, few candidates) so it finishes
-  quickly; n_jobs=-1 is allowed.
-- Assign your best trained Pipeline to a variable called `model`.
+- `model` MUST be already FITTED. Call `model.fit(X, y)` on the training data
+  (X = train_df.drop(columns=[target_col]), y = train_df[target_col]) before you
+  finish. An unfitted estimator has no usable `.predict` and will be rejected.
+- If you use GridSearchCV/RandomizedSearchCV: keep it small (cv<=3, few
+  candidates), call `.fit(X, y)` on it, then assign `search.best_estimator_`
+  (the refitted Pipeline) to `model` — do NOT assign the unfitted search object.
+- As the LAST lines, verify it works and only then keep `model`:
+      _ = model.predict(val_df.drop(columns=[target_col]).head())
+- n_jobs=-1 is allowed.
 
 Output only a single ```python ... ``` block, nothing else."""
 
