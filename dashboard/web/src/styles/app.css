@@ -1251,6 +1251,7 @@ table.data tbody tr.clickable:hover {
   content: ""; position: absolute; left: 15px; top: 32px; bottom: -12px;
   width: 2px; transform: translateX(-50%); background: var(--border); z-index: 0;
 }
+.traj-step.before-live::after { bottom: -6px; }
 .traj-card { flex: 1; min-width: 0; border: 1px solid var(--border); border-radius: var(--r-md); padding: 14px; margin-bottom: 12px; }
 .traj-card .th { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .traj-card .th .st { font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); }
@@ -1261,7 +1262,11 @@ table.data tbody tr.clickable:hover {
 .fb-checklist { background: var(--green-bg); color: var(--green); }
 .fb-checklist-hint { background: var(--accent-soft); color: var(--accent-ink); }
 .fb-terminal { background: var(--ink); color: #fff; }
+.traj-live { min-height: 30px; align-items: center; }
+.traj-live .traj-marker { padding-top: 0; align-items: center; }
+.traj-live .spinner { position: relative; z-index: 1; background: var(--surface); }
 .spinner-row { display: flex; align-items: center; gap: 10px; color: var(--text-dim); font-size: 13px; padding: 10px 0; }
+.traj-live .spinner-row { padding: 0; min-height: 30px; }
 
 /* Checklist tab */
 .cl-summary { display: flex; align-items: center; gap: 22px; margin-bottom: 20px; }

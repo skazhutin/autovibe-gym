@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-03 (common runner failure propagation)
+**Last updated:** 2026-06-03 (common runner failure propagation; dashboard trajectory live-spinner alignment)
 **Phase:** Hardening after first full H200 recon + building the local control-panel dashboard for configuring/launching/inspecting runs.
 
 ---
@@ -255,6 +255,9 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
   legacy MLflow run without episode events; browser smoke on desktop/mobile
   confirms `11/12`, `88%`, no stale `92%`, no console errors, and no page-level
   horizontal overflow.
+- **Visual fix:** active trajectory rows now render the "agent is executing"
+  spinner inside the same marker column as step icons; the connector from the
+  previous step ends at the spinner's top center.
 - **Run:** `dashboard/server/run.sh` (API :8000) + `cd dashboard/web && npm i && npm run dev` (:5173).
 
 ## Blocked / Needs Decision
@@ -283,6 +286,7 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 
 | Date | Change |
 |------|--------|
+| 2026-06-02 | Dashboard trajectory visual fix: aligned the live "агент выполняет шаг…" spinner with the timeline marker column and adjusted the connector so the grey line meets the spinner's top center |
 | 2026-06-02 | Agent thoughts/scratchpad: optional `notes` field on any action; with `--enable-thoughts` (gym/iterative) the env stores notes, re-injects them every turn ([YOUR NOTES SO FAR]), persists `scratchpad.json`. Dashboard: New Run toggle (gym/iterative) + a «Мысли» tab rendering the notes timeline. One PR. |
 | 2026-06-03 | Propagated child runner failures from `experiments.run`: batch summaries still print, but the wrapper exits non-zero when any selected product mode fails |
 | 2026-06-03 | Cleaned up New Run budget controls: removed the budget-preset subhint and added Problems-style tooltip hints to budget parameter fields |
