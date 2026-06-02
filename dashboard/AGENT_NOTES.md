@@ -140,6 +140,14 @@ GET  /runs/{id}/events (SSE/poll for live)
   exactly `closed` items render green (replay-detected first, then canonical order) so ticks == number.
   DOCS RULE: keep docs/STATUS.md changelog + this file updated every change (user asked). main is protected;
   fixes go on dev/claude/* branches via PR.
+  VISUAL FIXES (branch dev/claude/dashboard-visual-fixes, PR #27): sidebar position:fixed (+ .main
+  margin-left); dumbbell logo in .mark; cleaner gear/trash icon paths; trajectory rebuilt as flex
+  row [marker][card] with .traj-step::after connector (z-index:0) spanning full row; marker = 30px
+  badge with line icon chosen by step `kind` (backend trajectory() now emits raw `kind`), opaque
+  fills (validate/submit mixed with --surface, not transparent, so the connector doesn't show
+  through); "code" icon redefined to centered chevrons. Gotcha that burned time: HMR/stale build +
+  a duplicate uvicorn made changes "not show" — restart vite (clear node_modules/.vite) AND keep a
+  single backend; verify served module via curl localhost:5173/src/... and kind via the :5173 proxy.
 - next ideas: open draft PR; optional gym-side incremental artifact flush for true live streaming;
   run a real end-to-end launch once an LLM endpoint is reachable.
 </content>
