@@ -109,6 +109,7 @@ def main():
     parser.add_argument("--model", default=None)
     parser.add_argument("--shots", type=int, default=None)
     parser.add_argument("--max-tokens", type=int, default=None)
+    parser.add_argument("--workspace-dir", default=None, help="Emit dashboard episode artifacts here.")
     parser.add_argument("--sandbox-timeout", type=int, default=None)
     parser.add_argument("--executor-backend", default=None)
     parser.add_argument("--sandbox-image", default=None)
@@ -182,6 +183,8 @@ def main():
 
         best_val: float | None = None
         best_model = None
+        best_code = ""
+        best_stdout = ""
         total_input_tokens = 0
         total_output_tokens = 0
         errors_count = 0
@@ -245,6 +248,8 @@ def main():
                     if best_val is None or val_metric > best_val:
                         best_val = val_metric
                         best_model = model_obj
+                        best_code = code
+                        best_stdout = stdout
                 except Exception as exc:
                     preflight_error = f"{type(exc).__name__}: {exc}"
                     attempt_error = (attempt_error or "") + f" [val_eval: {preflight_error}]"
@@ -314,6 +319,15 @@ def main():
             "output_tokens": total_output_tokens,
             "elapsed_seconds": elapsed,
         }
+        from experiments.dashboard_artifacts import checklist_coverage, write_episode_artifacts
+        coverage = checklist_coverage(best_code, best_stdout, target_col) if best_code else None
+        if coverage is not None:
+            metrics["checklist_coverage"] = coverage
+        metrics["steps_used"] = len(attempt_log)
+        if args.workspace_dir and best_code:
+            write_episode_artifacts(args.workspace_dir, code=best_code, stdout=best_stdout,
+                                    target_col=target_col, coverage=coverage,
+                                    steps=len(attempt_log))
         if best_val is not None:
             metrics["best_val_metric"] = best_val
             metrics["best_validation_metric"] = best_val
