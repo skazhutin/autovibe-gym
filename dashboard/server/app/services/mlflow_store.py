@@ -369,11 +369,23 @@ def checklist(episode_dir: Path | None, target_col: str = "", fallback_coverage:
             it["desc"] = GENERIC_CHECKLIST_HINTS.get(it["id"], "")
     except Exception:
         pass
-    items = [{**m, "closed": closed_step[m["id"]] is not None, "closedStep": closed_step[m["id"]]} for m in items_meta]
-    # Use the env's authoritative coverage metric for the count so it matches the
-    # run header; fall back to the per-item replay count only when unavailable.
-    closed = round(coverage * len(items)) if coverage is not None else replay_closed
-    return {"items": items, "coverage": coverage, "closed": closed, "total": len(items)}
+    # Authoritative count (matches the run banner).
+    total = len(items_meta)
+    closed = round(coverage * total) if coverage is not None else replay_closed
+    closed = max(0, min(closed, total))
+    # Mark exactly `closed` items green so the ticks add up to the headline number:
+    # prefer the items replay actually detected (earliest first), then fill the
+    # rest in canonical order.
+    detected = sorted((m["id"] for m in items_meta if closed_step[m["id"]] is not None),
+                      key=lambda i: closed_step[i])
+    remaining = [m["id"] for m in items_meta if closed_step[m["id"]] is None]
+    marked = set((detected + remaining)[:closed])
+    items = [
+        {**m, "closed": m["id"] in marked,
+         "closedStep": closed_step[m["id"]] if m["id"] in marked else None}
+        for m in items_meta
+    ]
+    return {"items": items, "coverage": coverage, "closed": closed, "total": total}
 
 
 def episode_progress(episode_dir: Path | None, target_col: str = "") -> dict[str, Any]:
