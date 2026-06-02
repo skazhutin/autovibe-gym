@@ -1043,16 +1043,16 @@ table.data tbody tr.clickable:hover {
 /* Trajectory tab */
 .traj { display: flex; flex-direction: column; }
 .traj-step { display: flex; gap: 14px; align-items: flex-start; position: relative; }
-.traj-marker { flex: none; display: flex; justify-content: center; padding-top: 2px; }
-.traj-dot { width: 26px; height: 26px; border-radius: 50%; background: var(--surface); border: 2px solid var(--border); display: grid; place-items: center; color: var(--text-dim); flex: none; position: relative; z-index: 1; }
-/* connector spans the full row down to the next step's marker */
+.traj-marker { flex: none; width: 16px; display: flex; justify-content: center; padding-top: 5px; }
+/* solid filled node — cannot look clipped/ghosted */
+.traj-dot { width: 16px; height: 16px; border-radius: 50%; background: var(--text-faint); display: grid; place-items: center; color: #fff; flex: none; position: relative; z-index: 1; }
+.traj-dot.validate { background: var(--blue); }
+.traj-dot.submit { background: var(--green); }
+/* connector spans the full row down to the next step's node */
 .traj-step:not(:last-child)::after {
-  content: ""; position: absolute; left: 13px; top: 26px; bottom: -12px;
+  content: ""; position: absolute; left: 8px; top: 22px; bottom: -12px;
   width: 2px; transform: translateX(-50%); background: var(--border); z-index: 0;
 }
-.traj-pip { display: block; width: 9px; height: 9px; border-radius: 50%; background: var(--accent-ink); }
-.traj-dot.submit { border-color: var(--green); color: var(--green); }
-.traj-dot.validate { border-color: var(--blue); color: var(--blue); }
 .traj-card { flex: 1; min-width: 0; border: 1px solid var(--border); border-radius: var(--r-md); padding: 14px; margin-bottom: 12px; }
 .traj-card .th { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .traj-card .th .st { font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); }
