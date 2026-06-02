@@ -62,6 +62,9 @@ Rules:
   then assign `search.best_estimator_` to `model` — not the unfitted search object.
 - As the LAST line, verify: `_ = model.predict(val_df.drop(columns=[target_col]).head())`.
 - Keep any hyperparameter search small (cv<=3); n_jobs=-1 is allowed.
+- Target scikit-learn 1.7: rely on DEFAULT parameters and do NOT pass deprecated
+  or removed arguments (e.g. `loss='auto'`, `multi_class=...`); omit a parameter
+  if unsure and use defaults.
 - Write only executable Python. Do not include markdown or explanations.
 """
 
