@@ -20,6 +20,7 @@ except ImportError:
     load_dotenv = None
 
 from experiments.mlflow_config import configure_mlflow_tracking
+from experiments.modes import add_mode_metadata_args, mode_metadata_params
 from gym.data_profile import build_dataset_card
 from gym.datasets import load_dataset_splits, resolve_metric
 from gym.executor import CodeExecutor
@@ -80,6 +81,7 @@ def main():
     parser.add_argument("--sandbox-timeout", type=int, default=60)
     parser.add_argument("--experiment-name", default="autovibe-gym")
     parser.add_argument("--run-name", default=None)
+    add_mode_metadata_args(parser)
     args = parser.parse_args()
 
     max_tokens = args.max_tokens or (8192 if args.mode == "local" else 4096)
@@ -128,6 +130,7 @@ def main():
             "experiment_type": "baseline_single_shot",
             "max_tokens": max_tokens,
             "executor_backend": args.executor_backend or os.getenv("AUTOVIBE_EXECUTOR_BACKEND", "docker"),
+            **mode_metadata_params(args, "single_shot"),
         })
 
         response = client.complete(
@@ -205,6 +208,7 @@ def main():
         elapsed = round(time.time() - started, 1)
         summary = {
             "experiment_type": "baseline_single_shot",
+            **mode_metadata_params(args, "single_shot"),
             "model": model_name,
             "dataset": dataset_name,
             "test_metric": test_metric,

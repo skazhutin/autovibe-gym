@@ -1,6 +1,6 @@
 /** Typed client for the dashboard backend (FastAPI on /api, proxied in dev). */
 
-export type RunMode = "single" | "repeated" | "iterative" | "gym";
+export type RunMode = "single" | "repeated" | "iterative" | "gym" | "fixed" | "all";
 export type RunStatus = "success" | "failed" | "null" | "running";
 
 export interface Run {
@@ -10,6 +10,11 @@ export interface Run {
   model: string;
   modelId?: string;
   mode: RunMode;
+  requestedMode?: string | null;
+  batchId?: string | null;
+  productMode?: string | null;
+  modeLabel?: string | null;
+  modeOrder?: number | null;
   dataset: string;
   datasetDir?: string;
   status: RunStatus;

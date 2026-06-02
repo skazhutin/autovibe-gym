@@ -10,6 +10,7 @@ import json
 import os
 
 from experiments.mlflow_config import configure_mlflow_tracking
+from experiments.modes import add_mode_metadata_args, mode_metadata_params
 from gym import GymAgent, NotebookGymEnv
 from gym.datasets import (
     DatasetSplits,
@@ -95,6 +96,7 @@ def main():
     parser.add_argument("--workspace-dir", default=None)
     parser.add_argument("--experiment-name", default="autovibe-gym")
     parser.add_argument("--run-name", default=None)
+    add_mode_metadata_args(parser)
     args = parser.parse_args()
 
     defaults = MODE_DEFAULTS[args.mode]
@@ -142,6 +144,7 @@ def main():
             "dataset_split_strategy": splits.metadata.split_strategy,
             "dataset_role": splits.metadata.role,
             "dataset_sampled": str(splits.metadata.sampled),
+            **mode_metadata_params(args, args.episode_mode),
         })
 
         env = NotebookGymEnv(
@@ -162,6 +165,7 @@ def main():
             summary = agent.run()
         finally:
             env.close()
+        summary.update(mode_metadata_params(args, args.episode_mode))
 
         has_test_metric = summary.get("final_test_metric") is not None
         metrics = {

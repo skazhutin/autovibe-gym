@@ -11,6 +11,8 @@ const MODE_INFO: { id: RunMode; desc: string; rec?: boolean }[] = [
   { id: "repeated", desc: "N независимых попыток, только скалярная val-метрика между ними." },
   { id: "iterative", desc: "Итеративно с runtime/contract-фидбэком, без подсказок чеклиста." },
   { id: "gym", desc: "Итеративно + неявные подсказки чеклиста DS-пайплайна.", rec: true },
+  { id: "fixed", desc: "Фиксированные стадии: EDA, preprocessing, feature engineering, model selection, tuning." },
+  { id: "all", desc: "Последовательно запускает 4 отдельных прогона: single, repeated, gym и fixed." },
 ];
 
 const BUDGET_DEFAULTS = {
@@ -73,7 +75,8 @@ export default function NewRun() {
 
   const model: ModelRec | undefined = models?.find((m) => m.id === modelId);
   const dataset: Dataset | undefined = datasets?.find((d) => d.id === datasetId);
-  const iterative = mode === "gym" || mode === "iterative";
+  const stepBased = mode === "gym" || mode === "iterative" || mode === "fixed" || mode === "all";
+  const repeatedLike = mode === "repeated" || mode === "all";
   const canLaunch = !!modelId && !!dataset?.prepared && !launching;
 
   async function launch() {
@@ -83,12 +86,12 @@ export default function NewRun() {
     try {
       const run = await api.launchRun({
         modelId, mode, datasetId, budgetMode,
-        maxSteps: iterative ? maxSteps : undefined,
+        maxSteps: stepBased ? maxSteps : undefined,
         maxTokens, temp, seed,
-        shots: mode === "repeated" ? shots : undefined,
+        shots: repeatedLike ? shots : undefined,
         execution,
       });
-      nav(`/runs/${run.id}`);
+      nav(mode === "all" ? "/runs" : `/runs/${run.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setLaunching(false);
@@ -181,12 +184,12 @@ export default function NewRun() {
             <Field label="Лимит токенов">
               <Stepper value={maxTokens} onChange={setMaxTokens} min={256} max={131072} step={256} />
             </Field>
-            {iterative && (
+            {stepBased && (
               <Field label="Макс. шагов">
                 <Stepper value={maxSteps} onChange={setMaxSteps} min={1} max={200} />
               </Field>
             )}
-            {mode === "repeated" && (
+            {repeatedLike && (
               <Field label="Число попыток (shots)">
                 <Stepper value={shots} onChange={setShots} min={2} max={50} />
               </Field>
@@ -211,14 +214,15 @@ export default function NewRun() {
         <div className="preview-row"><span className="k">Датасет</span><span className="v">{dataset?.name ?? "—"}</span></div>
         <div className="preview-row"><span className="k">Задача</span><span className="v">{dataset?.task ?? "—"}</span></div>
         <div className="preview-row"><span className="k">Бюджет</span><span className="v">{budgetMode}</span></div>
-        {iterative && <div className="preview-row"><span className="k">Шагов</span><span className="v">{maxSteps}</span></div>}
-        {mode === "repeated" && <div className="preview-row"><span className="k">Попыток</span><span className="v">{shots}</span></div>}
+        {mode === "all" && <div className="preview-row"><span className="k">Прогонов</span><span className="v acc">4 отдельных</span></div>}
+        {stepBased && <div className="preview-row"><span className="k">Шагов</span><span className="v">{maxSteps}</span></div>}
+        {repeatedLike && <div className="preview-row"><span className="k">Попыток</span><span className="v">{shots}</span></div>}
         <div className="preview-row"><span className="k">Токены / темп.</span><span className="v">{(maxTokens / 1024).toFixed(0)}k / {temp.toFixed(2)}</span></div>
 
         <div style={{ marginTop: 18 }}>
           <Button variant="primary" size="lg" block disabled={!canLaunch} onClick={launch}>
             {launching ? <Spinner /> : <Icon name="play" size={18} fill />}
-            {launching ? "Запуск…" : "Запустить прогон"}
+            {launching ? "Запуск…" : mode === "all" ? "Запустить 4 прогона" : "Запустить прогон"}
           </Button>
         </div>
         {!dataset?.prepared && <div className="preview-est">Выберите подготовленный датасет</div>}

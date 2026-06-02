@@ -7,19 +7,26 @@ import { Button, Card, EmptyState, Skeleton, StatusBadge } from "../components/u
 import { Icon } from "../components/Icon";
 import { ModeTag, ScoreCell } from "../components/runbits";
 
+type ModeFilter = RunMode | "any" | "requested-all";
+const RUN_MODE_OPTIONS = (Object.keys(MODE_LABELS) as RunMode[]).filter((m) => m !== "all");
+
 export default function Runs() {
   const nav = useNavigate();
   const { data: runs, loading } = useAsync(() => api.listRuns(), [], 5000);
   const [q, setQ] = useState("");
-  const [mode, setMode] = useState<RunMode | "all">("all");
+  const [mode, setMode] = useState<ModeFilter>("any");
   const [status, setStatus] = useState<RunStatus | "all">("all");
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
     return (runs ?? []).filter((r) => {
-      if (mode !== "all" && r.mode !== mode) return false;
+      if (mode === "requested-all") {
+        if (r.requestedMode !== "all" && r.mode !== "all") return false;
+      } else if (mode !== "any" && r.mode !== mode) {
+        return false;
+      }
       if (status !== "all" && r.status !== status) return false;
-      if (term && !`${r.shortId} ${r.model} ${r.dataset}`.toLowerCase().includes(term)) return false;
+      if (term && !`${r.shortId} ${r.model} ${r.dataset} ${r.batchId ?? ""}`.toLowerCase().includes(term)) return false;
       return true;
     });
   }, [runs, q, mode, status]);
@@ -31,9 +38,10 @@ export default function Runs() {
           <Icon name="search" size={17} />
           <input className="input" placeholder="Поиск по ID, модели, датасету…" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
-        <select className="select-sm" value={mode} onChange={(e) => setMode(e.target.value as RunMode | "all")}>
-          <option value="all">Все режимы</option>
-          {(Object.keys(MODE_LABELS) as RunMode[]).map((m) => <option key={m} value={m}>{MODE_LABELS[m]}</option>)}
+        <select className="select-sm" value={mode} onChange={(e) => setMode(e.target.value as ModeFilter)}>
+          <option value="any">Все режимы</option>
+          <option value="requested-all">Запуск all</option>
+          {RUN_MODE_OPTIONS.map((m) => <option key={m} value={m}>{MODE_LABELS[m]}</option>)}
         </select>
         <select className="select-sm" value={status} onChange={(e) => setStatus(e.target.value as RunStatus | "all")}>
           <option value="all">Все статусы</option>

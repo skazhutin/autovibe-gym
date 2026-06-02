@@ -22,6 +22,7 @@ except ImportError:
     load_dotenv = None
 
 from experiments.mlflow_config import configure_mlflow_tracking
+from experiments.modes import add_mode_metadata_args, mode_metadata_params
 from gym.data_profile import build_dataset_card
 from gym.datasets import load_dataset_splits, resolve_metric
 from gym.executor import CodeExecutor
@@ -118,6 +119,7 @@ def main():
     parser.add_argument("--sandbox-image", default=None)
     parser.add_argument("--experiment-name", default="autovibe-gym")
     parser.add_argument("--run-name", default=None)
+    add_mode_metadata_args(parser)
     args = parser.parse_args()
 
     defaults = MODE_DEFAULTS[args.mode]
@@ -181,6 +183,7 @@ def main():
             "dataset_split_strategy": splits.metadata.split_strategy,
             "dataset_role": splits.metadata.role,
             "dataset_sampled": str(splits.metadata.sampled),
+            **mode_metadata_params(args, "repeated_single_shot"),
         })
 
         best_val: float | None = None
@@ -345,6 +348,7 @@ def main():
 
     summary = {
         "experiment_type": "repeated_single_shot",
+        **mode_metadata_params(args, "repeated_single_shot"),
         "model": model_name,
         "dataset": dataset_name,
         "attempts_used": len(attempt_log),

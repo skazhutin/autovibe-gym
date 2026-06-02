@@ -28,7 +28,7 @@ _MODE_MAP = {
     "multishot": "repeated",
     "single_shot": "single",
     "repeated_single_shot": "repeated",
-    "fixed_transitions": "iterative",
+    "fixed_transitions": "fixed",
 }
 
 _CHECK_LABELS: dict[str, str] = {
@@ -102,6 +102,13 @@ def _run_record(run) -> dict[str, Any]:
     info = run.info
     mode_param = params.get("experiment_type") or params.get("episode_mode") or ""
     ui_mode = _MODE_MAP.get(mode_param, "gym")
+    product_mode = params.get("product_mode") or mode_param
+    requested_mode = params.get("requested_mode") or product_mode
+    batch_id = params.get("batch_id") or None
+    try:
+        mode_order = int(float(params["mode_order"])) if params.get("mode_order") else None
+    except (TypeError, ValueError):
+        mode_order = None
     coverage = _f(metrics, "checklist_coverage")
     max_steps = (
         params.get("max_steps")
@@ -123,6 +130,11 @@ def _run_record(run) -> dict[str, Any]:
         "runName": (run.data.tags or {}).get("mlflow.runName", info.run_id[:8]),
         "model": params.get("model", "—"),
         "mode": ui_mode,
+        "requestedMode": requested_mode,
+        "batchId": batch_id,
+        "productMode": product_mode,
+        "modeLabel": params.get("mode_label") or product_mode,
+        "modeOrder": mode_order,
         "dataset": params.get("dataset", "—"),
         "status": _derive_status(info.status, metrics),
         "score": _score(metrics),

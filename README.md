@@ -69,6 +69,17 @@ DOCKER="docker run --rm \
   -e MLFLOW_TRACKING_URI=file:///autovibe/mlruns \
   autovibe-gym"
 
+# Recommended: run the 4 product modes as one linked batch.
+# This creates 4 separate MLflow runs with the same batch_id and
+# requested_mode=all.
+$DOCKER -m experiments.run \
+  --dataset-dir $DS \
+  --mode all \
+  --budget-mode cloud \
+  --model $LLM_MODEL
+
+# Or run each mode manually:
+
 # Mode 1 — Single-shot (no feedback, ~15s)
 $DOCKER -m experiments.run_baseline --dataset-dir $DS --mode cloud
 
@@ -91,6 +102,10 @@ $DOCKER -m experiments.run_all_modes_matrix \
   --mode cloud
 ```
 
+Use `experiments.run_all_modes_matrix` when you want the full
+datasets × models × product modes matrix. Use `experiments.run --mode all`
+for the normal one-dataset launch.
+
 ### Step 6 — Compare results
 
 ```bash
@@ -104,12 +119,12 @@ docker run --rm \
 Expected output (values will vary by model):
 
 ```
-Mode                  test_metric  steps  tokens   elapsed
---------------------  -----------  -----  -------  -------
-baseline_single_shot        0.747      1    2 120      12s
-repeated_single_shot        0.730      5   11 228     110s
-gym (flexible)              0.745     14  146 013     111s
-fixed_transitions            null     17  218 322     218s
+requested_mode  batch_id          mode_label            test_metric  steps  tokens   elapsed
+--------------  ----------------  --------------------  -----------  -----  -------  -------
+all             20260603-...      single_shot                 0.747      1    2 120      12s
+all             20260603-...      repeated_single_shot        0.730      5   11 228     110s
+all             20260603-...      gym_with_checklist          0.745     14  146 013     111s
+all             20260603-...      fixed_transitions            null     17  218 322     218s
 ```
 
 > The single-shot baseline wins on score **and** cost.
@@ -321,6 +336,19 @@ The non-notebook controls remain:
   (`experiments.run_baseline`).
 - `repeated_single_shot`: repeated attempts with execution feedback
   (`experiments.run_multishot`).
+
+For a single entrypoint, use `experiments.run`:
+
+```bash
+python -m experiments.run --dataset-dir datasets/example_dry_bean/prepared --mode single_shot
+python -m experiments.run --dataset-dir datasets/example_dry_bean/prepared --mode all --dry-run
+```
+
+`--mode all` expands to four separate product runs in this order:
+`single_shot`, `repeated_single_shot`, `gym_with_checklist`,
+`fixed_transitions`. Each child run logs `requested_mode`, `batch_id`,
+`product_mode`, `mode_label`, and `mode_order` so `experiments.compare` can
+group the batch without mixing metrics into one run.
 
 Run the checklist ablation:
 

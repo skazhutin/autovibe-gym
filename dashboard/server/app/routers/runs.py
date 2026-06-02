@@ -21,7 +21,7 @@ router = APIRouter(prefix="/runs", tags=["runs"])
 class LaunchPayload(BaseModel):
     modelId: str | None = None
     model: str | None = None
-    mode: str  # single | repeated | iterative | gym
+    mode: str  # single | repeated | iterative | gym | fixed | all
     datasetId: str
     budgetMode: str = "local"  # local | cloud
     maxSteps: int | None = None
