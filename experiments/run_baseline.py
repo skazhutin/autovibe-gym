@@ -38,9 +38,15 @@ Requirements for the final model:
   scikit-learn Pipeline / ColumnTransformer and assign that fitted Pipeline to
   `model`, so `model.predict(df)` works on raw, unprocessed DataFrame rows.
   Do NOT transform features outside the model — the hidden test set is raw.
-- Keep any hyperparameter search small (cv<=3, few candidates) so it finishes
-  quickly; n_jobs=-1 is allowed.
-- Assign your best trained Pipeline to a variable called `model`.
+- `model` MUST be already FITTED. Call `model.fit(X, y)` on the training data
+  (X = train_df.drop(columns=[target_col]), y = train_df[target_col]) before you
+  finish. An unfitted estimator has no usable `.predict` and will be rejected.
+- If you use GridSearchCV/RandomizedSearchCV: keep it small (cv<=3, few
+  candidates), call `.fit(X, y)` on it, then assign `search.best_estimator_`
+  (the refitted Pipeline) to `model` — do NOT assign the unfitted search object.
+- As the LAST lines, verify it works and only then keep `model`:
+      _ = model.predict(val_df.drop(columns=[target_col]).head())
+- n_jobs=-1 is allowed.
 
 Output only a single ```python ... ``` block, nothing else."""
 
@@ -156,17 +162,26 @@ def main():
                     model_obj = value
                     break
         if model_obj is not None:
+            X_val = val.drop(columns=[target_col]).head(32)
+            preflight_ok = True
             try:
-                X_val = val.drop(columns=[target_col]).head(32)
                 model_obj.predict(X_val)
-            except Exception as exc:
-                final_status = "submit_blocked_preflight"
-                null_reason = f"{type(exc).__name__}: {exc}"
-                submit_failure_type = type(exc).__name__
-                finalize_path = "submit_preflight"
-                submit_error = null_reason
-                stderr += f"\n[submit preflight error] {submit_error}"
-            else:
+            except Exception:
+                # Safety net: the LLM defined the model but may not have fitted it.
+                # Fit the chosen architecture on train and retry before rejecting.
+                try:
+                    model_obj.fit(train.drop(columns=[target_col]), train[target_col])
+                    model_obj.predict(X_val)
+                    finalize_path = "single_shot_autofit"
+                except Exception as exc:
+                    preflight_ok = False
+                    final_status = "submit_blocked_preflight"
+                    null_reason = f"{type(exc).__name__}: {exc}"
+                    submit_failure_type = type(exc).__name__
+                    finalize_path = "submit_preflight"
+                    submit_error = null_reason
+                    stderr += f"\n[submit preflight error] {submit_error}"
+            if preflight_ok:
                 try:
                     X_test = test.drop(columns=[target_col])
                     y_test = test[target_col]

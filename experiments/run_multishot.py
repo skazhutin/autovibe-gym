@@ -55,6 +55,12 @@ Rules:
   scikit-learn Pipeline / ColumnTransformer and assign that fitted Pipeline to
   `model`, so `model.predict(df)` works on raw, unprocessed DataFrame rows.
   Do NOT transform features outside the model — validation and test sets are raw.
+- `model` MUST be already FITTED: call `model.fit(train_df.drop(columns=[target_col]),
+  train_df[target_col])` before finishing. An unfitted estimator has no usable
+  `.predict` and will be rejected.
+- If you use GridSearchCV/RandomizedSearchCV: keep it small (cv<=3), call `.fit(X, y)`,
+  then assign `search.best_estimator_` to `model` — not the unfitted search object.
+- As the LAST line, verify: `_ = model.predict(val_df.drop(columns=[target_col]).head())`.
 - Keep any hyperparameter search small (cv<=3); n_jobs=-1 is allowed.
 - Write only executable Python. Do not include markdown or explanations.
 """
@@ -225,10 +231,15 @@ def main():
             raw_validation_ready = False
             preflight_error = None
             if model_obj is not None:
+                X_val = val.drop(columns=[target_col])
+                y_val = val[target_col]
                 try:
-                    X_val = val.drop(columns=[target_col])
-                    y_val = val[target_col]
-                    val_preds = model_obj.predict(X_val)
+                    try:
+                        val_preds = model_obj.predict(X_val)
+                    except Exception:
+                        # Safety net: fit the LLM's model if it was left unfitted.
+                        model_obj.fit(train.drop(columns=[target_col]), train[target_col])
+                        val_preds = model_obj.predict(X_val)
                     raw_validation_ready = True
                     val_metric = score_with_coercion(metric_fn, y_val, val_preds)
                     if best_val is None or val_metric > best_val:
