@@ -27,7 +27,7 @@ const P: Record<string, string> = {
   external: "M14 4h6m0 0v6m0-6L10 14M18 14v6H4V6h6",
   refresh: "M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5",
   stop: "M6 6h12v12H6z",
-  code: "M16 18l6-6-6-6M8 6l-6 6 6 6",
+  code: "M9.5 8.5 6 12l3.5 3.5M14.5 8.5 18 12l-3.5 3.5",
   notebook: "M4 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H4zM4 4v18M8 8h8M8 12h8M8 16h5",
   route: "M6 19a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm12-10a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM6 13V8a2 2 0 0 1 2-2h7M18 11v5a2 2 0 0 1-2 2H9",
   bug: "M8 6V4m8 2V4M9 4h6M5 10H3m18 0h-2M5 15H3m18 0h-2M12 8a4 4 0 0 0-4 4v3a4 4 0 0 0 8 0v-3a4 4 0 0 0-4-4Z",

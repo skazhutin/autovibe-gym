@@ -1045,9 +1045,10 @@ table.data tbody tr.clickable:hover {
 .traj-step { display: flex; gap: 14px; align-items: flex-start; position: relative; }
 .traj-marker { flex: none; width: 30px; display: flex; justify-content: center; padding-top: 1px; }
 /* soft tinted badge with a centered line icon */
+/* opaque fills so the connector line never shows through the badge */
 .traj-dot { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; flex: none; position: relative; z-index: 1; background: var(--surface-2); color: var(--text-dim); border: 1px solid var(--border); }
-.traj-dot.validate { background: color-mix(in srgb, var(--blue) 14%, transparent); color: var(--blue); border-color: transparent; }
-.traj-dot.submit { background: var(--green-bg); color: var(--green); border-color: var(--green-border); }
+.traj-dot.validate { background: color-mix(in srgb, var(--blue) 16%, var(--surface)); color: var(--blue); border: 1px solid color-mix(in srgb, var(--blue) 30%, var(--surface)); }
+.traj-dot.submit { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
 /* connector spans the full row down to the next step's node */
 .traj-step:not(:last-child)::after {
   content: ""; position: absolute; left: 15px; top: 32px; bottom: -12px;

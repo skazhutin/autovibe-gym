@@ -77,7 +77,7 @@ function TrajectoryTab({ id, live }: { id: string; live: boolean }) {
         <div key={i} className="traj-step">
           <div className="traj-marker">
             <div className={`traj-dot ${s.action}`}>
-              <Icon name={STEP_ICON[s.kind ?? ""] ?? "notebook"} size={15} />
+              <Icon name={STEP_ICON[s.kind ?? ""] ?? (s.action === "submit" ? "check2" : s.action === "validate" ? "check" : "code")} size={15} />
             </div>
           </div>
           <div className="traj-card">
