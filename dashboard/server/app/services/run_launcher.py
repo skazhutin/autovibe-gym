@@ -137,6 +137,11 @@ def _build_env(cfg: dict[str, Any]) -> dict[str, str]:
     env = dict(os.environ)
     env["PYTHONPATH"] = str(s.repo_root) + os.pathsep + env.get("PYTHONPATH", "")
     env["MLFLOW_TRACKING_URI"] = s.mlflow_tracking_uri
+    # Local execution has no Docker: force the in-process executor for the legacy
+    # single-shot/repeated runners (the .env default is docker) and a local kernel
+    # for notebook modes. Overridable via AUTOVIBE_DASHBOARD_EXECUTOR.
+    env["AUTOVIBE_EXECUTOR_BACKEND"] = os.getenv("AUTOVIBE_DASHBOARD_EXECUTOR", "subprocess")
+    env["AUTOVIBE_KERNEL_BACKEND"] = "local"
     # LLM connection + thread caps (load_dotenv won't override these explicit vars).
     env.update(_llm_env(cfg))
     return env
