@@ -384,7 +384,9 @@ def episode_progress(episode_dir: Path | None, target_col: str = "") -> dict[str
     step = max((e.get("step", 0) for e in events), default=0)
     err = sum(1 for e in events if (e.get("execution_result") or {}).get("error_name") or (e.get("execution_result") or {}).get("success") is False)
     closed_step, coverage = _replay_checklist(episode_dir, target_col)
-    closed = sum(1 for v in closed_step.values() if v is not None)
+    replay_closed = sum(1 for v in closed_step.values() if v is not None)
+    # Same formula the checklist tab uses, so banner and tab always agree.
+    closed = round(coverage * CHECK_TOTAL) if coverage is not None else replay_closed
     nb = notebook(episode_dir)
     return {
         "step": step,
