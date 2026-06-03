@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-03 (dashboard budget tooltips)
+**Last updated:** 2026-06-03 (common runner failure propagation)
 **Phase:** Hardening after first full H200 recon + building the local control-panel dashboard for configuring/launching/inspecting runs.
 
 ---
@@ -113,6 +113,11 @@ Current dashboard budget-tooltip cycle:
   budget preset field.
 - Added Problems-style `?` tooltips to New Run budget parameter labels.
 - dashboard TypeScript build + Vite production build via bundled Node runtime.
+Current common-runner failure-propagation cycle:
+
+- `experiments.run` now exits with the first failed child return code after
+  printing the batch summary, even when `--stop-on-failure` is not set.
+- `python -m pytest tests/test_experiments.py` -> `27 passed`.
 Additional checks:
 
 - `python -m experiments.run --dataset-dir datasets/demo/prepared --mode all --model fake-model --dry-run`
@@ -278,6 +283,7 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 
 | Date | Change |
 |------|--------|
+| 2026-06-03 | Propagated child runner failures from `experiments.run`: batch summaries still print, but the wrapper exits non-zero when any selected product mode fails |
 | 2026-06-03 | Cleaned up New Run budget controls: removed the budget-preset subhint and added Problems-style tooltip hints to budget parameter fields |
 | 2026-06-03 | Added two-state environment badges to New Run mode cards: `Среда` for the three environment-backed modes and `Без среды` for the two non-environment modes |
 | 2026-06-03 | Restored Iterative as a selectable product run type, raised dashboard/common-run batch selection to 5 modes, renamed Gym to Flexible gym and Fixed transitions to Fixed transitions gym, and removed the New Run recommendation badge |

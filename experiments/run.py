@@ -230,6 +230,9 @@ def main() -> None:
 
     print("\n[run] Summary")
     print(json.dumps(results, indent=2))
+    failed = next((r for r in results if r["returncode"]), None)
+    if failed is not None:
+        sys.exit(failed["returncode"])
 
 
 if __name__ == "__main__":

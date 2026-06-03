@@ -508,3 +508,31 @@ def test_common_run_single_dry_run_stays_single(monkeypatch, capsys):
     assert "single_shot" in out
 
 
+def test_common_run_exits_nonzero_when_child_fails_without_stop_on_failure(monkeypatch, capsys):
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "run",
+            "--dataset-dir",
+            "datasets/demo/prepared",
+            "--mode",
+            "single_shot",
+            "--model",
+            "fake-model",
+        ],
+    )
+
+    def fake_run(command):
+        return type("Completed", (), {"returncode": 7})()
+
+    monkeypatch.setattr(run_cli.subprocess, "run", fake_run)
+
+    with pytest.raises(SystemExit) as exc:
+        run_cli.main()
+
+    assert exc.value.code == 7
+    out = capsys.readouterr().out
+    assert "[run] Summary" in out
+    assert '"returncode": 7' in out
+
+
