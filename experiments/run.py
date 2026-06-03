@@ -2,6 +2,7 @@
 
 Examples:
     python -m experiments.run --dataset-dir datasets/example_dry_bean/prepared --mode gym_with_checklist
+    python -m experiments.run --dataset-dir datasets/example_dry_bean/prepared --modes single_shot gym_with_checklist
     python -m experiments.run --dataset-dir datasets/example_dry_bean/prepared --mode all --dry-run
 """
 from __future__ import annotations
@@ -16,6 +17,8 @@ from pathlib import Path
 
 from experiments.modes import (
     ALL_REQUESTED_MODE,
+    BATCH_REQUESTED_MODE,
+    MODE_BY_KEY,
     ProductMode,
     expand_requested_mode,
     mode_metadata_cli_args,
@@ -64,7 +67,7 @@ def build_command(
         command.extend(["--sandbox-timeout", str(args.sandbox_timeout)])
     if args.run_name:
         run_name = args.run_name
-        if requested_mode == ALL_REQUESTED_MODE:
+        if requested_mode in (ALL_REQUESTED_MODE, BATCH_REQUESTED_MODE):
             run_name = f"{run_name}_{mode.key}"
         command.extend(["--run-name", run_name])
     if args.max_steps and mode.module in {"experiments.run_gym", "experiments.run_fixed"}:
@@ -79,7 +82,7 @@ def build_command(
         command.extend(["--sandbox-image", args.sandbox_image])
     if args.workspace_dir:
         workspace = Path(args.workspace_dir)
-        if requested_mode == ALL_REQUESTED_MODE:
+        if requested_mode in (ALL_REQUESTED_MODE, BATCH_REQUESTED_MODE):
             workspace = workspace / mode.key
         command.extend(["--workspace-dir", str(workspace)])
     command.extend(
@@ -93,19 +96,51 @@ def build_command(
     return command
 
 
+def _selected_product_modes(
+    parser: argparse.ArgumentParser,
+    args: argparse.Namespace,
+) -> tuple[str, tuple[ProductMode, ...]]:
+    if args.modes:
+        modes: list[ProductMode] = []
+        seen: set[str] = set()
+        for raw_mode in args.modes:
+            try:
+                key = normalize_mode_key(raw_mode)
+            except ValueError as exc:
+                parser.error(str(exc))
+            if key == ALL_REQUESTED_MODE:
+                parser.error("--modes accepts explicit product modes; use --mode all for the full batch")
+            if key in seen:
+                continue
+            seen.add(key)
+            modes.append(MODE_BY_KEY[key])
+        if len(modes) > 4:
+            parser.error("--modes accepts at most 4 unique modes")
+        requested_mode = BATCH_REQUESTED_MODE if len(modes) > 1 else modes[0].key
+        return requested_mode, tuple(modes)
+
+    requested_mode = normalize_mode_key(args.mode)
+    return requested_mode, expand_requested_mode(args.mode)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run one AutoVibe product mode or all product modes.")
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--dataset-dir", help="Directory with train/val/test CSV + meta.json")
     source.add_argument("--dataset", help="Single CSV file; requires --target")
     parser.add_argument("--target")
-    parser.add_argument(
+    selection = parser.add_mutually_exclusive_group(required=True)
+    selection.add_argument(
         "--mode",
-        required=True,
         help=(
             "Product mode: single_shot, repeated_single_shot, iterative_no_checklist, "
             "gym_with_checklist, fixed_transitions, or all."
         ),
+    )
+    selection.add_argument(
+        "--modes",
+        nargs="+",
+        help="Explicit product modes to run as one batch; at most 4 unique modes.",
     )
     parser.add_argument(
         "--budget-mode",
@@ -129,10 +164,9 @@ def main() -> None:
     parser.add_argument("--stop-on-failure", action="store_true")
     args, extra = parser.parse_known_args()
 
-    requested_mode = normalize_mode_key(args.mode)
-    modes = expand_requested_mode(args.mode)
+    requested_mode, modes = _selected_product_modes(parser, args)
     batch_id = args.batch_id
-    if requested_mode == ALL_REQUESTED_MODE:
+    if requested_mode in (ALL_REQUESTED_MODE, BATCH_REQUESTED_MODE):
         batch_id = batch_id or _new_batch_id()
 
     commands = [

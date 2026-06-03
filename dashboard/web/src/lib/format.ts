@@ -6,7 +6,7 @@ export const MODE_LABELS: Record<RunMode, string> = {
   iterative: "Iterative",
   gym: "Gym (с чеклистом)",
   fixed: "Fixed transitions",
-  all: "All modes",
+  batch: "Набор режимов",
 };
 
 export const MODE_SHORT: Record<RunMode, string> = {
@@ -15,7 +15,7 @@ export const MODE_SHORT: Record<RunMode, string> = {
   iterative: "Iterative",
   gym: "Gym",
   fixed: "Fixed",
-  all: "All",
+  batch: "Batch",
 };
 
 export const STATUS_LABELS: Record<RunStatus, string> = {

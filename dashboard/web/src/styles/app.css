@@ -1133,6 +1133,9 @@ table.data tbody tr.clickable:hover {
 @media (max-width: 960px) { .newrun { grid-template-columns: 1fr; } }
 .steps { display: flex; flex-direction: column; gap: 30px; }
 .step-head { display: flex; gap: 12px; align-items: center; margin-bottom: 14px; }
+.step-head-spread { justify-content: space-between; gap: 16px; }
+.step-head-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.step-hint { color: var(--text-dim); font-size: 12px; font-weight: 600; text-align: right; }
 .step-num {
   width: 28px; height: 28px; border-radius: 50%;
   background: var(--ink); color: #fff;
@@ -1140,6 +1143,10 @@ table.data tbody tr.clickable:hover {
   font-weight: 700; font-size: 13px; font-family: var(--font-mono);
 }
 .step-title { font-weight: 700; font-size: 16px; }
+@media (max-width: 560px) {
+  .step-head-spread { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .step-hint { text-align: left; }
+}
 .pick {
   border: 1px solid var(--border);
   border-radius: var(--r-md);

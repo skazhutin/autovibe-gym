@@ -442,6 +442,43 @@ def test_common_run_all_dry_run_lists_four_commands_with_shared_batch(monkeypatc
     assert len(set(batch_ids)) == 1
 
 
+def test_common_run_selected_modes_dry_run_lists_selected_commands_with_shared_batch(monkeypatch, capsys):
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "run",
+            "--dataset-dir",
+            "datasets/demo/prepared",
+            "--modes",
+            "single_shot",
+            "gym_with_checklist",
+            "fixed_transitions",
+            "--model",
+            "fake-model",
+            "--run-name",
+            "unit_batch",
+            "--workspace-dir",
+            "workspace",
+            "--dry-run",
+        ],
+    )
+
+    run_cli.main()
+
+    out = capsys.readouterr().out
+    assert "[run] requested_mode=batch" in out
+    assert "[run] Planned 3 run(s)" in out
+    assert "single_shot" in out
+    assert "gym_with_checklist" in out
+    assert "fixed_transitions" in out
+    assert "repeated_single_shot" not in out
+    assert "unit_batch_single_shot" in out
+    assert "workspace\\single_shot" in out or "workspace/single_shot" in out
+    batch_ids = re.findall(r"--batch-id\s+(\S+)", out)
+    assert len(batch_ids) >= 3
+    assert len(set(batch_ids)) == 1
+
+
 def test_common_run_single_dry_run_stays_single(monkeypatch, capsys):
     monkeypatch.setattr(
         "sys.argv",

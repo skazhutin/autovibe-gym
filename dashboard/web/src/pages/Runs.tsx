@@ -7,8 +7,8 @@ import { Button, Card, EmptyState, Skeleton, StatusBadge } from "../components/u
 import { Icon } from "../components/Icon";
 import { ModeTag, ScoreCell } from "../components/runbits";
 
-type ModeFilter = RunMode | "any" | "requested-all";
-const RUN_MODE_OPTIONS = (Object.keys(MODE_LABELS) as RunMode[]).filter((m) => m !== "all");
+type ModeFilter = RunMode | "any";
+const RUN_MODE_OPTIONS = Object.keys(MODE_LABELS) as RunMode[];
 
 export default function Runs() {
   const nav = useNavigate();
@@ -20,9 +20,7 @@ export default function Runs() {
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
     return (runs ?? []).filter((r) => {
-      if (mode === "requested-all") {
-        if (r.requestedMode !== "all" && r.mode !== "all") return false;
-      } else if (mode !== "any" && r.mode !== mode) {
+      if (mode !== "any" && r.mode !== mode) {
         return false;
       }
       if (status !== "all" && r.status !== status) return false;
@@ -40,7 +38,6 @@ export default function Runs() {
         </div>
         <select className="select-sm" value={mode} onChange={(e) => setMode(e.target.value as ModeFilter)}>
           <option value="any">Все режимы</option>
-          <option value="requested-all">Запуск all</option>
           {RUN_MODE_OPTIONS.map((m) => <option key={m} value={m}>{MODE_LABELS[m]}</option>)}
         </select>
         <select className="select-sm" value={status} onChange={(e) => setStatus(e.target.value as RunStatus | "all")}>

@@ -1,18 +1,18 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, type Dataset, type ModelRec, type RunMode } from "../lib/api";
+import { api, type Dataset, type LaunchRunMode, type ModelRec } from "../lib/api";
 import { useAsync } from "../lib/hooks";
 import { MODE_LABELS } from "../lib/format";
 import { Button, Card, Dot, Field, Spinner } from "../components/ui";
 import { Icon } from "../components/Icon";
 
-const MODE_INFO: { id: RunMode; desc: string; rec?: boolean }[] = [
+const MAX_SELECTED_MODES = 4;
+
+const MODE_INFO: { id: LaunchRunMode; desc: string; rec?: boolean }[] = [
   { id: "single", desc: "Один полный ответ без обратной связи от среды." },
   { id: "repeated", desc: "N независимых попыток, только скалярная val-метрика между ними." },
-  { id: "iterative", desc: "Итеративно с runtime/contract-фидбэком, без подсказок чеклиста." },
   { id: "gym", desc: "Итеративно + неявные подсказки чеклиста DS-пайплайна.", rec: true },
   { id: "fixed", desc: "Фиксированные стадии: EDA, preprocessing, feature engineering, model selection, tuning." },
-  { id: "all", desc: "Последовательно запускает 4 отдельных прогона: single, repeated, gym и fixed." },
 ];
 
 const BUDGET_DEFAULTS = {
@@ -45,7 +45,7 @@ export default function NewRun() {
   const [execution, setExecution] = useState<"local" | "server">("local");
 
   const [modelId, setModelId] = useState<string>("");
-  const [mode, setMode] = useState<RunMode>("gym");
+  const [selectedModes, setSelectedModes] = useState<LaunchRunMode[]>(["gym"]);
   const [datasetId, setDatasetId] = useState<string>("");
   const [budgetMode, setBudgetMode] = useState<"local" | "cloud">("local");
   const [maxSteps, setMaxSteps] = useState(30);
@@ -75,9 +75,27 @@ export default function NewRun() {
 
   const model: ModelRec | undefined = models?.find((m) => m.id === modelId);
   const dataset: Dataset | undefined = datasets?.find((d) => d.id === datasetId);
-  const stepBased = mode === "gym" || mode === "iterative" || mode === "fixed" || mode === "all";
-  const repeatedLike = mode === "repeated" || mode === "all";
-  const canLaunch = !!modelId && !!dataset?.prepared && !launching;
+  const selectedCount = selectedModes.length;
+  const primaryMode = selectedModes[0] ?? "gym";
+  const multiMode = selectedCount > 1;
+  const stepBased = selectedModes.some((m) => m === "gym" || m === "fixed");
+  const repeatedLike = selectedModes.includes("repeated");
+  const canLaunch = selectedCount > 0 && !!modelId && !!dataset?.prepared && !launching;
+
+  function toggleMode(id: LaunchRunMode) {
+    setSelectedModes((prev) => {
+      if (prev.includes(id)) {
+        return prev.length === 1 ? prev : prev.filter((m) => m !== id);
+      }
+      if (prev.length >= MAX_SELECTED_MODES) return prev;
+      return [...prev, id];
+    });
+  }
+
+  function launchLabel() {
+    if (!multiMode) return "Запустить прогон";
+    return `Запустить ${selectedCount} ${selectedCount === 1 ? "прогон" : "прогона"}`;
+  }
 
   async function launch() {
     if (!canLaunch) return;
@@ -85,13 +103,16 @@ export default function NewRun() {
     setError(null);
     try {
       const run = await api.launchRun({
-        modelId, mode, datasetId, budgetMode,
+        modelId,
+        mode: multiMode ? "batch" : primaryMode,
+        modes: selectedModes,
+        datasetId, budgetMode,
         maxSteps: stepBased ? maxSteps : undefined,
         maxTokens, temp, seed,
         shots: repeatedLike ? shots : undefined,
         execution,
       });
-      nav(mode === "all" ? "/runs" : `/runs/${run.id}`);
+      nav(multiMode ? "/runs" : `/runs/${run.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setLaunching(false);
@@ -140,15 +161,22 @@ export default function NewRun() {
 
         {/* 2. Mode */}
         <Card>
-          <div className="step-head"><span className="step-num">2</span><span className="step-title">Тип прогона</span></div>
+          <div className="step-head step-head-spread">
+            <span className="step-head-left"><span className="step-num">2</span><span className="step-title">Тип прогона</span></span>
+            <span className="step-hint">Можно выбрать до 4</span>
+          </div>
           <div className="grid-2">
-            {MODE_INFO.map((mi) => (
-              <div key={mi.id} className={`pick${mode === mi.id ? " pick-active" : ""}`} onClick={() => setMode(mi.id)}>
+            {MODE_INFO.map((mi) => {
+              const active = selectedModes.includes(mi.id);
+              const disabled = !active && selectedCount >= MAX_SELECTED_MODES;
+              return (
+              <div key={mi.id} className={`pick${active ? " pick-active" : ""}${disabled ? " pick-disabled" : ""}`} onClick={() => !disabled && toggleMode(mi.id)}>
                 <div className="pick-title">{MODE_LABELS[mi.id]}{mi.rec && <span className="rec-badge">РЕКОМЕНДУЕМ</span>}</div>
                 <div className="pick-desc">{mi.desc}</div>
-                {mode === mi.id && <span className="pick-check"><Icon name="check" size={18} /></span>}
+                {active && <span className="pick-check"><Icon name="check" size={18} /></span>}
               </div>
-            ))}
+              );
+            })}
           </div>
         </Card>
 
@@ -210,11 +238,11 @@ export default function NewRun() {
         <div className="preview-row"><span className="k">Среда</span><span className={`v${execution === "server" ? " acc" : ""}`}>{execution === "server" ? "на сервере" : "на компьютере"}</span></div>
         <div className="preview-row"><span className="k">Модель</span><span className="v">{model?.name ?? "—"}</span></div>
         <div className="preview-row"><span className="k">Провайдер</span><span className="v">{model?.provider ?? "—"}</span></div>
-        <div className="preview-row"><span className="k">Режим</span><span className={`v${mode === "gym" ? " acc" : ""}`}>{MODE_LABELS[mode]}</span></div>
+        <div className="preview-row"><span className="k">Режим</span><span className={`v${selectedModes.includes("gym") ? " acc" : ""}`}>{multiMode ? `${selectedCount} режима` : MODE_LABELS[primaryMode]}</span></div>
         <div className="preview-row"><span className="k">Датасет</span><span className="v">{dataset?.name ?? "—"}</span></div>
         <div className="preview-row"><span className="k">Задача</span><span className="v">{dataset?.task ?? "—"}</span></div>
         <div className="preview-row"><span className="k">Бюджет</span><span className="v">{budgetMode}</span></div>
-        {mode === "all" && <div className="preview-row"><span className="k">Прогонов</span><span className="v acc">4 отдельных</span></div>}
+        {multiMode && <div className="preview-row"><span className="k">Прогонов</span><span className="v acc">{selectedCount} отдельных</span></div>}
         {stepBased && <div className="preview-row"><span className="k">Шагов</span><span className="v">{maxSteps}</span></div>}
         {repeatedLike && <div className="preview-row"><span className="k">Попыток</span><span className="v">{shots}</span></div>}
         <div className="preview-row"><span className="k">Токены / темп.</span><span className="v">{(maxTokens / 1024).toFixed(0)}k / {temp.toFixed(2)}</span></div>
@@ -222,7 +250,7 @@ export default function NewRun() {
         <div style={{ marginTop: 18 }}>
           <Button variant="primary" size="lg" block disabled={!canLaunch} onClick={launch}>
             {launching ? <Spinner /> : <Icon name="play" size={18} fill />}
-            {launching ? "Запуск…" : mode === "all" ? "Запустить 4 прогона" : "Запустить прогон"}
+            {launching ? "Запуск…" : launchLabel()}
           </Button>
         </div>
         {!dataset?.prepared && <div className="preview-est">Выберите подготовленный датасет</div>}

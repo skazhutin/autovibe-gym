@@ -3,6 +3,8 @@ from __future__ import annotations
 import sys
 from types import SimpleNamespace
 
+import pytest
+
 from dashboard.server.app.config import default_python_bin
 from dashboard.server.app.services import mlflow_store, run_launcher
 
@@ -159,13 +161,15 @@ def test_run_launcher_planned_steps_match_dashboard_modes():
     assert run_launcher._planned_steps({"mode": "gym", "maxSteps": 8}) == 8
     assert run_launcher._planned_steps({"mode": "iterative", "maxSteps": 6}) == 6
     assert run_launcher._planned_steps({"mode": "fixed", "maxSteps": 12}) == 12
+    assert run_launcher._planned_steps({"mode": "batch", "modes": ["single", "repeated", "gym"]}) == 3
     assert run_launcher._planned_steps({"mode": "all"}) == 4
 
 
-def test_run_launcher_all_mode_uses_common_runner():
+def test_run_launcher_batch_mode_uses_common_runner_with_selected_modes():
     args = run_launcher._runner_args(
         {
-            "mode": "all",
+            "mode": "batch",
+            "modes": ["single", "repeated", "gym", "fixed"],
             "budgetMode": "local",
             "model": "fake-model",
             "runName": "dash_live_unit",
@@ -174,10 +178,31 @@ def test_run_launcher_all_mode_uses_common_runner():
         }
     )
 
-    assert args[:5] == ["-m", "experiments.run", "--mode", "all", "--budget-mode"]
+    assert args[:8] == [
+        "-m",
+        "experiments.run",
+        "--modes",
+        "single_shot",
+        "repeated_single_shot",
+        "gym_with_checklist",
+        "fixed_transitions",
+        "--budget-mode",
+    ]
     assert "local" in args
     assert "--max-steps" in args
     assert "--shots" in args
+
+
+def test_run_launcher_batch_rejects_more_than_four_modes():
+    with pytest.raises(ValueError, match="at most 4"):
+        run_launcher._runner_args(
+            {
+                "mode": "batch",
+                "modes": ["single", "repeated", "iterative", "gym", "fixed"],
+                "budgetMode": "local",
+                "runName": "dash_live_unit",
+            }
+        )
 
 
 def test_run_launcher_fixed_mode_uses_fixed_runner():

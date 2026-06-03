@@ -6,6 +6,7 @@ from typing import Any
 
 
 ALL_REQUESTED_MODE = "all"
+BATCH_REQUESTED_MODE = "batch"
 
 
 @dataclass(frozen=True)

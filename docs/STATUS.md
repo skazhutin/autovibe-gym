@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-03 (all-mode run orchestration, batch metadata, dashboard selector)
+**Last updated:** 2026-06-03 (dashboard run-mode multi-select)
 **Phase:** Hardening after first full H200 recon + building the local control-panel dashboard for configuring/launching/inspecting runs.
 
 ---
@@ -39,7 +39,7 @@ test, sandbox, and logging gaps.
 | `run_baseline.py` | Done | single-shot control preserved; prompts require raw-DataFrame pipelines; missing score is not logged as zero |
 | `run_multishot.py` | Done | logged as `repeated_single_shot`; prompts require raw-DataFrame pipelines; not the fair checklist control |
 | `run_fixed.py` | Done | fixed-transition control preserved; failed submit is not logged as real score 0.0 |
-| `run.py` | Done | common single-dataset entrypoint; `--mode all` expands to four separate product runs with shared `batch_id` |
+| `run.py` | Done | common single-dataset entrypoint; `--mode all` expands to four separate product runs with shared `batch_id`; `--modes ...` runs a selected batch of up to four modes |
 | `compare.py` | Done | handles missing metrics without zero substitution |
 
 ### Privacy and Security
@@ -78,14 +78,19 @@ python -m pytest
 
 Result after all-mode orchestration: `222 passed` (one sklearn
 `InconsistentVersionWarning` from the Docker notebook pickle smoke).
+Current dashboard multi-select cycle:
+
+- `python -m pytest tests/test_dashboard.py tests/test_experiments.py` -> `40 passed`
+- dashboard TypeScript build + Vite production build via bundled Node runtime
+- Browser smoke on `/new`: `All modes` is absent, the `Можно выбрать до 4`
+  hint is visible, selecting Single-shot + Repeated single-shot + Gym + Fixed
+  transitions shows `4 режима`, `4 отдельных`, the `Запустить 4 прогона` CTA,
+  no page-level horizontal overflow at the test viewport, and only existing
+  React Router future-flag warnings.
 Additional checks:
 
 - `python -m experiments.run --dataset-dir datasets/demo/prepared --mode all --model fake-model --dry-run`
 - `python -m experiments.run_all_modes_matrix --datasets datasets/demo/prepared --models fake-model --dry-run`
-- dashboard TypeScript build + Vite production build via bundled Node runtime
-- Browser smoke on `/new`: selecting `All modes` shows `4 отдельных`, the
-  `Запустить 4 прогона` CTA, no page-level horizontal overflow at the test
-  viewport, and only existing React Router future-flag warnings.
 
 The Docker-backed notebook integration test ran locally in this Windows
 workspace and passed. GitHub Actions remains the source of truth for the Linux
@@ -247,6 +252,7 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 
 | Date | Change |
 |------|--------|
+| 2026-06-03 | Replaced the dashboard `All modes` launch card with multi-select run types: users can select up to four product modes, see the `Можно выбрать до 4` hint, and multi-run launches use `batch` + `--modes ...` while preserving the CLI `--mode all` path |
 | 2026-06-03 | Added first-class `all` run orchestration: shared product-mode metadata, `experiments.run --mode all`, matrix batch metadata, compare columns/sort for `requested_mode`/`batch_id`/`mode_label`, dashboard `All modes` and `Fixed transitions` launch options, and responsive New Run grid fix |
 | 2026-06-03 | PR #34 Dataset Center hardening: fixed CI dataset preparation, restored finite upload limits, blocked localhost/private URL downloads and unsafe redirects, enforced gzip decompressed-size limits, made dataset creation atomic, preserved legacy root `meta.json` edits, added JSONL/SSRF/cleanup regressions, and kept `/datasets` route compatibility after the `/problems` UI rename |
 | 2026-06-02 | Dataset Center polish: one-column dataset cards, Russian UI with common ML terms preserved, dataset suite/group metadata removed from project flows, example configs now include repository-created timestamp and UCI sources, and empty sources display `-` |
