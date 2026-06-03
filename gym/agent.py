@@ -94,6 +94,19 @@ KEEP THE CLEAN RUN FAST AND ROBUST:
 {ACTION_JSON_SCHEMA}
 """
 
+# Appended to the system prompt only when the run has the scratchpad/thoughts
+# mode enabled. The notes persist across turns and are shown back to you.
+NOTES_PROMPT = """
+
+SCRATCHPAD / NOTES (enabled for this run):
+- You may add an optional "notes" string field to ANY action JSON, e.g.
+  {"type": "code", "code": "...", "notes": "Target is imbalanced; will try class_weight next."}
+- Use it to record your reasoning, hypotheses, observations, and plans.
+- Your notes are SAVED and shown back to you every turn under [YOUR NOTES SO FAR],
+  so use them as durable memory across steps. Keep each note short and useful.
+- Notes do not execute anything; they never replace the action itself.
+"""
+
 
 class GymAgent:
     """
@@ -122,12 +135,14 @@ class GymAgent:
         context = self.env.reset()
         self.messages = [{"role": "user", "content": context["task"]}]
         max_agent_turns = max(self.env.state.max_steps * 2 + 5, 10)
+        thoughts_on = bool(getattr(self.env, "enable_thoughts", False))
+        system_prompt = SYSTEM_PROMPT + (NOTES_PROMPT if thoughts_on else "")
 
         for turn in range(max_agent_turns):
             response = self.client.complete(
                 model=self.model,
                 max_tokens=self.max_tokens,
-                system=SYSTEM_PROMPT,
+                system=system_prompt,
                 messages=self._messages_for_llm(),
             )
             self.total_input_tokens += response.input_tokens
@@ -220,6 +235,11 @@ class GymAgent:
         )
         if notebook_context:
             feedback = f"{feedback}\n\n{notebook_context}"
+        digest = getattr(self.env, "scratchpad_digest", None)
+        if callable(digest):
+            notes = digest()
+            if notes:
+                feedback = f"{feedback}\n\n{notes}"
         return feedback
 
     def _messages_for_llm(self) -> list[dict]:
