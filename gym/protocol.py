@@ -207,11 +207,11 @@ class Action:
             code = payload.get("code")
             if code is None:
                 raise ActionParseError("Code action is missing the 'code' field.")
-            return cls.code_action(str(code))
+            return cls.code_action(_normalize_source(str(code)))
 
         if action_type == "add_cell":
             return cls.add_cell_action(
-                str(payload.get("source") or ""),
+                _normalize_source(str(payload.get("source") or "")),
                 cell_type=str(payload.get("cell_type") or "code"),
                 execute=bool(payload.get("execute", False)),
             )
@@ -220,7 +220,7 @@ class Action:
             return cls(
                 type="update_cell",
                 cell_id=str(payload.get("cell_id") or ""),
-                source=str(payload.get("source") or ""),
+                source=_normalize_source(str(payload.get("source") or "")),
                 execute=bool(payload.get("execute", False)),
             )
 
@@ -600,6 +600,19 @@ def extract_reasoning(text: str) -> str:
     # Drop common reasoning-tag wrappers but keep their content.
     cleaned = re.sub(r"</?(?:think|thinking|reasoning|scratchpad)>", " ", cleaned, flags=re.IGNORECASE)
     return cleaned.strip()
+
+
+def _normalize_source(s: str) -> str:
+    """Fix code/source that arrived with literal escape sequences instead of
+    real newlines. Some models emit ``import x\\nimport y`` as one physical
+    line (backslash-n as two chars), which then fails to parse in a cell with
+    ``SyntaxError: unexpected character after line continuation character``.
+    Only rewritten when the string has NO real newlines but DOES contain ``\\n``
+    — so genuinely multi-line code and intentional regex escapes are untouched.
+    """
+    if "\n" not in s and "\\n" in s:
+        s = s.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\t", "\t")
+    return s
 
 
 def _extract_code_block(text: str) -> str:
