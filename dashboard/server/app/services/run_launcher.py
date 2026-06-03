@@ -139,6 +139,9 @@ def _runner_args(cfg: dict[str, Any]) -> list[str]:
         # support it (multi-turn, so notes can be re-shown to the agent).
         if cfg.get("enableThoughts"):
             args += ["--enable-thoughts"]
+        # Checklist hint frequency (only gym_with_checklist emits hints).
+        if cfg.get("hintCooldown"):
+            args += ["--hint-cooldown", str(cfg["hintCooldown"])]
     elif mode == "fixed" and cfg.get("maxSteps"):
         args += ["--max-steps", str(cfg["maxSteps"])]
     elif mode == BATCH_REQUESTED_MODE and cfg.get("maxSteps"):

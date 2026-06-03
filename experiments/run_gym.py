@@ -96,6 +96,8 @@ def main():
     parser.add_argument("--workspace-dir", default=None)
     parser.add_argument("--enable-thoughts", action="store_true",
                         help="Let the agent keep a persistent scratchpad of notes.")
+    parser.add_argument("--hint-cooldown", type=int, default=2,
+                        help="Steps between consecutive checklist hints (gym mode).")
     parser.add_argument("--experiment-name", default="autovibe-gym")
     parser.add_argument("--run-name", default=None)
     add_mode_metadata_args(parser)
@@ -138,6 +140,7 @@ def main():
             "feedback_policy_version": NotebookGymEnv.feedback_policy_version,
             "max_steps": max_steps,
             "thoughts_enabled": args.enable_thoughts,
+            "hint_cooldown": args.hint_cooldown,
             "max_agent_turns": max_steps,
             "max_tokens": max_tokens,
             "token_budget": max_tokens,
@@ -162,6 +165,7 @@ def main():
             mode=args.episode_mode,
             kernel_timeout=sandbox_timeout,
             enable_thoughts=args.enable_thoughts,
+            hint_cooldown=args.hint_cooldown,
         )
 
         agent = GymAgent(env=env, model=model_name, max_tokens=max_tokens)
