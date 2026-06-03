@@ -84,6 +84,7 @@ export default function NewRun() {
   const [seed, setSeed] = useState(42);
   const [shots, setShots] = useState(5);
   const [enableThoughts, setEnableThoughts] = useState(false);
+  const [hintCooldown, setHintCooldown] = useState(2);
   const [launching, setLaunching] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -112,6 +113,7 @@ export default function NewRun() {
   const stepBased = selectedModes.some((m) => m === "iterative" || m === "gym" || m === "fixed");
   const repeatedLike = selectedModes.includes("repeated");
   const thoughtsSupported = selectedModes.some((m) => m === "gym" || m === "iterative");
+  const checklistMode = selectedModes.includes("gym");
   const canLaunch = selectedCount > 0 && !!modelId && !!dataset?.prepared && !launching;
 
   function toggleMode(id: LaunchRunMode) {
@@ -144,6 +146,7 @@ export default function NewRun() {
         shots: repeatedLike ? shots : undefined,
         execution,
         enableThoughts: thoughtsSupported ? enableThoughts : undefined,
+        hintCooldown: checklistMode ? hintCooldown : undefined,
       });
       nav(multiMode ? "/runs" : `/runs/${run.id}`);
     } catch (e) {
@@ -253,6 +256,11 @@ export default function NewRun() {
                 <Stepper value={maxSteps} onChange={setMaxSteps} min={1} max={200} />
               </FieldInfo>
             )}
+            {checklistMode && (
+              <FieldInfo label="Подсказка каждые N шагов" info="Через сколько шагов агенту даётся новая подсказка чеклиста (Gym). 1 — на каждом шаге, 2 — через шаг, и т.д.">
+                <Stepper value={hintCooldown} onChange={setHintCooldown} min={1} max={20} />
+              </FieldInfo>
+            )}
             {repeatedLike && (
               <FieldInfo label="Число попыток (shots)" info="Количество независимых single-shot попыток в repeated-режиме.">
                 <Stepper value={shots} onChange={setShots} min={2} max={50} />
@@ -290,6 +298,7 @@ export default function NewRun() {
         {multiMode && <div className="preview-row"><span className="k">Прогонов</span><span className="v acc">{selectedCount} отдельных</span></div>}
         {stepBased && <div className="preview-row"><span className="k">Шагов</span><span className="v">{maxSteps}</span></div>}
         {repeatedLike && <div className="preview-row"><span className="k">Попыток</span><span className="v">{shots}</span></div>}
+        {checklistMode && <div className="preview-row"><span className="k">Подсказка каждые</span><span className="v">{hintCooldown} шаг.</span></div>}
         <div className="preview-row"><span className="k">Токены / темп.</span><span className="v">{(maxTokens / 1024).toFixed(0)}k / {temp.toFixed(2)}</span></div>
 
         <div style={{ marginTop: 18 }}>

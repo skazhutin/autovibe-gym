@@ -27,7 +27,7 @@ from .data_profile import (
     profile_config_from_env,
     run_ydata_profile,
 )
-from .feedback import FeedbackItem, NotebookChecklist
+from .feedback import FeedbackItem, FeedbackPolicy, NotebookChecklist
 from .jupyter_kernel import (
     CellExecutionResult,
     KernelExecutionBackend,
@@ -175,8 +175,12 @@ class NotebookGymEnv:
         backend: KernelExecutionBackend | None = None,
         kernel_timeout: int = 60,
         enable_thoughts: bool = False,
+        hint_cooldown: int = 2,
     ):
         self.enable_thoughts = enable_thoughts
+        # Steps to wait between consecutive checklist hints (gym mode).
+        self.hint_cooldown = max(1, int(hint_cooldown))
+        self._feedback_policy = FeedbackPolicy(hint_cooldown_executions=self.hint_cooldown)
         self.scratchpad: list[dict[str, Any]] = []
         self.state = NotebookEnvState(
             train=train.reset_index(drop=True),
@@ -198,7 +202,7 @@ class NotebookGymEnv:
         self.kernel_timeout = kernel_timeout
         self.kernel = self.backend.create_session(self.workspace_dir)
         self.notebook = NotebookDocument.create(self.workspace_dir / "solution.ipynb")
-        self.checklist = NotebookChecklist(target_col=target_col)
+        self.checklist = NotebookChecklist(target_col=target_col, policy=self._feedback_policy)
         self.candidates = CandidateRegistry()
         self._candidate_objects: dict[str, Any] = {}
         self.events: list[dict[str, Any]] = []
@@ -244,7 +248,7 @@ class NotebookGymEnv:
         self.state.step = 0
         self.state.submitted = False
         self.state.history = []
-        self.checklist = NotebookChecklist(target_col=self.state.target_col)
+        self.checklist = NotebookChecklist(target_col=self.state.target_col, policy=self._feedback_policy)
         self.candidates = CandidateRegistry()
         self._candidate_objects = {}
         self.events = []

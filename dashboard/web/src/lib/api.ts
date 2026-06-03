@@ -324,6 +324,7 @@ export interface LaunchPayload {
   seed?: number;
   execution?: "server" | "local";
   enableThoughts?: boolean;
+  hintCooldown?: number;
 }
 
 const BASE = "/api";
