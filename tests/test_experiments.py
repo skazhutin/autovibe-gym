@@ -1,14 +1,16 @@
 import json
+import re
 import sys
-import types
 from pathlib import Path
 
 import pandas as pd
 import pytest
 
 from experiments import compare, mlflow_config, run_baseline, run_fixed, run_gym, run_multishot
+from experiments import run as run_cli
 from experiments import run_all_modes_matrix
 from experiments import run_matrix
+from experiments.modes import expand_requested_mode
 from gym.llm import LLMResponse
 from gym.notebook_env import NotebookGymEnv
 
@@ -267,6 +269,53 @@ def test_compare_handles_runs_without_test_metric(monkeypatch, capsys):
     assert "m1" in printed
 
 
+def test_compare_groups_all_batch_by_mode_order(monkeypatch, capsys):
+    runs = pd.DataFrame(
+        {
+            "params.experiment_type": [
+                "gym_with_checklist",
+                "baseline_single_shot",
+                "fixed_transitions",
+                "repeated_single_shot",
+                "iterative_no_checklist",
+            ],
+            "params.requested_mode": ["all", "all", "all", "all", "all"],
+            "params.batch_id": ["batch-1", "batch-1", "batch-1", "batch-1", "batch-1"],
+            "params.product_mode": [
+                "gym_with_checklist",
+                "single_shot",
+                "fixed_transitions",
+                "repeated_single_shot",
+                "iterative_no_checklist",
+            ],
+            "params.mode_label": [
+                "gym_with_checklist",
+                "single_shot",
+                "fixed_transitions",
+                "repeated_single_shot",
+                "iterative_no_checklist",
+            ],
+            "params.mode_order": [4, 1, 5, 2, 3],
+            "params.model": ["m1", "m1", "m1", "m1", "m1"],
+            "params.dataset": ["d", "d", "d", "d", "d"],
+            "metrics.test_metric": [0.4, 0.1, 0.5, 0.2, 0.3],
+        }
+    )
+    monkeypatch.setattr(compare.mlflow, "set_tracking_uri", lambda uri: None)
+    monkeypatch.setattr(compare.mlflow, "search_runs", lambda **kwargs: runs)
+    monkeypatch.setattr("sys.argv", ["compare"])
+
+    compare.main()
+
+    printed = capsys.readouterr().out
+    assert "requested_mode" in printed
+    assert "batch_id" in printed
+    assert printed.index("single_shot") < printed.index("repeated_single_shot")
+    assert printed.index("repeated_single_shot") < printed.index("iterative_no_checklist")
+    assert printed.index("iterative_no_checklist") < printed.index("gym_with_checklist")
+    assert printed.index("gym_with_checklist") < printed.index("fixed_transitions")
+
+
 # ---------------------------------------------------------------------------
 # run_gym — executor_backend MLflow param reflects AUTOVIBE_KERNEL_BACKEND
 # ---------------------------------------------------------------------------
@@ -334,7 +383,7 @@ def test_run_matrix_exits_when_no_datasets(tmp_path, monkeypatch, capsys):
     assert exc.value.code == 1
 
 
-def test_run_all_modes_matrix_dry_run_lists_exact_four_modes(monkeypatch, capsys):
+def test_run_all_modes_matrix_dry_run_lists_exact_five_modes(monkeypatch, capsys):
     monkeypatch.setattr(
         "sys.argv",
         [
@@ -352,8 +401,138 @@ def test_run_all_modes_matrix_dry_run_lists_exact_four_modes(monkeypatch, capsys
     out = capsys.readouterr().out
     assert "single-shot" in out
     assert "repeated single-shot" in out
+    assert "iterative no-checklist" in out
     assert "flexible gym" in out
-    assert "fixed transitions" in out
-    assert out.count("fake-model") >= 4
+    assert "fixed transitions gym" in out
+    assert out.count("fake-model") >= 5
+    batch_ids = re.findall(r"--batch-id\s+(\S+)", out)
+    assert len(batch_ids) >= 5
+    assert len(set(batch_ids)) == 1
+
+
+def test_shared_modes_all_expands_to_five_product_modes():
+    assert [m.key for m in expand_requested_mode("all")] == [
+        "single_shot",
+        "repeated_single_shot",
+        "iterative_no_checklist",
+        "gym_with_checklist",
+        "fixed_transitions",
+    ]
+
+
+def test_common_run_all_dry_run_lists_five_commands_with_shared_batch(monkeypatch, capsys):
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "run",
+            "--dataset-dir",
+            "datasets/demo/prepared",
+            "--mode",
+            "all",
+            "--model",
+            "fake-model",
+            "--dry-run",
+        ],
+    )
+
+    run_cli.main()
+
+    out = capsys.readouterr().out
+    assert "[run] Planned 5 run(s)" in out
+    assert "single_shot" in out
+    assert "repeated_single_shot" in out
+    assert "iterative_no_checklist" in out
+    assert "gym_with_checklist" in out
+    assert "fixed_transitions" in out
+    batch_ids = re.findall(r"--batch-id\s+(\S+)", out)
+    assert len(batch_ids) >= 5
+    assert len(set(batch_ids)) == 1
+
+
+def test_common_run_selected_modes_dry_run_lists_selected_commands_with_shared_batch(monkeypatch, capsys):
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "run",
+            "--dataset-dir",
+            "datasets/demo/prepared",
+            "--modes",
+            "single_shot",
+            "gym_with_checklist",
+            "fixed_transitions",
+            "--model",
+            "fake-model",
+            "--run-name",
+            "unit_batch",
+            "--workspace-dir",
+            "workspace",
+            "--dry-run",
+        ],
+    )
+
+    run_cli.main()
+
+    out = capsys.readouterr().out
+    assert "[run] requested_mode=batch" in out
+    assert "[run] Planned 3 run(s)" in out
+    assert "single_shot" in out
+    assert "gym_with_checklist" in out
+    assert "fixed_transitions" in out
+    assert "repeated_single_shot" not in out
+    assert "unit_batch_single_shot" in out
+    assert "workspace\\single_shot" in out or "workspace/single_shot" in out
+    batch_ids = re.findall(r"--batch-id\s+(\S+)", out)
+    assert len(batch_ids) >= 3
+    assert len(set(batch_ids)) == 1
+
+
+def test_common_run_single_dry_run_stays_single(monkeypatch, capsys):
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "run",
+            "--dataset-dir",
+            "datasets/demo/prepared",
+            "--mode",
+            "single_shot",
+            "--model",
+            "fake-model",
+            "--dry-run",
+        ],
+    )
+
+    run_cli.main()
+
+    out = capsys.readouterr().out
+    assert "[run] Planned 1 run(s)" in out
+    assert "single_shot" in out
+
+
+def test_common_run_exits_nonzero_when_child_fails_without_stop_on_failure(monkeypatch, capsys):
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "run",
+            "--dataset-dir",
+            "datasets/demo/prepared",
+            "--mode",
+            "single_shot",
+            "--model",
+            "fake-model",
+        ],
+    )
+
+    def fake_run(command):
+        return type("Completed", (), {"returncode": 7})()
+
+    monkeypatch.setattr(run_cli.subprocess, "run", fake_run)
+
+    with pytest.raises(SystemExit) as exc:
+        run_cli.main()
+
+    assert exc.value.code == 7
+    out = capsys.readouterr().out
+    assert "[run] Summary" in out
+    assert '"returncode": 7' in out
 
 

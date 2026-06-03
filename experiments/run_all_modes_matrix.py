@@ -11,33 +11,36 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 import time
 from pathlib import Path
 
+from experiments.modes import ALL_PRODUCT_MODES, ALL_REQUESTED_MODE, ProductMode, mode_metadata_cli_args
 
-MODE_COMMANDS = {
-    "single-shot": "experiments.run_baseline",
-    "repeated single-shot": "experiments.run_multishot",
-    "flexible gym": "experiments.run_gym",
-    "fixed transitions": "experiments.run_fixed",
-}
+
+MODE_COMMANDS = {mode.matrix_label: mode.module for mode in ALL_PRODUCT_MODES}
+
+
+def _slug(value: str) -> str:
+    return re.sub(r"[^a-zA-Z0-9_.-]+", "-", value).strip("-") or "run"
 
 
 def _build_command(
     *,
-    module: str,
+    product_mode: ProductMode,
     dataset: str,
     model: str,
     mode: str,
     experiment_name: str,
+    batch_id: str,
     extra_args: list[str],
 ) -> list[str]:
     command = [
         sys.executable,
         "-m",
-        module,
+        product_mode.module,
         "--dataset-dir",
         dataset,
         "--mode",
@@ -47,6 +50,15 @@ def _build_command(
         "--experiment-name",
         experiment_name,
     ]
+    if product_mode.episode_mode:
+        command.extend(["--episode-mode", product_mode.episode_mode])
+    command.extend(
+        mode_metadata_cli_args(
+            product_mode,
+            requested_mode=ALL_REQUESTED_MODE,
+            batch_id=batch_id,
+        )
+    )
     command.extend(extra_args)
     return command
 
@@ -61,11 +73,17 @@ def main() -> None:
     parser.add_argument("--stop-on-failure", action="store_true")
     args, extra = parser.parse_known_args()
 
-    plan = [
-        (dataset, model, product_mode, module)
+    batch_seed = time.strftime("%Y%m%d-%H%M%S")
+    batch_ids = {
+        (dataset, model): f"{batch_seed}-{_slug(Path(dataset).name)}-{_slug(model)}"
         for dataset in args.datasets
         for model in args.models
-        for product_mode, module in MODE_COMMANDS.items()
+    }
+    plan = [
+        (dataset, model, product_mode)
+        for dataset in args.datasets
+        for model in args.models
+        for product_mode in ALL_PRODUCT_MODES
     ]
     print(
         f"[run_all_modes_matrix] {len(args.datasets)} dataset(s) x "
@@ -73,16 +91,18 @@ def main() -> None:
     )
 
     results = []
-    for index, (dataset, model, product_mode, module) in enumerate(plan, 1):
+    for index, (dataset, model, product_mode) in enumerate(plan, 1):
+        batch_id = batch_ids[(dataset, model)]
         command = _build_command(
-            module=module,
+            product_mode=product_mode,
             dataset=dataset,
             model=model,
             mode=args.mode,
             experiment_name=args.experiment_name,
+            batch_id=batch_id,
             extra_args=extra,
         )
-        label = f"{Path(dataset).name} | {model} | {product_mode}"
+        label = f"{Path(dataset).name} | {model} | {product_mode.matrix_label}"
         print(f"[run_all_modes_matrix] [{index}/{len(plan)}] {label}")
         print("  " + " ".join(command))
         if args.dry_run:
@@ -90,7 +110,11 @@ def main() -> None:
                 {
                     "dataset": dataset,
                     "model": model,
-                    "product_mode": product_mode,
+                    "product_mode": product_mode.key,
+                    "mode_label": product_mode.key,
+                    "mode_order": product_mode.mode_order,
+                    "requested_mode": ALL_REQUESTED_MODE,
+                    "batch_id": batch_id,
                     "command": command,
                     "returncode": None,
                     "elapsed_seconds": 0.0,
@@ -106,7 +130,11 @@ def main() -> None:
             {
                 "dataset": dataset,
                 "model": model,
-                "product_mode": product_mode,
+                "product_mode": product_mode.key,
+                "mode_label": product_mode.key,
+                "mode_order": product_mode.mode_order,
+                "requested_mode": ALL_REQUESTED_MODE,
+                "batch_id": batch_id,
                 "command": command,
                 "returncode": completed.returncode,
                 "elapsed_seconds": elapsed,

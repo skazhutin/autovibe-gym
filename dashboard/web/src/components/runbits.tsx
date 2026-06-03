@@ -5,7 +5,7 @@ import { MODE_SHORT, formatScore } from "../lib/format";
 import { StatusBadge, Tag } from "./ui";
 
 export function ModeTag({ mode }: { mode: Run["mode"] }) {
-  return <Tag tone={mode === "gym" ? "accent" : "neutral"}>{MODE_SHORT[mode]}</Tag>;
+  return <Tag tone={mode === "gym" || mode === "batch" ? "accent" : "neutral"}>{MODE_SHORT[mode]}</Tag>;
 }
 
 export function ScoreCell({ run }: { run: Run }) {

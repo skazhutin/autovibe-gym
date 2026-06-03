@@ -4,14 +4,18 @@ export const MODE_LABELS: Record<RunMode, string> = {
   single: "Single-shot",
   repeated: "Repeated single-shot",
   iterative: "Iterative",
-  gym: "Gym (с чеклистом)",
+  gym: "Flexible gym",
+  fixed: "Fixed transitions gym",
+  batch: "Набор режимов",
 };
 
 export const MODE_SHORT: Record<RunMode, string> = {
   single: "Single-shot",
   repeated: "Repeated",
   iterative: "Iterative",
-  gym: "Gym",
+  gym: "Flexible",
+  fixed: "Fixed gym",
+  batch: "Batch",
 };
 
 export const STATUS_LABELS: Record<RunStatus, string> = {

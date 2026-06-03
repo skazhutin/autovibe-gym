@@ -5,6 +5,8 @@ UI mode -> runner:
   repeated  -> experiments.run_multishot   (--shots)
   iterative -> experiments.run_gym --episode-mode iterative_no_checklist  (--max-steps)
   gym       -> experiments.run_gym --episode-mode gym_with_checklist       (--max-steps)
+  fixed     -> experiments.run_fixed       (--max-steps)
+  batch     -> experiments.run --modes ... (selected product-mode batch)
 
 Runs are spawned with the project venv, cwd=repo root, and MLflow tracking
 pointed at the dashboard's store so finished runs show up in the history list.
@@ -25,6 +27,7 @@ from typing import Any
 
 from ..config import get_settings
 from . import model_store, remote_exec
+from experiments.modes import ALL_PRODUCT_MODES, BATCH_REQUESTED_MODE, MODE_BY_DASHBOARD_MODE
 
 # local_id -> {"proc": Popen, "meta": dict}
 _ACTIVE: dict[str, dict[str, Any]] = {}
@@ -34,10 +37,48 @@ _MODE_TO_RUNNER = {
     "repeated": ("experiments.run_multishot", None),
     "iterative": ("experiments.run_gym", "iterative_no_checklist"),
     "gym": ("experiments.run_gym", "gym_with_checklist"),
+    "fixed": ("experiments.run_fixed", None),
+    BATCH_REQUESTED_MODE: ("experiments.run", None),
 }
 
 
+def _selected_modes(cfg: dict[str, Any]) -> list[str]:
+    raw_modes = cfg.get("modes") or [cfg.get("mode")]
+    modes: list[str] = []
+    for raw_mode in raw_modes:
+        if not raw_mode or raw_mode == BATCH_REQUESTED_MODE:
+            continue
+        mode = str(raw_mode)
+        if mode not in MODE_BY_DASHBOARD_MODE:
+            raise ValueError(f"Unsupported mode in batch: {mode}")
+        if mode not in modes:
+            modes.append(mode)
+    if not modes:
+        raise ValueError("At least one run mode must be selected")
+    if len(modes) > 5:
+        raise ValueError("Select at most 5 run modes")
+    return modes
+
+
+def _normalize_cfg_modes(cfg: dict[str, Any]) -> list[str]:
+    modes = _selected_modes(cfg)
+    cfg["modes"] = modes
+    if len(modes) > 1:
+        cfg["mode"] = BATCH_REQUESTED_MODE
+    elif cfg.get("mode") == BATCH_REQUESTED_MODE:
+        cfg["mode"] = modes[0]
+    return modes
+
+
+def _selected_product_keys(cfg: dict[str, Any]) -> list[str]:
+    return [MODE_BY_DASHBOARD_MODE[mode].key for mode in _selected_modes(cfg)]
+
+
 def _planned_steps(cfg: dict[str, Any]) -> int | None:
+    if cfg["mode"] == BATCH_REQUESTED_MODE:
+        return len(_selected_modes(cfg))
+    if cfg["mode"] == "all":
+        return len(ALL_PRODUCT_MODES)
     if cfg["mode"] == "single":
         return 1
     if cfg["mode"] == "repeated":
@@ -76,7 +117,14 @@ def _runner_args(cfg: dict[str, Any]) -> list[str]:
     --dataset-dir and --workspace-dir, which are added per environment)."""
     mode = cfg["mode"]
     module, episode = _MODE_TO_RUNNER[mode]
-    args = ["-m", module, "--mode", cfg.get("budgetMode", "local")]
+    if mode == BATCH_REQUESTED_MODE:
+        args = [
+            "-m", module,
+            "--modes", *_selected_product_keys(cfg),
+            "--budget-mode", cfg.get("budgetMode", "local"),
+        ]
+    else:
+        args = ["-m", module, "--mode", cfg.get("budgetMode", "local")]
     if cfg.get("model"):
         args += ["--model", cfg["model"]]
     if cfg.get("maxTokens"):
@@ -87,12 +135,18 @@ def _runner_args(cfg: dict[str, Any]) -> list[str]:
         args += ["--episode-mode", episode]
         if cfg.get("maxSteps"):
             args += ["--max-steps", str(cfg["maxSteps"])]
+    elif mode == "fixed" and cfg.get("maxSteps"):
+        args += ["--max-steps", str(cfg["maxSteps"])]
+    elif mode == BATCH_REQUESTED_MODE and cfg.get("maxSteps"):
+        args += ["--max-steps", str(cfg["maxSteps"])]
     if mode == "repeated" and cfg.get("shots"):
+        args += ["--shots", str(cfg["shots"])]
+    if mode == BATCH_REQUESTED_MODE and cfg.get("shots"):
         args += ["--shots", str(cfg["shots"])]
     # The legacy single-shot/repeated runners default to a 60s execution timeout,
     # too short for local thread-capped model training (→ "no candidate" on kill).
     # Give them a generous timeout (env AUTOVIBE_DASHBOARD_TIMEOUT).
-    if mode in ("single", "repeated"):
+    if mode in ("single", "repeated", BATCH_REQUESTED_MODE):
         args += ["--sandbox-timeout", os.getenv("AUTOVIBE_DASHBOARD_TIMEOUT", "300")]
     args += ["--experiment-name", cfg.get("experimentName", "autovibe-dashboard")]
     args += ["--run-name", cfg["runName"]]
@@ -102,9 +156,9 @@ def _runner_args(cfg: dict[str, Any]) -> list[str]:
 def _build_command(cfg: dict[str, Any]) -> list[str]:
     s = get_settings()
     cmd = [s.python_bin, *_runner_args(cfg), "--dataset-dir", cfg["datasetDir"]]
-    # All modes write episode artifacts here so the dashboard can show the
-    # notebook/trajectory/checklist (notebook modes flush per step; single-shot/
-    # repeated emit a synthesized episode at the end).
+    # Runs write episode artifacts here so the dashboard can show the
+    # notebook/trajectory/checklist. Notebook modes flush per step; single-shot
+    # and repeated emit a synthesized episode at the end.
     if cfg.get("workspaceDir"):
         cmd += ["--workspace-dir", cfg["workspaceDir"]]
     return cmd
@@ -155,6 +209,7 @@ def _build_env(cfg: dict[str, Any]) -> dict[str, str]:
 
 def launch(cfg: dict[str, Any]) -> dict[str, Any]:
     s = get_settings()
+    selected_modes = _normalize_cfg_modes(cfg)
     if cfg["mode"] not in _MODE_TO_RUNNER:
         raise ValueError(f"Unsupported mode: {cfg['mode']}")
     if not _python_available(s.python_bin):
@@ -180,6 +235,12 @@ def launch(cfg: dict[str, Any]) -> dict[str, Any]:
         "model": (model or {}).get("name") or cfg.get("model") or "—",
         "modelId": cfg.get("modelId"),
         "mode": cfg["mode"],
+        "requestedMode": BATCH_REQUESTED_MODE if cfg["mode"] == BATCH_REQUESTED_MODE else cfg["mode"],
+        "batchId": None,
+        "productMode": None,
+        "modeLabel": ", ".join(selected_modes) if cfg["mode"] == BATCH_REQUESTED_MODE else cfg["mode"],
+        "modeOrder": None,
+        "selectedModes": selected_modes,
         "dataset": cfg.get("dataset") or Path(cfg["datasetDir"]).name,
         "datasetDir": cfg["datasetDir"],
         "status": "running",
@@ -264,7 +325,11 @@ def _refresh(local_id: str) -> dict[str, Any] | None:
                 if key in rec and rec[key] is not None:
                     meta[key] = rec[key]
     if meta["status"] == "running":
-        meta["status"] = "null" if rc == 0 else "failed"
+        if meta.get("mode") in (BATCH_REQUESTED_MODE, "all"):
+            meta["step"] = meta.get("steps") or len(ALL_PRODUCT_MODES)
+            meta["status"] = "success" if rc == 0 else "failed"
+        else:
+            meta["status"] = "null" if rc == 0 else "failed"
         if rc != 0:
             meta["failReason"] = f"Процесс завершился с кодом {rc}. См. вкладку «Логи»."
     _write_meta(meta)
@@ -403,6 +468,8 @@ def list_live() -> list[dict[str, Any]]:
                 continue
             m = _read_meta(d.name)
             if m:
+                if m.get("mode") in (BATCH_REQUESTED_MODE, "all") and m.get("status") != "running":
+                    continue
                 out.append(_refresh_remote(m) if m.get("remote") else _reconcile_orphan(m))
     out.sort(key=lambda r: r.get("startedMs", 0), reverse=True)
     return out

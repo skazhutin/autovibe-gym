@@ -48,7 +48,7 @@ Splits are **deterministic**: same seed → same rows in train/val/test every ti
 
 ### 2. Run an experiment
 
-All four modes share the same CLI pattern:
+All five product modes share the same CLI pattern:
 
 ```bash
 # Single-shot baseline
@@ -62,12 +62,17 @@ python -m experiments.run_multishot \
   --dataset-dir datasets/student_dropout/prepared \
   --mode local --shots 5
 
-# Flexible transitions (gym)
+# Iterative no-checklist
+python -m experiments.run_gym \
+  --dataset-dir datasets/student_dropout/prepared \
+  --mode local --episode-mode iterative_no_checklist --max-steps 15
+
+# Flexible gym
 python -m experiments.run_gym \
   --dataset-dir datasets/student_dropout/prepared \
   --mode local --max-steps 15
 
-# Fixed transitions
+# Fixed transitions gym
 python -m experiments.run_fixed \
   --dataset-dir datasets/student_dropout/prepared \
   --mode local
@@ -76,7 +81,7 @@ python -m experiments.run_fixed \
 `--mode local` uses 30-step budget and 60s sandbox timeout.
 `--mode cloud` uses 15-step budget and 30s sandbox timeout.
 
-To run the full four-mode product matrix across datasets and models:
+To run the full five-mode product matrix across datasets and models:
 
 ```bash
 python -m experiments.run_all_modes_matrix \

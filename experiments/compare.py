@@ -12,6 +12,7 @@ import pandas as pd
 from dotenv import load_dotenv
 
 from experiments.mlflow_config import configure_mlflow_tracking
+from experiments.modes import MODE_BY_EXPERIMENT_TYPE, MODE_BY_KEY
 
 load_dotenv()
 
@@ -44,6 +45,11 @@ def main():
 
     cols = {
         "params.experiment_type": "experiment_type",
+        "params.requested_mode": "requested_mode",
+        "params.batch_id": "batch_id",
+        "params.product_mode": "product_mode",
+        "params.mode_label": "mode_label",
+        "params.mode_order": "mode_order",
         "params.model": "model",
         "params.dataset": "dataset",
         "params.mode": "mode",
@@ -73,6 +79,34 @@ def main():
 
     available = {k: v for k, v in cols.items() if k in runs.columns}
     table = runs[list(available.keys())].rename(columns=available)
+    if "product_mode" not in table.columns:
+        table["product_mode"] = table.get("experiment_type", "")
+    else:
+        table["product_mode"] = table["product_mode"].fillna(table.get("experiment_type", ""))
+    if "requested_mode" not in table.columns:
+        table["requested_mode"] = table["product_mode"]
+    else:
+        table["requested_mode"] = table["requested_mode"].fillna(table["product_mode"])
+    if "batch_id" not in table.columns:
+        table["batch_id"] = ""
+    else:
+        table["batch_id"] = table["batch_id"].fillna("")
+    if "mode_label" not in table.columns:
+        table["mode_label"] = table["product_mode"]
+    else:
+        table["mode_label"] = table["mode_label"].fillna(table["product_mode"])
+    if "mode_order" not in table.columns:
+        table["mode_order"] = pd.NA
+    table["mode_order"] = pd.to_numeric(table["mode_order"], errors="coerce")
+    if "experiment_type" in table.columns:
+        def _infer_mode_order(row):
+            if pd.notna(row["mode_order"]):
+                return row["mode_order"]
+            mode_key = row.get("product_mode") or row.get("experiment_type")
+            spec = MODE_BY_KEY.get(str(mode_key)) or MODE_BY_EXPERIMENT_TYPE.get(str(mode_key))
+            return spec.mode_order if spec else 999
+
+        table["mode_order"] = table.apply(_infer_mode_order, axis=1)
     if "best_validation_metric" not in table.columns and "best_val_metric" in table.columns:
         table["best_validation_metric"] = table["best_val_metric"]
     if args.metric in table.columns and "best_validation_metric" in table.columns:
@@ -84,7 +118,15 @@ def main():
         if args.metric in table.columns:
             denom = table["total_tokens"].replace(0, pd.NA) / 1000
             table["score_per_1k_tokens"] = table[args.metric] / denom
-    sort_cols = [col for col in ["dataset", "model", "experiment_type"] if col in table.columns]
+    table["_batch_sort"] = table["batch_id"].where(
+        table["batch_id"].astype(str).str.len() > 0,
+        table["requested_mode"],
+    )
+    sort_cols = [
+        col
+        for col in ["dataset", "model", "_batch_sort", "mode_order", "experiment_type"]
+        if col in table.columns
+    ]
     sorted_by = "matrix"
     if args.sort_by == "metric" and args.metric in table.columns:
         table = table.sort_values(args.metric, ascending=False, na_position="last")
@@ -103,10 +145,11 @@ def main():
     pd.set_option("display.float_format", "{:.4f}".format)
 
     print(f"\n=== Experiment: {args.experiment} | Sorted by: {sorted_by} ===\n")
-    print(table.to_string(index=False))
+    printable = table.drop(columns=[c for c in ["_batch_sort"] if c in table.columns])
+    print(printable.to_string(index=False))
 
     if args.output:
-        table.to_csv(args.output, index=False)
+        printable.to_csv(args.output, index=False)
         print(f"\nSaved to {args.output}")
 
 

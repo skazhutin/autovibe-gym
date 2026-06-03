@@ -220,7 +220,7 @@ export default function RunDetail() {
           </div>
           <div className="run-meta-line">
             <span className="mono">{run.model}</span>
-            <Tag tone={run.mode === "gym" ? "accent" : "neutral"}>{MODE_LABELS[run.mode]}</Tag>
+            <Tag tone={run.mode === "gym" || run.mode === "batch" ? "accent" : "neutral"}>{MODE_LABELS[run.mode]}</Tag>
             <span>·</span>
             <span>{run.dataset}</span>
           </div>

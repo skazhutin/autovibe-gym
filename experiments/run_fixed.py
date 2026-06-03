@@ -17,6 +17,7 @@ import json
 import os
 import time
 
+from experiments.modes import add_mode_metadata_args, mode_metadata_params
 from gym import NotebookGymEnv
 from gym.agent import SYSTEM_PROMPT
 from gym.datasets import DatasetSplits, load_dataset_splits, metric_from_name, resolve_metric
@@ -436,8 +437,10 @@ def main():
         help="Override total step budget (default: sum of stage budgets + 5).",
     )
     parser.add_argument("--sandbox-timeout", type=int, default=None)
+    parser.add_argument("--workspace-dir", default=None)
     parser.add_argument("--experiment-name", default="autovibe-gym")
     parser.add_argument("--run-name", default=None)
+    add_mode_metadata_args(parser)
     args = parser.parse_args()
 
     defaults = MODE_DEFAULTS[args.mode]
@@ -482,6 +485,7 @@ def main():
             "dataset_split_strategy": splits.metadata.split_strategy,
             "dataset_role": splits.metadata.role,
             "dataset_sampled": str(splits.metadata.sampled),
+            **mode_metadata_params(args, "fixed_transitions"),
         })
 
         env = NotebookGymEnv(
@@ -492,6 +496,7 @@ def main():
             metric_fn=metric_fn,
             metric_name=metric_name,
             max_steps=max_steps,
+            workspace_dir=args.workspace_dir,
             mode="gym_with_checklist",
             kernel_timeout=sandbox_timeout,
         )
@@ -503,6 +508,7 @@ def main():
             max_tokens=max_tokens,
         )
         summary = agent.run()
+        summary.update(mode_metadata_params(args, "fixed_transitions"))
         episode_workspace = summary.get("episode_workspace")
         if episode_workspace and os.path.isdir(episode_workspace):
             mlflow.log_artifacts(episode_workspace, artifact_path="episode")

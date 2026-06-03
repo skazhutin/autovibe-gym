@@ -3,6 +3,8 @@ from __future__ import annotations
 import sys
 from types import SimpleNamespace
 
+import pytest
+
 from dashboard.server.app.config import default_python_bin
 from dashboard.server.app.services import mlflow_store, run_launcher
 
@@ -92,6 +94,44 @@ def test_run_record_maps_repeated_single_shot_attempt_progress():
     assert record["steps"] == 5
 
 
+def test_run_record_maps_fixed_transitions_to_fixed_mode():
+    record = mlflow_store._run_record(
+        _fake_run(
+            params={
+                "experiment_type": "fixed_transitions",
+                "model": "fake-model",
+                "dataset": "unit-ds",
+            },
+            metrics={},
+        )
+    )
+
+    assert record["mode"] == "fixed"
+
+
+def test_run_record_exposes_all_batch_metadata():
+    record = mlflow_store._run_record(
+        _fake_run(
+            params={
+                "experiment_type": "gym_with_checklist",
+                "requested_mode": "all",
+                "batch_id": "batch-1",
+                "product_mode": "gym_with_checklist",
+                "mode_label": "gym_with_checklist",
+                "mode_order": "3",
+                "model": "fake-model",
+                "dataset": "unit-ds",
+            },
+            metrics={},
+        )
+    )
+
+    assert record["requestedMode"] == "all"
+    assert record["batchId"] == "batch-1"
+    assert record["productMode"] == "gym_with_checklist"
+    assert record["modeOrder"] == 3
+
+
 def test_run_record_hides_placeholder_zero_score_for_failed_submit():
     record = mlflow_store._run_record(
         _fake_run(
@@ -120,6 +160,53 @@ def test_run_launcher_planned_steps_match_dashboard_modes():
     assert run_launcher._planned_steps({"mode": "repeated", "shots": 4}) == 4
     assert run_launcher._planned_steps({"mode": "gym", "maxSteps": 8}) == 8
     assert run_launcher._planned_steps({"mode": "iterative", "maxSteps": 6}) == 6
+    assert run_launcher._planned_steps({"mode": "fixed", "maxSteps": 12}) == 12
+    assert run_launcher._planned_steps({"mode": "batch", "modes": ["single", "repeated", "gym"]}) == 3
+    assert run_launcher._planned_steps({"mode": "all"}) == 5
+
+
+def test_run_launcher_batch_mode_uses_common_runner_with_selected_modes():
+    args = run_launcher._runner_args(
+        {
+            "mode": "batch",
+            "modes": ["single", "repeated", "iterative", "gym", "fixed"],
+            "budgetMode": "local",
+            "model": "fake-model",
+            "runName": "dash_live_unit",
+            "maxSteps": 8,
+            "shots": 4,
+        }
+    )
+
+    assert args[:9] == [
+        "-m",
+        "experiments.run",
+        "--modes",
+        "single_shot",
+        "repeated_single_shot",
+        "iterative_no_checklist",
+        "gym_with_checklist",
+        "fixed_transitions",
+        "--budget-mode",
+    ]
+    assert "local" in args
+    assert "--max-steps" in args
+    assert "--shots" in args
+
+
+def test_run_launcher_fixed_mode_uses_fixed_runner():
+    args = run_launcher._runner_args(
+        {
+            "mode": "fixed",
+            "budgetMode": "local",
+            "model": "fake-model",
+            "runName": "dash_live_unit",
+            "maxSteps": 8,
+        }
+    )
+
+    assert args[:2] == ["-m", "experiments.run_fixed"]
+    assert "--max-steps" in args
 
 
 def test_run_launcher_python_available_accepts_paths_and_rejects_missing(tmp_path):

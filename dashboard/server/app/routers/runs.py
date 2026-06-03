@@ -21,7 +21,8 @@ router = APIRouter(prefix="/runs", tags=["runs"])
 class LaunchPayload(BaseModel):
     modelId: str | None = None
     model: str | None = None
-    mode: str  # single | repeated | iterative | gym
+    mode: str  # single | repeated | iterative | gym | fixed | batch
+    modes: list[str] | None = None
     datasetId: str
     budgetMode: str = "local"  # local | cloud
     maxSteps: int | None = None
@@ -100,6 +101,13 @@ def launch(payload: LaunchPayload) -> dict:
     if not ds.get("prepared"):
         raise HTTPException(400, f"Dataset '{payload.datasetId}' is not prepared (no train/val/test).")
     cfg = payload.model_dump()
+    selected_modes = [m for m in (cfg.get("modes") or [cfg["mode"]]) if m]
+    if len(selected_modes) > 1:
+        cfg["mode"] = "batch"
+        cfg["modes"] = selected_modes
+    elif selected_modes:
+        cfg["mode"] = selected_modes[0]
+        cfg["modes"] = selected_modes
     cfg["dataset"] = ds["name"]
     cfg["datasetDir"] = ds["datasetDir"]
     try:

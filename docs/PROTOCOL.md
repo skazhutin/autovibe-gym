@@ -48,7 +48,7 @@ Closes the environment. Only one submit is allowed per session.
 
 ### Gym Tool Actions
 
-The gym still has exactly four product modes; these are actions inside the
+The gym has five product modes; these are actions inside the
 existing flexible/fixed gym protocol, not new modes.
 
 ```json
