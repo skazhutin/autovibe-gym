@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-03 (dashboard environment badges)
+**Last updated:** 2026-06-03 (dashboard budget tooltips)
 **Phase:** Hardening after first full H200 recon + building the local control-panel dashboard for configuring/launching/inspecting runs.
 
 ---
@@ -106,6 +106,12 @@ Current dashboard environment-badge cycle:
 - New Run run-type cards now show only two badges: `Среда` for Iterative,
   Flexible gym, and Fixed transitions gym; `Без среды` for Single-shot and
   Repeated single-shot.
+- dashboard TypeScript build + Vite production build via bundled Node runtime.
+Current dashboard budget-tooltip cycle:
+
+- Removed the inline `local — длиннее, cloud — экономнее` hint from the New Run
+  budget preset field.
+- Added Problems-style `?` tooltips to New Run budget parameter labels.
 - dashboard TypeScript build + Vite production build via bundled Node runtime.
 Additional checks:
 
@@ -272,6 +278,7 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 
 | Date | Change |
 |------|--------|
+| 2026-06-03 | Cleaned up New Run budget controls: removed the budget-preset subhint and added Problems-style tooltip hints to budget parameter fields |
 | 2026-06-03 | Added two-state environment badges to New Run mode cards: `Среда` for the three environment-backed modes and `Без среды` for the two non-environment modes |
 | 2026-06-03 | Restored Iterative as a selectable product run type, raised dashboard/common-run batch selection to 5 modes, renamed Gym to Flexible gym and Fixed transitions to Fixed transitions gym, and removed the New Run recommendation badge |
 | 2026-06-03 | Hardened dashboard responsive layout across core routes: mobile hides the desktop sidebar toggle, New Run stacks earlier, grids/cards/settings/filters/dataset actions can shrink or wrap safely, compare labels and preview values wrap, and chart bars no longer force overflow |

@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { api, type Dataset, type LaunchRunMode, type ModelRec } from "../lib/api";
 import { useAsync } from "../lib/hooks";
@@ -20,6 +21,34 @@ const BUDGET_DEFAULTS = {
   local: { maxSteps: 30, maxTokens: 8192 },
   cloud: { maxSteps: 20, maxTokens: 4096 },
 };
+
+function Info({ text }: { text: string }) {
+  const [visible, setVisible] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const dotRef = useRef<HTMLSpanElement>(null);
+
+  function show() {
+    const rect = dotRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setPos({ top: rect.top, left: rect.left + rect.width / 2 });
+    setVisible(true);
+  }
+
+  return (
+    <>
+      <span ref={dotRef} className="info-dot" aria-label={text} onMouseEnter={show} onMouseLeave={() => setVisible(false)}>?</span>
+      {visible && createPortal(<div className="tooltip-portal" style={{ top: pos.top, left: pos.left }}>{text}</div>, document.body)}
+    </>
+  );
+}
+
+function FieldInfo({ label, info, children }: { label: ReactNode; info: string; children: ReactNode }) {
+  return (
+    <Field label={<span className="field-info-label">{label}<Info text={info} /></span>}>
+      {children}
+    </Field>
+  );
+}
 
 function Stepper({ value, onChange, min = 1, max = 999999, step = 1, suffix }: {
   value: number; onChange: (v: number) => void; min?: number; max?: number; step?: number; suffix?: string;
@@ -207,31 +236,31 @@ export default function NewRun() {
         <Card>
           <div className="step-head"><span className="step-num">4</span><span className="step-title">Параметры бюджета</span></div>
           <div className="grid-2" style={{ gap: 18 }}>
-            <Field label="Пресет бюджета" hint="local — длиннее, cloud — экономнее">
+            <FieldInfo label="Пресет бюджета" info="Выбирает стартовые значения для шагов и токенов: local даёт больше бюджета, cloud — более экономный пресет.">
               <select className="input" value={budgetMode} onChange={(e) => setBudgetMode(e.target.value as "local" | "cloud")}>
                 <option value="local">local</option>
                 <option value="cloud">cloud</option>
               </select>
-            </Field>
-            <Field label="Лимит токенов">
+            </FieldInfo>
+            <FieldInfo label="Лимит токенов" info="Максимум токенов ответа модели на один запрос. Больше токенов даёт больше места для решения, но повышает стоимость и время.">
               <Stepper value={maxTokens} onChange={setMaxTokens} min={256} max={131072} step={256} />
-            </Field>
+            </FieldInfo>
             {stepBased && (
-              <Field label="Макс. шагов">
+              <FieldInfo label="Макс. шагов" info="Сколько интерактивных шагов доступно режимам со средой до финального submit.">
                 <Stepper value={maxSteps} onChange={setMaxSteps} min={1} max={200} />
-              </Field>
+              </FieldInfo>
             )}
             {repeatedLike && (
-              <Field label="Число попыток (shots)">
+              <FieldInfo label="Число попыток (shots)" info="Количество независимых single-shot попыток в repeated-режиме.">
                 <Stepper value={shots} onChange={setShots} min={2} max={50} />
-              </Field>
+              </FieldInfo>
             )}
-            <Field label={`Температура: ${temp.toFixed(2)}`}>
+            <FieldInfo label={`Температура: ${temp.toFixed(2)}`} info="Насколько разнообразными будут ответы модели: ниже — стабильнее, выше — больше вариативности.">
               <input className="range" type="range" min={0} max={1} step={0.05} value={temp} onChange={(e) => setTemp(parseFloat(e.target.value))} />
-            </Field>
-            <Field label="Seed">
+            </FieldInfo>
+            <FieldInfo label="Seed" info="Фиксирует случайность запуска, чтобы результаты было проще воспроизводить и сравнивать.">
               <Stepper value={seed} onChange={setSeed} min={0} max={999999} />
-            </Field>
+            </FieldInfo>
           </div>
         </Card>
       </div>
