@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-03 (dashboard run-mode multi-select)
+**Last updated:** 2026-06-03 (dashboard responsive hardening)
 **Phase:** Hardening after first full H200 recon + building the local control-panel dashboard for configuring/launching/inspecting runs.
 
 ---
@@ -87,6 +87,15 @@ Current dashboard multi-select cycle:
   transitions shows `4 режима`, `4 отдельных`, the `Запустить 4 прогона` CTA,
   no page-level horizontal overflow at the test viewport, and only existing
   React Router future-flag warnings.
+Current dashboard responsive-hardening cycle:
+
+- Backend API healthy on `http://127.0.0.1:8000/api/health`; Vite dev server
+  running on `http://127.0.0.1:5174/new`.
+- dashboard TypeScript build + Vite production build via bundled Node runtime.
+- CSS hardened for compact top navigation, responsive New Run stacking, card/grid
+  min-width behavior, wrapped filter/setting rows, dataset actions, compare picks,
+  preview values, and chart bars so narrow and desktop breakpoints avoid clipped
+  controls and horizontal layout drift.
 Additional checks:
 
 - `python -m experiments.run --dataset-dir datasets/demo/prepared --mode all --model fake-model --dry-run`
@@ -252,6 +261,7 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 
 | Date | Change |
 |------|--------|
+| 2026-06-03 | Hardened dashboard responsive layout across core routes: mobile hides the desktop sidebar toggle, New Run stacks earlier, grids/cards/settings/filters/dataset actions can shrink or wrap safely, compare labels and preview values wrap, and chart bars no longer force overflow |
 | 2026-06-03 | Replaced the dashboard `All modes` launch card with multi-select run types: users can select up to four product modes, see the `Можно выбрать до 4` hint, and multi-run launches use `batch` + `--modes ...` while preserving the CLI `--mode all` path |
 | 2026-06-03 | Added first-class `all` run orchestration: shared product-mode metadata, `experiments.run --mode all`, matrix batch metadata, compare columns/sort for `requested_mode`/`batch_id`/`mode_label`, dashboard `All modes` and `Fixed transitions` launch options, and responsive New Run grid fix |
 | 2026-06-03 | PR #34 Dataset Center hardening: fixed CI dataset preparation, restored finite upload limits, blocked localhost/private URL downloads and unsafe redirects, enforced gzip decompressed-size limits, made dataset creation atomic, preserved legacy root `meta.json` edits, added JSONL/SSRF/cleanup regressions, and kept `/datasets` route compatibility after the `/problems` UI rename |

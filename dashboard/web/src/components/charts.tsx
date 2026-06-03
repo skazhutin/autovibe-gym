@@ -68,9 +68,9 @@ export function BarChart({ data, height = 220, fmt }: { data: BarDatum[]; height
   if (!data.length) return null;
   const max = Math.max(...data.map((d) => d.value)) || 1;
   return (
-    <div style={{ display: "flex", alignItems: "flex-end", gap: 14, height, position: "relative", paddingTop: 8 }}>
+    <div style={{ display: "flex", alignItems: "flex-end", gap: 14, height, position: "relative", paddingTop: 8, minWidth: 0 }}>
       {data.map((d, i) => (
-        <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", height: "100%", justifyContent: "flex-end", gap: 8 }}
+        <div key={i} style={{ flex: "1 1 0", minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", height: "100%", justifyContent: "flex-end", gap: 8 }}
           onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
           <div className="mono" style={{ fontSize: 12, fontWeight: 700, color: d.best ? "var(--accent-ink)" : "var(--text-dim)" }}>
             {fmt ? fmt(d.value) : d.value.toFixed(3)}
