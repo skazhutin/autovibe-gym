@@ -113,7 +113,7 @@ function TrajectoryTab({ id, live }: { id: string; live: boolean }) {
   return (
     <div className="traj">
       {steps.map((s, i) => (
-        <div key={i} className="traj-step">
+        <div key={i} className={`traj-step${live && i === steps.length - 1 ? " before-live" : ""}`}>
           <div className="traj-marker">
             <div className={`traj-dot ${s.action}`}>
               <Icon name={STEP_ICON[s.kind ?? ""] ?? (s.action === "submit" ? "check2" : s.action === "validate" ? "check" : "code")} size={15} />
@@ -135,7 +135,14 @@ function TrajectoryTab({ id, live }: { id: string; live: boolean }) {
           </div>
         </div>
       ))}
-      {live && <div className="spinner-row"><Spinner /> агент выполняет шаг…</div>}
+      {live && (
+        <div className="traj-step traj-live">
+          <div className="traj-marker">
+            <Spinner size={18} />
+          </div>
+          <div className="spinner-row">агент выполняет шаг…</div>
+        </div>
+      )}
     </div>
   );
 }
