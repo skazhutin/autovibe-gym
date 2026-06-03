@@ -55,8 +55,8 @@ def _selected_modes(cfg: dict[str, Any]) -> list[str]:
             modes.append(mode)
     if not modes:
         raise ValueError("At least one run mode must be selected")
-    if len(modes) > 4:
-        raise ValueError("Select at most 4 run modes")
+    if len(modes) > 5:
+        raise ValueError("Select at most 5 run modes")
     return modes
 
 

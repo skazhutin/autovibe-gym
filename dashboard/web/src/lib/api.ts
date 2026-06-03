@@ -1,7 +1,7 @@
 /** Typed client for the dashboard backend (FastAPI on /api, proxied in dev). */
 
 export type RunMode = "single" | "repeated" | "iterative" | "gym" | "fixed" | "batch";
-export type LaunchRunMode = "single" | "repeated" | "gym" | "fixed";
+export type LaunchRunMode = "single" | "repeated" | "iterative" | "gym" | "fixed";
 export type RunStatus = "success" | "failed" | "null" | "running";
 
 export interface Run {

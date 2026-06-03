@@ -277,25 +277,28 @@ def test_compare_groups_all_batch_by_mode_order(monkeypatch, capsys):
                 "baseline_single_shot",
                 "fixed_transitions",
                 "repeated_single_shot",
+                "iterative_no_checklist",
             ],
-            "params.requested_mode": ["all", "all", "all", "all"],
-            "params.batch_id": ["batch-1", "batch-1", "batch-1", "batch-1"],
+            "params.requested_mode": ["all", "all", "all", "all", "all"],
+            "params.batch_id": ["batch-1", "batch-1", "batch-1", "batch-1", "batch-1"],
             "params.product_mode": [
                 "gym_with_checklist",
                 "single_shot",
                 "fixed_transitions",
                 "repeated_single_shot",
+                "iterative_no_checklist",
             ],
             "params.mode_label": [
                 "gym_with_checklist",
                 "single_shot",
                 "fixed_transitions",
                 "repeated_single_shot",
+                "iterative_no_checklist",
             ],
-            "params.mode_order": [3, 1, 4, 2],
-            "params.model": ["m1", "m1", "m1", "m1"],
-            "params.dataset": ["d", "d", "d", "d"],
-            "metrics.test_metric": [0.3, 0.1, 0.4, 0.2],
+            "params.mode_order": [4, 1, 5, 2, 3],
+            "params.model": ["m1", "m1", "m1", "m1", "m1"],
+            "params.dataset": ["d", "d", "d", "d", "d"],
+            "metrics.test_metric": [0.4, 0.1, 0.5, 0.2, 0.3],
         }
     )
     monkeypatch.setattr(compare.mlflow, "set_tracking_uri", lambda uri: None)
@@ -308,7 +311,8 @@ def test_compare_groups_all_batch_by_mode_order(monkeypatch, capsys):
     assert "requested_mode" in printed
     assert "batch_id" in printed
     assert printed.index("single_shot") < printed.index("repeated_single_shot")
-    assert printed.index("repeated_single_shot") < printed.index("gym_with_checklist")
+    assert printed.index("repeated_single_shot") < printed.index("iterative_no_checklist")
+    assert printed.index("iterative_no_checklist") < printed.index("gym_with_checklist")
     assert printed.index("gym_with_checklist") < printed.index("fixed_transitions")
 
 
@@ -379,7 +383,7 @@ def test_run_matrix_exits_when_no_datasets(tmp_path, monkeypatch, capsys):
     assert exc.value.code == 1
 
 
-def test_run_all_modes_matrix_dry_run_lists_exact_four_modes(monkeypatch, capsys):
+def test_run_all_modes_matrix_dry_run_lists_exact_five_modes(monkeypatch, capsys):
     monkeypatch.setattr(
         "sys.argv",
         [
@@ -397,24 +401,26 @@ def test_run_all_modes_matrix_dry_run_lists_exact_four_modes(monkeypatch, capsys
     out = capsys.readouterr().out
     assert "single-shot" in out
     assert "repeated single-shot" in out
+    assert "iterative no-checklist" in out
     assert "flexible gym" in out
-    assert "fixed transitions" in out
-    assert out.count("fake-model") >= 4
+    assert "fixed transitions gym" in out
+    assert out.count("fake-model") >= 5
     batch_ids = re.findall(r"--batch-id\s+(\S+)", out)
-    assert len(batch_ids) >= 4
+    assert len(batch_ids) >= 5
     assert len(set(batch_ids)) == 1
 
 
-def test_shared_modes_all_expands_to_four_product_modes():
+def test_shared_modes_all_expands_to_five_product_modes():
     assert [m.key for m in expand_requested_mode("all")] == [
         "single_shot",
         "repeated_single_shot",
+        "iterative_no_checklist",
         "gym_with_checklist",
         "fixed_transitions",
     ]
 
 
-def test_common_run_all_dry_run_lists_four_commands_with_shared_batch(monkeypatch, capsys):
+def test_common_run_all_dry_run_lists_five_commands_with_shared_batch(monkeypatch, capsys):
     monkeypatch.setattr(
         "sys.argv",
         [
@@ -432,13 +438,14 @@ def test_common_run_all_dry_run_lists_four_commands_with_shared_batch(monkeypatc
     run_cli.main()
 
     out = capsys.readouterr().out
-    assert "[run] Planned 4 run(s)" in out
+    assert "[run] Planned 5 run(s)" in out
     assert "single_shot" in out
     assert "repeated_single_shot" in out
+    assert "iterative_no_checklist" in out
     assert "gym_with_checklist" in out
     assert "fixed_transitions" in out
     batch_ids = re.findall(r"--batch-id\s+(\S+)", out)
-    assert len(batch_ids) >= 4
+    assert len(batch_ids) >= 5
     assert len(set(batch_ids)) == 1
 
 

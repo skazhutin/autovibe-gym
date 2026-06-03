@@ -43,23 +43,23 @@ REPEATED_SINGLE_SHOT = ProductMode(
 
 GYM_WITH_CHECKLIST = ProductMode(
     key="gym_with_checklist",
-    display_name="Gym with checklist",
+    display_name="Flexible gym",
     matrix_label="flexible gym",
     dashboard_mode="gym",
     module="experiments.run_gym",
     experiment_type="gym_with_checklist",
-    mode_order=3,
+    mode_order=4,
     episode_mode="gym_with_checklist",
 )
 
 FIXED_TRANSITIONS = ProductMode(
     key="fixed_transitions",
-    display_name="Fixed transitions",
-    matrix_label="fixed transitions",
+    display_name="Fixed transitions gym",
+    matrix_label="fixed transitions gym",
     dashboard_mode="fixed",
     module="experiments.run_fixed",
     experiment_type="fixed_transitions",
-    mode_order=4,
+    mode_order=5,
 )
 
 ITERATIVE_NO_CHECKLIST = ProductMode(
@@ -73,16 +73,15 @@ ITERATIVE_NO_CHECKLIST = ProductMode(
     episode_mode="iterative_no_checklist",
 )
 
-# The four product modes presented in README quickstart and the all-modes matrix.
+# Product modes presented in README quickstart and the all-modes matrix.
 ALL_PRODUCT_MODES: tuple[ProductMode, ...] = (
     SINGLE_SHOT,
     REPEATED_SINGLE_SHOT,
+    ITERATIVE_NO_CHECKLIST,
     GYM_WITH_CHECKLIST,
     FIXED_TRANSITIONS,
 )
 
-# Extra runnable modes that are useful for ablations but are not part of the
-# product-mode "all" batch.
 RUNNABLE_MODES: tuple[ProductMode, ...] = (
     SINGLE_SHOT,
     REPEATED_SINGLE_SHOT,

@@ -114,8 +114,8 @@ def _selected_product_modes(
                 continue
             seen.add(key)
             modes.append(MODE_BY_KEY[key])
-        if len(modes) > 4:
-            parser.error("--modes accepts at most 4 unique modes")
+        if len(modes) > 5:
+            parser.error("--modes accepts at most 5 unique modes")
         requested_mode = BATCH_REQUESTED_MODE if len(modes) > 1 else modes[0].key
         return requested_mode, tuple(modes)
 
@@ -140,7 +140,7 @@ def main() -> None:
     selection.add_argument(
         "--modes",
         nargs="+",
-        help="Explicit product modes to run as one batch; at most 4 unique modes.",
+        help="Explicit product modes to run as one batch; at most 5 unique modes.",
     )
     parser.add_argument(
         "--budget-mode",

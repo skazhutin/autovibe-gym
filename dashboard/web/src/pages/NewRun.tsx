@@ -6,13 +6,14 @@ import { MODE_LABELS } from "../lib/format";
 import { Button, Card, Dot, Field, Spinner } from "../components/ui";
 import { Icon } from "../components/Icon";
 
-const MAX_SELECTED_MODES = 4;
+const MAX_SELECTED_MODES = 5;
 
-const MODE_INFO: { id: LaunchRunMode; desc: string; rec?: boolean }[] = [
+const MODE_INFO: { id: LaunchRunMode; desc: string }[] = [
   { id: "single", desc: "Один полный ответ без обратной связи от среды." },
   { id: "repeated", desc: "N независимых попыток, только скалярная val-метрика между ними." },
-  { id: "gym", desc: "Итеративно + неявные подсказки чеклиста DS-пайплайна.", rec: true },
-  { id: "fixed", desc: "Фиксированные стадии: EDA, preprocessing, feature engineering, model selection, tuning." },
+  { id: "iterative", desc: "Итеративная среда без подсказок чеклиста: runtime и contract feedback." },
+  { id: "gym", desc: "Гибкая интерактивная среда с неявными подсказками чеклиста DS-пайплайна." },
+  { id: "fixed", desc: "Фиксированные стадии gym: EDA, preprocessing, feature engineering, model selection, tuning." },
 ];
 
 const BUDGET_DEFAULTS = {
@@ -78,7 +79,7 @@ export default function NewRun() {
   const selectedCount = selectedModes.length;
   const primaryMode = selectedModes[0] ?? "gym";
   const multiMode = selectedCount > 1;
-  const stepBased = selectedModes.some((m) => m === "gym" || m === "fixed");
+  const stepBased = selectedModes.some((m) => m === "iterative" || m === "gym" || m === "fixed");
   const repeatedLike = selectedModes.includes("repeated");
   const canLaunch = selectedCount > 0 && !!modelId && !!dataset?.prepared && !launching;
 
@@ -163,7 +164,7 @@ export default function NewRun() {
         <Card>
           <div className="step-head step-head-spread">
             <span className="step-head-left"><span className="step-num">2</span><span className="step-title">Тип прогона</span></span>
-            <span className="step-hint">Можно выбрать до 4</span>
+            <span className="step-hint">Можно выбрать до 5</span>
           </div>
           <div className="grid-2">
             {MODE_INFO.map((mi) => {
@@ -171,7 +172,7 @@ export default function NewRun() {
               const disabled = !active && selectedCount >= MAX_SELECTED_MODES;
               return (
               <div key={mi.id} className={`pick${active ? " pick-active" : ""}${disabled ? " pick-disabled" : ""}`} onClick={() => !disabled && toggleMode(mi.id)}>
-                <div className="pick-title">{MODE_LABELS[mi.id]}{mi.rec && <span className="rec-badge">РЕКОМЕНДУЕМ</span>}</div>
+                <div className="pick-title">{MODE_LABELS[mi.id]}</div>
                 <div className="pick-desc">{mi.desc}</div>
                 {active && <span className="pick-check"><Icon name="check" size={18} /></span>}
               </div>
