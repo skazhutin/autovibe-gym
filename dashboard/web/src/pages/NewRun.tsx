@@ -8,12 +8,12 @@ import { Icon } from "../components/Icon";
 
 const MAX_SELECTED_MODES = 5;
 
-const MODE_INFO: { id: LaunchRunMode; desc: string }[] = [
-  { id: "single", desc: "Один полный ответ без обратной связи от среды." },
-  { id: "repeated", desc: "N независимых попыток, только скалярная val-метрика между ними." },
-  { id: "iterative", desc: "Итеративная среда без подсказок чеклиста: runtime и contract feedback." },
-  { id: "gym", desc: "Гибкая интерактивная среда с неявными подсказками чеклиста DS-пайплайна." },
-  { id: "fixed", desc: "Фиксированные стадии gym: EDA, preprocessing, feature engineering, model selection, tuning." },
+const MODE_INFO: { id: LaunchRunMode; desc: string; env: boolean }[] = [
+  { id: "single", env: false, desc: "Один полный ответ без обратной связи от среды." },
+  { id: "repeated", env: false, desc: "N независимых попыток, только скалярная val-метрика между ними." },
+  { id: "iterative", env: true, desc: "Итеративная среда без подсказок чеклиста: runtime и contract feedback." },
+  { id: "gym", env: true, desc: "Гибкая интерактивная среда с неявными подсказками чеклиста DS-пайплайна." },
+  { id: "fixed", env: true, desc: "Фиксированные стадии gym: EDA, preprocessing, feature engineering, model selection, tuning." },
 ];
 
 const BUDGET_DEFAULTS = {
@@ -172,7 +172,10 @@ export default function NewRun() {
               const disabled = !active && selectedCount >= MAX_SELECTED_MODES;
               return (
               <div key={mi.id} className={`pick${active ? " pick-active" : ""}${disabled ? " pick-disabled" : ""}`} onClick={() => !disabled && toggleMode(mi.id)}>
-                <div className="pick-title">{MODE_LABELS[mi.id]}</div>
+                <div className="pick-title">
+                  {MODE_LABELS[mi.id]}
+                  <span className={`tag${mi.env ? " tag-accent" : ""}`}>{mi.env ? "Среда" : "Без среды"}</span>
+                </div>
                 <div className="pick-desc">{mi.desc}</div>
                 {active && <span className="pick-check"><Icon name="check" size={18} /></span>}
               </div>
