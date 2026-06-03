@@ -228,6 +228,9 @@ export default function RunDetail() {
 
   const live = run.status === "running";
   const pct = run.steps ? (run.step / run.steps) * 100 : 6;
+  // Hide the «Мысли» tab for runs that didn't enable the scratchpad.
+  const visibleTabs = TABS.filter((t) => t.id !== "thoughts" || run.thoughtsEnabled);
+  const activeTab = tab === "thoughts" && !run.thoughtsEnabled ? "notebook" : tab;
   const imp = improvementPct(run);
 
   async function stop() {
@@ -295,13 +298,13 @@ export default function RunDetail() {
       )}
 
       <div style={{ marginTop: 24 }}>
-        <Tabs tabs={TABS} active={tab} onChange={setTab} />
-        {tab === "notebook" && <NotebookTab id={id} live={live} />}
-        {tab === "trajectory" && <TrajectoryTab id={id} live={live} />}
-        {tab === "thoughts" && <ThoughtsTab id={id} live={live} />}
-        {tab === "checklist" && <ChecklistTab id={id} live={live} />}
-        {tab === "errors" && <ErrorsTab id={id} live={live} />}
-        {tab === "logs" && <LogsTab id={id} live={live} />}
+        <Tabs tabs={visibleTabs} active={activeTab} onChange={setTab} />
+        {activeTab === "notebook" && <NotebookTab id={id} live={live} />}
+        {activeTab === "trajectory" && <TrajectoryTab id={id} live={live} />}
+        {activeTab === "thoughts" && <ThoughtsTab id={id} live={live} />}
+        {activeTab === "checklist" && <ChecklistTab id={id} live={live} />}
+        {activeTab === "errors" && <ErrorsTab id={id} live={live} />}
+        {activeTab === "logs" && <LogsTab id={id} live={live} />}
       </div>
     </div>
   );

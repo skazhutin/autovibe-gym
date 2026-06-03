@@ -154,6 +154,7 @@ def _run_record(run) -> dict[str, Any]:
         "seed": params.get("seed"),
         "temp": params.get("temperature") or params.get("temp"),
         "experimentId": info.experiment_id,
+        "thoughtsEnabled": str(params.get("thoughts_enabled", "")).lower() == "true",
         "source": "mlflow",
     }
 

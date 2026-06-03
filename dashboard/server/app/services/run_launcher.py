@@ -263,6 +263,7 @@ def launch(cfg: dict[str, Any]) -> dict[str, Any]:
         "temp": cfg.get("temp"),
         "budgetMode": cfg.get("budgetMode", "local"),
         "workspaceDir": str(workspace),
+        "thoughtsEnabled": bool(cfg.get("enableThoughts")),
         "source": "live",
         "mlflowId": None,
     }

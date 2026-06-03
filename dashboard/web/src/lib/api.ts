@@ -37,6 +37,7 @@ export interface Run {
   temp?: number | string | null;
   source?: "mlflow" | "live";
   mlflowId?: string | null;
+  thoughtsEnabled?: boolean;
   failReason?: string;
   command?: string;
 }
