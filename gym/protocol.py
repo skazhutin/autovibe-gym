@@ -584,6 +584,24 @@ def _extract_json_block(text: str) -> str | None:
     return _first_json_object(cleaned)
 
 
+def extract_reasoning(text: str) -> str:
+    """Return the model's free-form reasoning that surrounds its JSON action.
+
+    Reasoning models usually narrate before/after the action JSON; in thoughts
+    mode we capture that prose as a note even when the model didn't fill the
+    explicit ``notes`` field. The JSON object and code-fence markers are removed.
+    """
+    cleaned = _strip_wrapper_tokens(text)
+    block = _first_json_object(cleaned)
+    if block:
+        cleaned = cleaned.replace(block, " ", 1)
+    cleaned = re.sub(r"```(?:json|python|py)?", " ", cleaned, flags=re.IGNORECASE)
+    cleaned = cleaned.replace("```", " ")
+    # Drop common reasoning-tag wrappers but keep their content.
+    cleaned = re.sub(r"</?(?:think|thinking|reasoning|scratchpad)>", " ", cleaned, flags=re.IGNORECASE)
+    return cleaned.strip()
+
+
 def _extract_code_block(text: str) -> str:
     for pattern in (
         r"```python\s*(.*?)\s*```",

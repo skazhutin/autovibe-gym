@@ -6,7 +6,9 @@ import os
 from .env import GymEnv
 from .llm import LLMClient, default_model_name, make_llm_client
 from .notebook_env import NotebookGymEnv
-from .protocol import ACTION_JSON_SCHEMA, Action, ActionParseError, Observation
+from dataclasses import replace
+
+from .protocol import ACTION_JSON_SCHEMA, Action, ActionParseError, Observation, extract_reasoning
 
 
 def _default_client() -> LLMClient:
@@ -99,9 +101,9 @@ KEEP THE CLEAN RUN FAST AND ROBUST:
 NOTES_PROMPT = """
 
 SCRATCHPAD / NOTES (enabled for this run):
-- You may add an optional "notes" string field to ANY action JSON, e.g.
+- EVERY turn, record your reasoning. Add a "notes" string field to your action JSON, e.g.
   {"type": "code", "code": "...", "notes": "Target is imbalanced; will try class_weight next."}
-- Use it to record your reasoning, hypotheses, observations, and plans.
+- Capture hypotheses, observations, plans, and why you chose this action.
 - Your notes are SAVED and shown back to you every turn under [YOUR NOTES SO FAR],
   so use them as durable memory across steps. Keep each note short and useful.
 - Notes do not execute anything; they never replace the action itself.
@@ -176,6 +178,13 @@ class GymAgent:
                     }
                 )
                 continue
+
+            # In thoughts mode, capture the model's surrounding reasoning prose
+            # as a note when it didn't fill the explicit "notes" field.
+            if thoughts_on and not getattr(action, "notes", ""):
+                prose = extract_reasoning(response.text)
+                if len(prose) >= 4:
+                    action = replace(action, notes=prose[:4000])
 
             observation = self.env.step(action)
             self._record_agent_trace(
