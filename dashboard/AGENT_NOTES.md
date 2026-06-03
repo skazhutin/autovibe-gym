@@ -158,3 +158,14 @@ no candidate. Fix: _build_env (local) sets AUTOVIBE_EXECUTOR_BACKEND=subprocess 
 BACKEND=local (override AUTOVIBE_DASHBOARD_EXECUTOR). Verified docker error gone. Remaining single-
 shot fail "Pipeline has no attribute predict" = LLM output quality (unfitted/partial pipeline), not
 infra — would need baseline prompt tuning.
+
+## Agent thoughts/scratchpad (PR: dev/claude/llm-thoughts)
+protocol.Action has optional `notes` (parsed via from_payload wrapper + replace; to_dict wrapper).
+NotebookGymEnv(enable_thoughts): _add_note() in step() top → self.scratchpad; scratchpad_digest()
+re-injected by agent._build_feedback each turn; persisted to workspace/scratchpad.json; summary
+notes_count/thoughts_enabled. agent.py appends NOTES_PROMPT to system prompt only when enabled.
+run_gym --enable-thoughts. Dashboard: run_launcher adds --enable-thoughts ONLY for episode (gym/
+iterative) when cfg.enableThoughts; mlflow_store.thoughts() reads scratchpad.json; GET /runs/{id}/
+thoughts. Frontend: «Мысли» tab (RunDetail), New Run toggle gated by thoughtsSupported, sparkles icon.
+Only gym/iterative support it (multi-turn). Verified: protocol parse, env capture+digest+persist,
+launcher gating, thoughts endpoint.

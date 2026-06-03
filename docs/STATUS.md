@@ -283,6 +283,7 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 
 | Date | Change |
 |------|--------|
+| 2026-06-02 | Agent thoughts/scratchpad: optional `notes` field on any action; with `--enable-thoughts` (gym/iterative) the env stores notes, re-injects them every turn ([YOUR NOTES SO FAR]), persists `scratchpad.json`. Dashboard: New Run toggle (gym/iterative) + a «Мысли» tab rendering the notes timeline. One PR. |
 | 2026-06-03 | Propagated child runner failures from `experiments.run`: batch summaries still print, but the wrapper exits non-zero when any selected product mode fails |
 | 2026-06-03 | Cleaned up New Run budget controls: removed the budget-preset subhint and added Problems-style tooltip hints to budget parameter fields |
 | 2026-06-03 | Added two-state environment badges to New Run mode cards: `Среда` for the three environment-backed modes and `Без среды` for the two non-environment modes |

@@ -1509,3 +1509,19 @@ table.data tbody tr.clickable:hover {
 .swatch-row { display: flex; gap: 8px; }
 .swatch { width: 28px; height: 28px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; }
 .swatch.active { border-color: var(--text); }
+
+/* ============ Thoughts (agent scratchpad) ============ */
+.thoughts { display: flex; flex-direction: column; gap: 12px; }
+.thought { display: flex; gap: 14px; align-items: stretch; position: relative; }
+.thought-rail { flex: none; width: 22px; display: flex; justify-content: center; }
+/* connector runs from this dot's center to the next dot's center (dot center is
+   11px from row top: margin-top 5 + radius ~8; rows are 12px apart). */
+.thought:not(:last-child)::after {
+  content: ""; position: absolute; left: 11px; top: 11px; bottom: -23px;
+  width: 2px; transform: translateX(-50%); background: var(--border); z-index: 0;
+}
+.thought-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--accent); border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--accent-ink); margin-top: 5px; z-index: 1; position: relative; }
+.thought-body { flex: 1; min-width: 0; background: var(--accent-wash); border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border)); border-radius: var(--r-md); padding: 12px 14px; }
+.thought-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.thought-head .st { font-size: 11px; color: var(--text-faint); }
+.thought-text { font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }

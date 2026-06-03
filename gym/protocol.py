@@ -1,6 +1,6 @@
 import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Literal
 
 
@@ -98,6 +98,9 @@ class Action:
     n_trials: int = 10
     timeout_sec: int = 60
     scoring: str = "metric"
+    # Optional free-form scratchpad note the agent can attach to any action.
+    # Persisted and re-shown to the agent when the thoughts/scratchpad mode is on.
+    notes: str = ""
 
     def __post_init__(self) -> None:
         if self.type not in {
@@ -189,6 +192,14 @@ class Action:
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any]) -> "Action":
+        action = cls._from_payload_core(payload)
+        note = payload.get("notes") or payload.get("note") or payload.get("thoughts")
+        if note:
+            action = replace(action, notes=str(note).strip())
+        return action
+
+    @classmethod
+    def _from_payload_core(cls, payload: dict[str, Any]) -> "Action":
         raw_type = payload.get("type") or payload.get("action")
         action_type = _normalize_action_type(raw_type)
 
@@ -321,6 +332,12 @@ class Action:
         return cls.code_action(_extract_code_block(text))
 
     def to_dict(self) -> dict[str, Any]:
+        data = self._to_dict_core()
+        if self.notes:
+            data["notes"] = self.notes
+        return data
+
+    def _to_dict_core(self) -> dict[str, Any]:
         if self.type == "code":
             return {"type": "code", "code": self.code}
         if self.type == "add_cell":
@@ -565,6 +582,24 @@ def _extract_json_block(text: str) -> str | None:
 
     # Fall back to the first balanced JSON object anywhere in the response.
     return _first_json_object(cleaned)
+
+
+def extract_reasoning(text: str) -> str:
+    """Return the model's free-form reasoning that surrounds its JSON action.
+
+    Reasoning models usually narrate before/after the action JSON; in thoughts
+    mode we capture that prose as a note even when the model didn't fill the
+    explicit ``notes`` field. The JSON object and code-fence markers are removed.
+    """
+    cleaned = _strip_wrapper_tokens(text)
+    block = _first_json_object(cleaned)
+    if block:
+        cleaned = cleaned.replace(block, " ", 1)
+    cleaned = re.sub(r"```(?:json|python|py)?", " ", cleaned, flags=re.IGNORECASE)
+    cleaned = cleaned.replace("```", " ")
+    # Drop common reasoning-tag wrappers but keep their content.
+    cleaned = re.sub(r"</?(?:think|thinking|reasoning|scratchpad)>", " ", cleaned, flags=re.IGNORECASE)
+    return cleaned.strip()
 
 
 def _extract_code_block(text: str) -> str:

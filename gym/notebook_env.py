@@ -174,7 +174,10 @@ class NotebookGymEnv:
         mode: str | EpisodeMode | None = None,
         backend: KernelExecutionBackend | None = None,
         kernel_timeout: int = 60,
+        enable_thoughts: bool = False,
     ):
+        self.enable_thoughts = enable_thoughts
+        self.scratchpad: list[dict[str, Any]] = []
         self.state = NotebookEnvState(
             train=train.reset_index(drop=True),
             val=val.reset_index(drop=True),
@@ -248,6 +251,7 @@ class NotebookGymEnv:
         self.feedback_trace = []
         self.validation_trajectory = []
         self.candidate_diagnostics = []
+        self.scratchpad = []
         self.private_summary = {}
         self.dirty_since_clean_run = True
         self.last_clean_run_id = None
@@ -282,6 +286,8 @@ class NotebookGymEnv:
         if self.state.submitted:
             raise RuntimeError("Environment already finalized via submit().")
         parsed = coerce_action(action)
+        if self.enable_thoughts and getattr(parsed, "notes", ""):
+            self._add_note(parsed.notes, parsed.type)
         if self.state.step >= self.state.max_steps and parsed.type not in {"submit", "finalize"}:
             observation = self._observation(
                 action=parsed.type,
@@ -814,6 +820,8 @@ class NotebookGymEnv:
             finalize_path = "not_attempted" if not self.private_summary.get("finalized_by_host") else "failed"
         summary = {
             "steps_used": self.state.step,
+            "thoughts_enabled": self.enable_thoughts,
+            "notes_count": len(self.scratchpad),
             "checklist_coverage": self.checklist.coverage(),
             "private_checklist_coverage": self.checklist.coverage(),
             "error_count": error_count,
@@ -1071,6 +1079,27 @@ class NotebookGymEnv:
         self._save_artifacts()
         return observation
 
+    def _add_note(self, text: str, action_type: str) -> None:
+        """Append a free-form agent note to the persistent scratchpad."""
+        note = {
+            "step": self.state.step + 1,
+            "action": action_type,
+            "text": str(text).strip(),
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        }
+        self.scratchpad.append(note)
+        self._record_event(action="note", note=note["text"])
+
+    def scratchpad_digest(self, max_notes: int = 30, max_chars: int = 4000) -> str:
+        """Render the accumulated notes to re-inject into the agent context."""
+        if not self.scratchpad:
+            return ""
+        lines = [f"- (step {n['step']}) {n['text']}" for n in self.scratchpad[-max_notes:]]
+        body = "\n".join(lines)
+        if len(body) > max_chars:
+            body = body[-max_chars:]
+        return "[YOUR NOTES SO FAR]\n" + body
+
     def _record_event(self, **event: Any) -> None:
         event_record = {
             "event_id": str(uuid.uuid4()),
@@ -1098,6 +1127,8 @@ class NotebookGymEnv:
             [self._public_candidate_record(record) for record in self.validation_trajectory],
         )
         _write_json(self.workspace_dir / "episode_summary.json", self.get_public_summary())
+        if self.enable_thoughts:
+            _write_json(self.workspace_dir / "scratchpad.json", self.scratchpad)
         _write_json(self.private_dir / "notebook_events_private.json", self.events)
         _write_json(
             self.private_dir / "feedback_trace_private.json",

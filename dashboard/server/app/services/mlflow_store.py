@@ -154,6 +154,7 @@ def _run_record(run) -> dict[str, Any]:
         "seed": params.get("seed"),
         "temp": params.get("temperature") or params.get("temp"),
         "experimentId": info.experiment_id,
+        "thoughtsEnabled": str(params.get("thoughts_enabled", "")).lower() == "true",
         "source": "mlflow",
     }
 
@@ -217,6 +218,14 @@ def _feedback_trace(episode_dir: Path | None) -> list[dict]:
     if not episode_dir:
         return []
     return _read_json(episode_dir / "feedback_trace.json") or []
+
+
+def thoughts(episode_dir: Path | None) -> list[dict]:
+    """Agent scratchpad notes (when the run had the thoughts mode on)."""
+    if not episode_dir:
+        return []
+    data = _read_json(episode_dir / "scratchpad.json")
+    return data if isinstance(data, list) else []
 
 
 def _notebook_path(episode_dir: Path | None) -> Path | None:

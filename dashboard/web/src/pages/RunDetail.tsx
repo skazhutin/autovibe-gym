@@ -17,10 +17,49 @@ const STEP_ICON: Record<string, string> = {
 const TABS = [
   { id: "notebook", label: "Ноутбук", icon: "notebook" },
   { id: "trajectory", label: "Траектория", icon: "route" },
+  { id: "thoughts", label: "Мысли", icon: "sparkles" },
   { id: "checklist", label: "Чеклист", icon: "check2" },
   { id: "errors", label: "Ошибки", icon: "bug" },
   { id: "logs", label: "Логи", icon: "terminal" },
 ];
+
+const THOUGHT_ACTION_LABEL: Record<string, string> = {
+  code: "код", add_cell: "ячейка", update_cell: "правка", delete_cell: "удаление",
+  run_cell: "запуск", restart_and_run_all: "перезапуск", validate: "валидация",
+  submit: "сабмит", finalize: "финал", inspect_notebook: "осмотр",
+};
+
+function ThoughtsTab({ id, live }: { id: string; live: boolean }) {
+  const { data, loading } = useAsync(() => api.thoughts(id), [id], live ? 2500 : 0);
+  if (loading && !data) return <Skeleton h={200} />;
+  const notes = data ?? [];
+  if (!notes.length)
+    return (
+      <EmptyState
+        icon="sparkles"
+        title="Мыслей нет"
+        text="Этот режим сохраняет заметки агента только если прогон запущен с включённым флагом «Мысли LLM» (доступно для Gym и Iterative)."
+      />
+    );
+  return (
+    <div className="thoughts">
+      {notes.map((n, i) => (
+        <div key={i} className="thought">
+          <div className="thought-rail">
+            <span className="thought-dot" />
+          </div>
+          <div className="thought-body">
+            <div className="thought-head">
+              <span className="st mono">шаг {n.step}</span>
+              <span className="tag">{THOUGHT_ACTION_LABEL[n.action] ?? n.action}</span>
+            </div>
+            <div className="thought-text">{n.text}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function ChipMetric({ label, value, ring }: { label: string; value: React.ReactNode; ring?: React.ReactNode }) {
   return (
@@ -189,6 +228,9 @@ export default function RunDetail() {
 
   const live = run.status === "running";
   const pct = run.steps ? (run.step / run.steps) * 100 : 6;
+  // Hide the «Мысли» tab for runs that didn't enable the scratchpad.
+  const visibleTabs = TABS.filter((t) => t.id !== "thoughts" || run.thoughtsEnabled);
+  const activeTab = tab === "thoughts" && !run.thoughtsEnabled ? "notebook" : tab;
   const imp = improvementPct(run);
 
   async function stop() {
@@ -256,12 +298,13 @@ export default function RunDetail() {
       )}
 
       <div style={{ marginTop: 24 }}>
-        <Tabs tabs={TABS} active={tab} onChange={setTab} />
-        {tab === "notebook" && <NotebookTab id={id} live={live} />}
-        {tab === "trajectory" && <TrajectoryTab id={id} live={live} />}
-        {tab === "checklist" && <ChecklistTab id={id} live={live} />}
-        {tab === "errors" && <ErrorsTab id={id} live={live} />}
-        {tab === "logs" && <LogsTab id={id} live={live} />}
+        <Tabs tabs={visibleTabs} active={activeTab} onChange={setTab} />
+        {activeTab === "notebook" && <NotebookTab id={id} live={live} />}
+        {activeTab === "trajectory" && <TrajectoryTab id={id} live={live} />}
+        {activeTab === "thoughts" && <ThoughtsTab id={id} live={live} />}
+        {activeTab === "checklist" && <ChecklistTab id={id} live={live} />}
+        {activeTab === "errors" && <ErrorsTab id={id} live={live} />}
+        {activeTab === "logs" && <LogsTab id={id} live={live} />}
       </div>
     </div>
   );
