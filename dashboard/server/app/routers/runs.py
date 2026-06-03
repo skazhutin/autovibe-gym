@@ -31,6 +31,7 @@ class LaunchPayload(BaseModel):
     temp: float | None = None
     seed: int | None = None
     execution: str | None = None  # "server" | "local" | None (use default)
+    enableThoughts: bool | None = None  # agent scratchpad (gym/iterative only)
 
 
 def _target_col(dataset_id: str | None) -> str:
@@ -152,6 +153,11 @@ def notebook(run_id: str) -> dict:
 @router.get("/{run_id}/trajectory")
 def trajectory(run_id: str) -> list[dict]:
     return mlflow_store.trajectory(_episode_dir(run_id))
+
+
+@router.get("/{run_id}/thoughts")
+def thoughts(run_id: str) -> list[dict]:
+    return mlflow_store.thoughts(_episode_dir(run_id))
 
 
 @router.get("/{run_id}/errors")
