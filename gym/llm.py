@@ -24,6 +24,44 @@ class LLMClient(Protocol):
         ...
 
 
+_TRANSIENT_NAMES = {
+    "RateLimitError", "APITimeoutError", "APIConnectionError",
+    "InternalServerError", "APIError",
+}
+_TRANSIENT_STATUS = {408, 409, 429, 500, 502, 503, 504, 529}
+
+
+def _is_transient(exc: Exception) -> bool:
+    if type(exc).__name__ in _TRANSIENT_NAMES:
+        return True
+    status = getattr(exc, "status_code", None) or getattr(exc, "code", None)
+    return status in _TRANSIENT_STATUS
+
+
+def _create_with_retries(client, **kwargs):
+    """Call chat.completions.create with exponential backoff on transient
+    errors (rate limits / 5xx / timeouts). Tunable via env:
+    AUTOVIBE_LLM_MAX_RETRIES (default 5), AUTOVIBE_LLM_RETRY_BASE (default 2s)."""
+    try:
+        max_retries = int(os.getenv("AUTOVIBE_LLM_MAX_RETRIES", "5"))
+    except ValueError:
+        max_retries = 5
+    try:
+        base = float(os.getenv("AUTOVIBE_LLM_RETRY_BASE", "2"))
+    except ValueError:
+        base = 2.0
+    for attempt in range(max_retries + 1):
+        try:
+            return client.chat.completions.create(**kwargs)
+        except Exception as exc:  # noqa: BLE001 - retry only on transient errors
+            if attempt >= max_retries or not _is_transient(exc):
+                raise
+            delay = min(base * (2 ** attempt), 30.0)
+            print(f"[llm] transient error ({type(exc).__name__}); retry "
+                  f"{attempt + 1}/{max_retries} in {delay:.0f}s", flush=True)
+            time.sleep(delay)
+
+
 class LiteLLMClient:
     """
     Adapter that uses the LiteLLM Python SDK directly — no proxy server needed.
@@ -83,7 +121,8 @@ class OpenAICompatibleLLMClient:
         model: str,
         max_tokens: int,
     ) -> LLMResponse:
-        response = self._client.chat.completions.create(
+        response = _create_with_retries(
+            self._client,
             model=model,
             max_tokens=max_tokens,
             messages=[{"role": "system", "content": system}] + messages,
