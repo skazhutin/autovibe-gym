@@ -83,6 +83,7 @@ export default function NewRun() {
   const [temp, setTemp] = useState(0.4);
   const [seed, setSeed] = useState(42);
   const [shots, setShots] = useState(5);
+  const [enableThoughts, setEnableThoughts] = useState(false);
   const [launching, setLaunching] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -110,6 +111,7 @@ export default function NewRun() {
   const multiMode = selectedCount > 1;
   const stepBased = selectedModes.some((m) => m === "iterative" || m === "gym" || m === "fixed");
   const repeatedLike = selectedModes.includes("repeated");
+  const thoughtsSupported = selectedModes.some((m) => m === "gym" || m === "iterative");
   const canLaunch = selectedCount > 0 && !!modelId && !!dataset?.prepared && !launching;
 
   function toggleMode(id: LaunchRunMode) {
@@ -141,6 +143,7 @@ export default function NewRun() {
         maxTokens, temp, seed,
         shots: repeatedLike ? shots : undefined,
         execution,
+        enableThoughts: thoughtsSupported ? enableThoughts : undefined,
       });
       nav(multiMode ? "/runs" : `/runs/${run.id}`);
     } catch (e) {
@@ -262,6 +265,15 @@ export default function NewRun() {
               <Stepper value={seed} onChange={setSeed} min={0} max={999999} />
             </FieldInfo>
           </div>
+          {thoughtsSupported && (
+            <div className="spread" style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
+              <div>
+                <div className="field-label">Мысли LLM (scratchpad)</div>
+                <div className="field-hint">Агент ведёт заметки/рассуждения, которые сохраняются и возвращаются ему между шагами. Доступно для Gym и Iterative.</div>
+              </div>
+              <div className={`toggle${enableThoughts ? " on" : ""}`} onClick={() => setEnableThoughts((v) => !v)} />
+            </div>
+          )}
         </Card>
       </div>
 

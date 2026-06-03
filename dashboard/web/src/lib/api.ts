@@ -322,6 +322,7 @@ export interface LaunchPayload {
   temp?: number;
   seed?: number;
   execution?: "server" | "local";
+  enableThoughts?: boolean;
 }
 
 const BASE = "/api";
@@ -383,6 +384,10 @@ export const api = {
   stopRun: (id: string) => req<{ stopped: string }>(`/runs/${id}/stop`, { method: "POST" }),
   notebook: (id: string) => req<{ cells: NotebookCell[] }>(`/runs/${id}/notebook`),
   trajectory: (id: string) => req<TrajectoryStep[]>(`/runs/${id}/trajectory`),
+  thoughts: (id: string) =>
+    req<{ step: number; action: string; text: string; timestamp?: string }[]>(
+      `/runs/${id}/thoughts`
+    ),
   checklist: (id: string) => req<ChecklistData>(`/runs/${id}/checklist`),
   errors: (id: string) => req<RunError[]>(`/runs/${id}/errors`),
   logs: (id: string) => req<LogsData>(`/runs/${id}/logs`),
