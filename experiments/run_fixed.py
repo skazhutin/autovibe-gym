@@ -19,7 +19,9 @@ import time
 
 from experiments.modes import add_mode_metadata_args, mode_metadata_params
 from gym import NotebookGymEnv
-from gym.agent import SYSTEM_PROMPT
+from dataclasses import replace
+from gym.agent import NOTES_PROMPT, SYSTEM_PROMPT
+from gym.protocol import extract_reasoning
 from gym.datasets import DatasetSplits, load_dataset_splits, metric_from_name, resolve_metric
 from gym.llm import LiteLLMClient, OpenAICompatibleLLMClient
 from gym.protocol import ACTION_JSON_SCHEMA, Action, ActionParseError
@@ -217,10 +219,11 @@ class FixedTransitionsAgent:
             and stage_code_steps < budget
             and not self.env.state.submitted
         ):
+            thoughts_on = getattr(self.env, "enable_thoughts", False)
             response = self.client.complete(
                 model=self.model,
                 max_tokens=self.max_tokens,
-                system=SYSTEM_PROMPT,
+                system=SYSTEM_PROMPT + (NOTES_PROMPT if thoughts_on else ""),
                 messages=self.messages,
             )
             stage_turns += 1
@@ -244,6 +247,10 @@ class FixedTransitionsAgent:
                 })
                 continue
 
+            if thoughts_on and not getattr(action, "notes", ""):
+                prose = extract_reasoning(response.text)
+                if len(prose) >= 4:
+                    action = replace(action, notes=prose[:4000])
             observation = self.env.step(action)
             last_action = action.type
             if action.type in CODE_OR_NOTEBOOK_STEP_ACTIONS:
@@ -271,6 +278,11 @@ class FixedTransitionsAgent:
                 )
             else:
                 feedback += f"\n\n[STAGE BUDGET] This was your last turn in {stage_label}."
+
+            if thoughts_on:
+                digest = self.env.scratchpad_digest()
+                if digest:
+                    feedback = f"{feedback}\n\n{digest}"
 
             self.messages.append({"role": "user", "content": feedback})
 
@@ -438,6 +450,8 @@ def main():
     )
     parser.add_argument("--sandbox-timeout", type=int, default=None)
     parser.add_argument("--workspace-dir", default=None)
+    parser.add_argument("--enable-thoughts", action="store_true",
+                        help="Let the agent keep a persistent scratchpad of notes.")
     parser.add_argument("--experiment-name", default="autovibe-gym")
     parser.add_argument("--run-name", default=None)
     add_mode_metadata_args(parser)
@@ -477,6 +491,7 @@ def main():
             "model": model_name,
             "dataset": dataset_name,
             "experiment_type": "fixed_transitions",
+            "thoughts_enabled": args.enable_thoughts,
             "max_steps": max_steps,
             "max_tokens": max_tokens,
             "sandbox_timeout": sandbox_timeout,
@@ -499,6 +514,7 @@ def main():
             workspace_dir=args.workspace_dir,
             mode="gym_with_checklist",
             kernel_timeout=sandbox_timeout,
+            enable_thoughts=args.enable_thoughts,
         )
 
         agent = FixedTransitionsAgent(
