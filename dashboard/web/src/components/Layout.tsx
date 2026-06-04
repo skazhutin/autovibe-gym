@@ -61,12 +61,14 @@ export default function Layout() {
         <div className="sidebar-logo">
           <span className="mark">
             <svg className="brand-dumbbell" viewBox="0 0 30 30" aria-hidden="true">
-              {/* clean symmetric dumbbell: handle + inner/outer plates each side */}
-              <rect x="11" y="13.2" width="8" height="3.6" rx="1.8" />
-              <rect x="8" y="9" width="3.4" height="12" rx="1.5" />
-              <rect x="18.6" y="9" width="3.4" height="12" rx="1.5" />
-              <rect x="4.7" y="11" width="2.8" height="8" rx="1.3" />
-              <rect x="22.5" y="11" width="2.8" height="8" rx="1.3" />
+              {/* clean symmetric dumbbell, rotated to a -45° diagonal */}
+              <g transform="rotate(-45 15 15)">
+                <rect x="12" y="13.4" width="6" height="3.2" rx="1.6" />
+                <rect x="9.4" y="10" width="3.2" height="10" rx="1.5" />
+                <rect x="17.4" y="10" width="3.2" height="10" rx="1.5" />
+                <rect x="6.6" y="11.6" width="2.6" height="6.8" rx="1.3" />
+                <rect x="20.8" y="11.6" width="2.6" height="6.8" rx="1.3" />
+              </g>
             </svg>
           </span>
           <span className="sidebar-logo-text">AutoVibe Gym</span>
