@@ -142,8 +142,12 @@ def _runner_args(cfg: dict[str, Any]) -> list[str]:
         # Checklist hint frequency (only gym_with_checklist emits hints).
         if cfg.get("hintCooldown"):
             args += ["--hint-cooldown", str(cfg["hintCooldown"])]
-    elif mode == "fixed" and cfg.get("maxSteps"):
-        args += ["--max-steps", str(cfg["maxSteps"])]
+    elif mode == "fixed":
+        if cfg.get("maxSteps"):
+            args += ["--max-steps", str(cfg["maxSteps"])]
+        # Fixed-transitions gym is multi-turn too → supports the scratchpad.
+        if cfg.get("enableThoughts"):
+            args += ["--enable-thoughts"]
     elif mode == BATCH_REQUESTED_MODE and cfg.get("maxSteps"):
         args += ["--max-steps", str(cfg["maxSteps"])]
     if mode == "repeated" and cfg.get("shots"):
