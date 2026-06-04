@@ -102,20 +102,26 @@ def launch(payload: LaunchPayload) -> dict:
         raise HTTPException(404, f"Dataset '{payload.datasetId}' not found")
     if not ds.get("prepared"):
         raise HTTPException(400, f"Dataset '{payload.datasetId}' is not prepared (no train/val/test).")
-    cfg = payload.model_dump()
-    selected_modes = [m for m in (cfg.get("modes") or [cfg["mode"]]) if m]
-    if len(selected_modes) > 1:
-        cfg["mode"] = "batch"
-        cfg["modes"] = selected_modes
-    elif selected_modes:
-        cfg["mode"] = selected_modes[0]
-        cfg["modes"] = selected_modes
-    cfg["dataset"] = ds["name"]
-    cfg["datasetDir"] = ds["datasetDir"]
+    base = payload.model_dump()
+    selected_modes = [m for m in (base.get("modes") or [base["mode"]]) if m and m != "batch"]
+    if not selected_modes:
+        raise HTTPException(400, "No run mode selected")
+    base["dataset"] = ds["name"]
+    base["datasetDir"] = ds["datasetDir"]
+    # Each selected mode becomes its OWN independent run (separate live entry),
+    # so picking N modes launches N runs instead of one fragile batch run.
+    launched: list[dict] = []
     try:
-        return run_launcher.launch(cfg)
+        for mode in selected_modes:
+            cfg = dict(base)
+            cfg["mode"] = mode
+            cfg["modes"] = [mode]
+            launched.append(run_launcher.launch(cfg))
     except (ValueError, OSError) as exc:
         raise HTTPException(400, str(exc)) from exc
+    if len(launched) == 1:
+        return launched[0]
+    return {"batch": True, "count": len(launched), "runs": launched, "id": launched[0]["id"]}
 
 
 @router.get("/{run_id}")
