@@ -293,9 +293,9 @@ export default function RunDetail() {
           {run.status === "failed" || run.status === "null" ? (
             <span className="sp-base">{run.status === "null" ? "не дошёл до сабмита" : "сабмит не прошёл"}</span>
           ) : imp != null ? (
-            <span className="sp-base"><Icon name={imp >= 0 ? "arrowUp" : "arrowDown"} size={14} /> {imp >= 0 ? "+" : ""}{imp.toFixed(1)}% к baseline</span>
+            <span className="sp-base" title="Финальный скор на тесте относительно лучшей метрики на валидации в этом прогоне"><Icon name={imp >= 0 ? "arrowUp" : "arrowDown"} size={14} /> {imp >= 0 ? "+" : ""}{imp.toFixed(1)}% к лучшей валидации</span>
           ) : run.baseline != null ? (
-            <span className="sp-base">baseline {formatScore(run.baseline, run.metric)}</span>
+            <span className="sp-base">лучшая валидация {formatScore(run.baseline, run.metric)}</span>
           ) : <span className="sp-base">&nbsp;</span>}
         </div>
       </Card>

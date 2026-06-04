@@ -99,6 +99,12 @@
   font-weight: 800;
   box-shadow: var(--shadow-sm);
 }
+.brand-dumbbell {
+  width: 24px;
+  height: 24px;
+  display: block;
+  fill: currentColor;
+}
 .nav {
   display: flex;
   flex-direction: column;

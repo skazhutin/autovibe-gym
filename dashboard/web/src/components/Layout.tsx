@@ -59,7 +59,18 @@ export default function Layout() {
     <div className={`app${collapsed ? " sidebar-collapsed" : ""}`}>
       <aside className={`sidebar${collapsed ? " collapsed" : ""}`}>
         <div className="sidebar-logo">
-          <span className="mark"><Icon name="dumbbell" size={19} strokeWidth={2.3} /></span>
+          <span className="mark">
+            <svg className="brand-dumbbell" viewBox="0 0 30 30" aria-hidden="true">
+              {/* clean symmetric dumbbell, rotated to a -45° diagonal */}
+              <g transform="rotate(-45 15 15)">
+                <rect x="12" y="13.4" width="6" height="3.2" rx="1.6" />
+                <rect x="9.4" y="10" width="3.2" height="10" rx="1.5" />
+                <rect x="17.4" y="10" width="3.2" height="10" rx="1.5" />
+                <rect x="6.6" y="11.6" width="2.6" height="6.8" rx="1.3" />
+                <rect x="20.8" y="11.6" width="2.6" height="6.8" rx="1.3" />
+              </g>
+            </svg>
+          </span>
           <span className="sidebar-logo-text">AutoVibe Gym</span>
         </div>
         <nav className="nav">
