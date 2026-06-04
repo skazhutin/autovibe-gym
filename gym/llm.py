@@ -108,9 +108,20 @@ class OpenAICompatibleLLMClient:
     def __init__(self, base_url: str | None = None, api_key: str | None = None):
         from openai import OpenAI
 
+        # Explicit per-request timeout so a hanging/queued request (e.g. several
+        # concurrent runs against one rate-limited endpoint) fails fast as an
+        # APITimeoutError and is retried with backoff, instead of silently
+        # blocking for the SDK default (~10 min). max_retries=0 so OUR
+        # _create_with_retries owns retrying. Tunable via AUTOVIBE_LLM_TIMEOUT.
+        try:
+            timeout = float(os.getenv("AUTOVIBE_LLM_TIMEOUT", "120"))
+        except ValueError:
+            timeout = 120.0
         self._client = OpenAI(
             base_url=base_url or os.getenv("LLM_BASE_URL", "http://localhost:8000/v1"),
             api_key=api_key or os.getenv("LLM_API_KEY", "local"),
+            timeout=timeout,
+            max_retries=0,
         )
 
     def complete(
