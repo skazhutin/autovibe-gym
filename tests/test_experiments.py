@@ -403,7 +403,7 @@ def test_run_all_modes_matrix_dry_run_lists_exact_five_modes(monkeypatch, capsys
     assert "repeated single-shot" in out
     assert "iterative no-checklist" in out
     assert "flexible gym" in out
-    assert "fixed transitions gym" in out
+    assert "fixed gym" in out
     assert out.count("fake-model") >= 5
     batch_ids = re.findall(r"--batch-id\s+(\S+)", out)
     assert len(batch_ids) >= 5
