@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, type Run } from "../lib/api";
 import { useAsync } from "../lib/hooks";
-import { MODE_SHORT, formatDuration, formatScore, formatTokens, improvementPct } from "../lib/format";
+import { MODE_SHORT, formatDuration, formatScore, formatTokens } from "../lib/format";
 import { Card, EmptyState, Skeleton } from "../components/ui";
 import { BarChart, Scatter } from "../components/charts";
 import { ModeTag } from "../components/runbits";
@@ -37,9 +37,29 @@ export default function Compare() {
     ? picked.map((r) => ({ label: `${MODE_SHORT[r.mode]}`, value: r.score!, best: r.score === bestScore, sub: r.model }))
     : [];
 
-  const scatterPts = picked
-    .map((r) => ({ x: r.tokIn + r.tokOut, y: improvementPct(r) ?? 0, label: `${MODE_SHORT[r.mode]} · ${r.dataset}`, highlight: r.mode === "gym" }))
-    .filter((p) => p.y !== 0);
+  // Cost-per-point: tokens vs improvement over a per-dataset baseline (the
+  // single-shot score if present, else the weakest run on that dataset).
+  const scoredPicked = picked.filter((r) => r.score !== null && r.score !== undefined);
+  const goalMin = (m?: string | null) =>
+    !!(m && /rmse|rmsle|mae|mse|logloss/.test(m.toLowerCase()) && !m.toLowerCase().startsWith("neg_"));
+  const baselineByDs = new Map<string, number>();
+  for (const ds of new Set(scoredPicked.map((r) => r.dataset))) {
+    const dsRuns = scoredPicked.filter((r) => r.dataset === ds);
+    const single = dsRuns.find((r) => r.mode === "single");
+    baselineByDs.set(ds, single ? single.score! : Math.min(...dsRuns.map((r) => r.score!)));
+  }
+  const scatterPts = scoredPicked.map((r) => {
+    const base = baselineByDs.get(r.dataset) ?? 0;
+    const imp = base
+      ? ((goalMin(r.metric) ? base - r.score! : r.score! - base) / Math.abs(base)) * 100
+      : 0;
+    return {
+      x: r.tokIn + r.tokOut,
+      y: imp,
+      label: `${MODE_SHORT[r.mode]} · ${r.dataset}`,
+      highlight: r.mode === "gym" || r.mode === "iterative",
+    };
+  });
 
   const sortedPicked = [...picked].sort((a, b) => {
     if (groupBy === "none") return 0;
@@ -125,8 +145,8 @@ export default function Compare() {
               </Card>
               <Card style={{ minWidth: 0 }}>
                 <strong>Цена за очко метрики</strong>
-                <div className="faint" style={{ fontSize: 12, marginBottom: 8 }}>токены против улучшения над baseline</div>
-                {scatterPts.length ? <Scatter points={scatterPts} xLabel="токены" yLabel="улучшение %" /> : <EmptyState icon="coins" title="Недостаточно данных" text="Нужен baseline и сабмит для расчёта улучшения." />}
+                <div className="faint" style={{ fontSize: 12, marginBottom: 8 }}>токены против улучшения над baseline (single-shot или слабейший на датасете)</div>
+                {scatterPts.length ? <Scatter points={scatterPts} xLabel="токены" yLabel="улучшение %" /> : <EmptyState icon="coins" title="Недостаточно данных" text="Нужны успешные прогоны со скором." />}
               </Card>
             </div>
           </>
