@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-04 (dashboard sidebar footer cleanup)
+**Last updated:** 2026-06-04 (dashboard logo mark refresh)
 **Phase:** Hardening after first full H200 recon + building the local control-panel dashboard for configuring/launching/inspecting runs.
 
 ---
@@ -131,6 +131,13 @@ Current dashboard sidebar cleanup cycle:
 - Removed the bottom sidebar team/local-mode block from the dashboard shell.
 - Moved the sidebar collapse toggle down to the bottom edge of the simplified
   sidebar.
+Current dashboard logo cycle:
+
+- Replaced the old H-like sidebar logo mark with a diagonal dumbbell mark
+  matching the yellow-square fitness reference while avoiding letter shapes.
+- `dashboard/web`: TypeScript build + Vite production build passed.
+- Browser smoke captured `.sidebar-logo`; only existing dev warnings/favicon 404
+  appeared in console.
 Additional checks:
 
 - `python -m experiments.run --dataset-dir datasets/demo/prepared --mode all --model fake-model --dry-run`
@@ -299,6 +306,7 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 
 | Date | Change |
 |------|--------|
+| 2026-06-04 | Dashboard logo refresh: replaced the H-like yellow-square mark with a diagonal dumbbell AutoVibe mark |
 | 2026-06-04 | Dashboard sidebar cleanup: removed the bottom `Команда / локальный режим` block and its unused styles |
 | 2026-06-04 | Normalized product-mode display labels: dashboard short labels now show `Flexible gym`, and fixed transitions display as `Fixed gym` in dashboard and shared matrix metadata |
 | 2026-06-02 | Dashboard trajectory visual fix: aligned the live "агент выполняет шаг…" spinner with the timeline marker column and adjusted the connector so the grey line meets the spinner's top center |
