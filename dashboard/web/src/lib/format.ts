@@ -5,7 +5,7 @@ export const MODE_LABELS: Record<RunMode, string> = {
   repeated: "Repeated single-shot",
   iterative: "Iterative",
   gym: "Flexible gym",
-  fixed: "Fixed transitions gym",
+  fixed: "Fixed gym",
   batch: "Набор режимов",
 };
 
@@ -13,7 +13,7 @@ export const MODE_SHORT: Record<RunMode, string> = {
   single: "Single-shot",
   repeated: "Repeated",
   iterative: "Iterative",
-  gym: "Flexible",
+  gym: "Flexible gym",
   fixed: "Fixed gym",
   batch: "Batch",
 };

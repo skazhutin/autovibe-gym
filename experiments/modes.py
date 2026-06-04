@@ -54,8 +54,8 @@ GYM_WITH_CHECKLIST = ProductMode(
 
 FIXED_TRANSITIONS = ProductMode(
     key="fixed_transitions",
-    display_name="Fixed transitions gym",
-    matrix_label="fixed transitions gym",
+    display_name="Fixed gym",
+    matrix_label="fixed gym",
     dashboard_mode="fixed",
     module="experiments.run_fixed",
     experiment_type="fixed_transitions",

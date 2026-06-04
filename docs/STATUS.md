@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-03 (common runner failure propagation; dashboard trajectory live-spinner alignment)
+**Last updated:** 2026-06-04 (dashboard/product mode display labels)
 **Phase:** Hardening after first full H200 recon + building the local control-panel dashboard for configuring/launching/inspecting runs.
 
 ---
@@ -97,14 +97,14 @@ Current dashboard five-mode selection cycle:
 
 - New Run includes Iterative again, allows selecting up to 5 run types, removes
   the recommendation badge, and labels the interactive modes as Flexible gym and
-  Fixed transitions gym.
+  Fixed gym.
 - Shared product-mode metadata, common `experiments.run --mode all`, dashboard
   batch launch validation, frontend types, and tests now use the same five-mode
   product set.
 Current dashboard environment-badge cycle:
 
 - New Run run-type cards now show only two badges: `Среда` for Iterative,
-  Flexible gym, and Fixed transitions gym; `Без среды` for Single-shot and
+  Flexible gym, and Fixed gym; `Без среды` for Single-shot and
   Repeated single-shot.
 - dashboard TypeScript build + Vite production build via bundled Node runtime.
 Current dashboard budget-tooltip cycle:
@@ -118,6 +118,14 @@ Current common-runner failure-propagation cycle:
 - `experiments.run` now exits with the first failed child return code after
   printing the batch summary, even when `--stop-on-failure` is not set.
 - `python -m pytest tests/test_experiments.py` -> `27 passed`.
+Current dashboard/product-mode label cycle:
+
+- Dashboard mode labels now display `Flexible gym` wherever the gym product mode
+  was previously shortened to `Flexible`.
+- Fixed-transition product mode display text is shortened to `Fixed gym` in the
+  dashboard and shared experiment matrix labels.
+- `dashboard/web`: TypeScript build + Vite production build passed.
+- `.venv/bin/python -m pytest tests/test_experiments.py` -> `27 passed`.
 Additional checks:
 
 - `python -m experiments.run --dataset-dir datasets/demo/prepared --mode all --model fake-model --dry-run`
@@ -286,6 +294,7 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 
 | Date | Change |
 |------|--------|
+| 2026-06-04 | Normalized product-mode display labels: dashboard short labels now show `Flexible gym`, and fixed transitions display as `Fixed gym` in dashboard and shared matrix metadata |
 | 2026-06-02 | Dashboard trajectory visual fix: aligned the live "агент выполняет шаг…" spinner with the timeline marker column and adjusted the connector so the grey line meets the spinner's top center |
 | 2026-06-02 | Agent thoughts/scratchpad: optional `notes` field on any action; with `--enable-thoughts` (gym/iterative) the env stores notes, re-injects them every turn ([YOUR NOTES SO FAR]), persists `scratchpad.json`. Dashboard: New Run toggle (gym/iterative) + a «Мысли» tab rendering the notes timeline. One PR. |
 | 2026-06-03 | Propagated child runner failures from `experiments.run`: batch summaries still print, but the wrapper exits non-zero when any selected product mode fails |
