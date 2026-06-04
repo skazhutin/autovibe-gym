@@ -33,9 +33,11 @@ class FakeCompletions:
 class FakeOpenAI:
     last_instance = None
 
-    def __init__(self, *, base_url, api_key):
+    def __init__(self, *, base_url, api_key, timeout=None, max_retries=None, **_kwargs):
         self.base_url = base_url
         self.api_key = api_key
+        self.timeout = timeout
+        self.max_retries = max_retries
         self.chat = types.SimpleNamespace(completions=FakeCompletions())
         FakeOpenAI.last_instance = self
 
