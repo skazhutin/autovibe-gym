@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-04 (dashboard/product mode display labels)
+**Last updated:** 2026-06-04 (dashboard sidebar footer cleanup)
 **Phase:** Hardening after first full H200 recon + building the local control-panel dashboard for configuring/launching/inspecting runs.
 
 ---
@@ -126,6 +126,11 @@ Current dashboard/product-mode label cycle:
   dashboard and shared experiment matrix labels.
 - `dashboard/web`: TypeScript build + Vite production build passed.
 - `.venv/bin/python -m pytest tests/test_experiments.py` -> `27 passed`.
+Current dashboard sidebar cleanup cycle:
+
+- Removed the bottom sidebar team/local-mode block from the dashboard shell.
+- Moved the sidebar collapse toggle down to the bottom edge of the simplified
+  sidebar.
 Additional checks:
 
 - `python -m experiments.run --dataset-dir datasets/demo/prepared --mode all --model fake-model --dry-run`
@@ -294,6 +299,7 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 
 | Date | Change |
 |------|--------|
+| 2026-06-04 | Dashboard sidebar cleanup: removed the bottom `Команда / локальный режим` block and its unused styles |
 | 2026-06-04 | Normalized product-mode display labels: dashboard short labels now show `Flexible gym`, and fixed transitions display as `Fixed gym` in dashboard and shared matrix metadata |
 | 2026-06-02 | Dashboard trajectory visual fix: aligned the live "агент выполняет шаг…" spinner with the timeline marker column and adjusted the connector so the grey line meets the spinner's top center |
 | 2026-06-02 | Agent thoughts/scratchpad: optional `notes` field on any action; with `--enable-thoughts` (gym/iterative) the env stores notes, re-injects them every turn ([YOUR NOTES SO FAR]), persists `scratchpad.json`. Dashboard: New Run toggle (gym/iterative) + a «Мысли» tab rendering the notes timeline. One PR. |

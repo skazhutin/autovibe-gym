@@ -70,13 +70,6 @@ export default function Layout() {
             </NavLink>
           ))}
         </nav>
-        <div className="sidebar-foot">
-          <span className="avatar">AV</span>
-          <div className="sidebar-foot-info" style={{ lineHeight: 1.25 }}>
-            <div style={{ fontWeight: 600, fontSize: 13 }}>Команда</div>
-            <div className="faint" style={{ fontSize: 11.5 }}>локальный режим</div>
-          </div>
-        </div>
       </aside>
       <button className={`sidebar-toggle${collapsed ? " collapsed" : ""}`} onClick={() => setCollapsed((v) => !v)} title={collapsed ? "Развернуть" : "Свернуть"}>
         <Icon name={collapsed ? "chevronRight" : "chevronLeft"} size={14} strokeWidth={2} />
