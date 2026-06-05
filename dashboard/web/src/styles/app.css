@@ -558,9 +558,20 @@
 .tabs {
   display: flex;
   gap: 4px;
-  border-bottom: 1px solid var(--border);
   margin-bottom: 20px;
   overflow-x: auto;
+  overflow-y: hidden;
+  position: relative;
+}
+.tabs::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--border);
+  pointer-events: none;
 }
 .tab {
   display: inline-flex;
@@ -573,9 +584,11 @@
   font-weight: 600;
   font-size: 14px;
   border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
+  margin-bottom: 0;
   cursor: pointer;
   white-space: nowrap;
+  position: relative;
+  z-index: 1;
 }
 .tab:hover {
   color: var(--text);
