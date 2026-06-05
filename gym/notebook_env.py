@@ -873,6 +873,22 @@ class NotebookGymEnv:
         return summary
 
     def _add_cell(self, action: Action) -> Observation:
+        # Weak models sometimes emit add_cell with an empty 'source' (or put the
+        # code under 'code'). Refuse to create blank code cells and nudge the
+        # agent instead of silently piling up empty cells and wasting budget.
+        if action.cell_type != "markdown" and not (action.source or "").strip():
+            self._record_event(action="add_cell", blocked="empty_source")
+            observation = self._observation(
+                action="add_cell",
+                feedback_items=[self._contract_feedback(
+                    "empty_cell",
+                    "Your add_cell had an empty 'source', so no cell was created. "
+                    "Put your Python code in the 'source' field (a non-empty string) "
+                    "and send the action again.",
+                    severity="warning",
+                )],
+            )
+            return self._record_observation(observation)
         if action.cell_type == "markdown":
             cell_id = self.notebook.add_markdown_cell(action.source)
             result = None
