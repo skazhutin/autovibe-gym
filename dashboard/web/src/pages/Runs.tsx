@@ -53,7 +53,7 @@ export default function Runs() {
           <div className="table-wrap">
             <table className="data">
               <thead>
-                <tr><th>ID</th><th>Модель</th><th>Режим</th><th>Датасет</th><th>Скор</th><th>Статус</th><th>Шагов</th><th>Токены</th><th>Когда</th><th></th></tr>
+                <tr><th>ID</th><th>Модель</th><th>Режим</th><th>Датасет</th><th>Скор</th><th>Статус</th><th>Шагов</th><th>Токены</th><th>Когда</th></tr>
               </thead>
               <tbody>
                 {filtered.map((r: Run) => (
@@ -67,7 +67,6 @@ export default function Runs() {
                     <td className="mono faint">{r.step}{r.steps ? `/${r.steps}` : ""}</td>
                     <td className="mono faint">{formatTokens(r.tokIn + r.tokOut)}</td>
                     <td className="faint">{timeAgo(r.startedMs)}</td>
-                    <td className="faint"><Icon name="chevronRight" size={16} /></td>
                   </tr>
                 ))}
               </tbody>
