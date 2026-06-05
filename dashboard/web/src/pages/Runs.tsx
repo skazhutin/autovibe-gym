@@ -59,9 +59,9 @@ export default function Runs() {
                 {filtered.map((r: Run) => (
                   <tr key={r.id} className="clickable" onClick={() => nav(`/runs/${r.id}`)}>
                     <td className="mono faint">{r.shortId}</td>
-                    <td className="mono">{r.model}</td>
+                    <td className="mono truncate" title={r.model}>{r.model}</td>
                     <td><ModeTag mode={r.mode} /></td>
-                    <td>{r.dataset}</td>
+                    <td className="truncate" title={r.dataset}>{r.dataset}</td>
                     <td><ScoreCell run={r} /></td>
                     <td><StatusBadge status={r.status} /></td>
                     <td className="mono faint">{r.step}{r.steps ? `/${r.steps}` : ""}</td>

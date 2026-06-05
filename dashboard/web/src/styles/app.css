@@ -843,6 +843,14 @@ table.data td {
 table.data tr:last-child td {
   border-bottom: none;
 }
+/* Let the longest columns shrink with an ellipsis so the table always fits its
+   container — otherwise nowrap cells (long model/dataset names) push the table a
+   few px past the wrap and trigger a horizontal micro-scrollbar. */
+table.data td.truncate {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 table.data tbody tr.clickable {
   cursor: pointer;
   transition: background 0.12s;
