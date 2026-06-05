@@ -17,7 +17,7 @@ def _accuracy(y_true, y_pred):
     return sum(int(a == b) for a, b in zip(y_true, y_pred)) / len(y_true)
 
 
-def _make_env(tmp_path, *, mode="gym_with_checklist", hidden_green=False):
+def _make_env(tmp_path, *, mode="gym_with_checklist", hidden_green=False, enable_thoughts=False):
     train = pd.DataFrame(
         {
             "color": ["red", "blue", "red", "blue"],
@@ -50,6 +50,7 @@ def _make_env(tmp_path, *, mode="gym_with_checklist", hidden_green=False):
         max_steps=20,
         workspace_dir=tmp_path,
         mode=mode,
+        enable_thoughts=enable_thoughts,
     )
     env.reset()
     return env
@@ -71,11 +72,162 @@ def test_workspace_contains_train_and_val_but_no_hidden_test(tmp_path):
 def test_legacy_code_action_creates_and_executes_code_cell(tmp_path):
     env = _make_env(tmp_path)
     try:
-        result = env.step({"type": "code", "code": "value = 41\nprint(value + 1)"})
+        result = env.step({"type": "code", "stage": "feature_pipeline_building", "code": "value = 41\nprint(value + 1)"})
 
         assert result.cell_id == "cell_01"
         assert "42" in result.stdout
         assert env.notebook.list_cells()[0]["cell_type"] == "code"
+    finally:
+        env.close()
+def test_notebook_env_rejects_missing_unknown_stage_and_unknown_type(tmp_path):
+    env = _make_env(tmp_path)
+    try:
+        missing_stage = env.step({"type": "inspect_data"})
+        assert missing_stage.action == "inspect_data"
+        assert "stage" in missing_stage.stderr
+        assert env.state.step == 0
+
+        unknown_stage = env.step({"type": "inspect_data", "stage": "made_up_stage"})
+        assert unknown_stage.action == "inspect_data"
+        assert "Unknown stage" in unknown_stage.stderr
+        assert env.state.step == 0
+
+        unknown_type = env.step({"type": "dance", "stage": "data_schema_inspection"})
+        assert unknown_type.action == "invalid_action"
+        assert "Unsupported action type" in unknown_type.stderr
+        assert env.state.step == 0
+    finally:
+        env.close()
+
+
+def test_notebook_env_rejects_thoughts_planning_and_think_when_disabled(tmp_path):
+    env = _make_env(tmp_path)
+    try:
+        thoughted = env.step(
+            {
+                "type": "inspect_data",
+                "stage": "data_schema_inspection",
+                "thoughts": "Inspecting the data.",
+            }
+        )
+        assert "Thoughts mode is disabled" in thoughted.stderr
+        assert env.state.step == 0
+
+        planning = env.step({"type": "inspect_data", "stage": "planning"})
+        assert "stage 'planning' is not allowed" in planning.stderr
+        assert env.state.step == 0
+
+        thinking = env.step(
+            {
+                "type": "think",
+                "stage": "validation_analysis",
+                "thoughts": "Reflecting on validation.",
+            }
+        )
+        assert "type 'think' is not allowed" in thinking.stderr
+        assert env.state.step == 0
+    finally:
+        env.close()
+
+
+def test_notebook_env_thoughts_mode_requires_initial_planning_think(tmp_path):
+    env = _make_env(tmp_path, enable_thoughts=True)
+    try:
+        regular = env.step(
+            {
+                "type": "inspect_data",
+                "stage": "data_schema_inspection",
+                "thoughts": "I want to inspect the data first.",
+            }
+        )
+        assert "first action must be type 'think' with stage 'planning'" in regular.stderr
+        assert env.scratchpad == []
+        assert env.state.step == 0
+
+        missing_thoughts = env.step({"type": "think", "stage": "planning"})
+        assert "non-empty 'thoughts'" in missing_thoughts.stderr
+        assert env.scratchpad == []
+        assert env.state.step == 0
+
+        planned = env.step(
+            {
+                "type": "think",
+                "stage": "planning",
+                "thoughts": "I will inspect the data, build a pipeline, validate it, and submit only when ready.",
+            }
+        )
+        assert planned.action == "think"
+        assert planned.stage == "planning"
+        assert planned.thoughts
+        assert env.scratchpad[0]["type"] == "think"
+        assert env.scratchpad[0]["stage"] == "planning"
+        assert env.state.step == 0
+    finally:
+        env.close()
+
+
+def test_think_records_artifacts_without_mutating_notebook_kernel_or_budget(tmp_path):
+    env = _make_env(tmp_path, enable_thoughts=True)
+    try:
+        env.kernel.execute_cell("sentinel_value = 123", store_history=False)
+        original_train = env.state.train.copy(deep=True)
+        before_cells = env.notebook.list_cells()
+        before_revision = env.notebook.revision
+
+        first = env.step(
+            {
+                "type": "think",
+                "stage": "planning",
+                "thoughts": "I will inspect schema, train a candidate, validate, check reproducibility, and submit.",
+            }
+        )
+        second = env.step(
+            {
+                "type": "think",
+                "stage": "validation_analysis",
+                "thoughts": "The next useful move is to inspect validation readiness without changing data.",
+            }
+        )
+        repeated_planning = env.step(
+            {
+                "type": "think",
+                "stage": "planning",
+                "thoughts": "Trying to plan again should be rejected.",
+            }
+        )
+
+        assert first.action == "think"
+        assert second.action == "think"
+        assert "only allowed for the first" in repeated_planning.stderr
+        assert env.state.step == 0
+        assert env.notebook.list_cells() == before_cells
+        assert env.notebook.revision == before_revision
+        assert env.state.train.equals(original_train)
+        probe = env.kernel.execute_cell("print(sentinel_value)", store_history=False)
+        assert "123" in probe.stdout
+        assert len(env.scratchpad) == 2
+        assert env.get_summary()["thoughts_count"] == 2
+        assert env.get_summary()["current_stage"] == "validation_analysis"
+
+        public_events = json.loads((tmp_path / "notebook_events.json").read_text(encoding="utf-8"))
+        public_trace = json.loads((tmp_path / "feedback_trace.json").read_text(encoding="utf-8"))
+        scratchpad = json.loads((tmp_path / "scratchpad.json").read_text(encoding="utf-8"))
+        public_summary = json.loads((tmp_path / "episode_summary.json").read_text(encoding="utf-8"))
+
+        think_events = [
+            event
+            for event in public_events
+            if event.get("type") == "think" and event.get("non_mutating") is True
+        ]
+        assert len(think_events) == 2
+        assert all(event.get("non_mutating") is True for event in think_events)
+        assert "action" not in json.dumps(public_events)
+        assert public_trace[-2]["type"] == "think"
+        assert public_trace[-2]["stage"] == "validation_analysis"
+        assert public_trace[-2]["thoughts"] == second.thoughts
+        assert "action" not in public_trace[-2]
+        assert scratchpad[-1]["thoughts"] == second.thoughts
+        assert public_summary["current_stage"] == "validation_analysis"
     finally:
         env.close()
 
@@ -84,12 +236,13 @@ def test_restart_and_run_all_clears_interactive_stale_state(tmp_path):
     env = _make_env(tmp_path)
     try:
         stale = env.step(
-            {"type": "add_cell", "cell_type": "code", "source": "stale = 123", "execute": True}
+            {"type": "add_cell", "stage": "feature_pipeline_building", "cell_type": "code", "source": "stale = 123", "execute": True}
         )
-        env.step({"type": "delete_cell", "cell_id": stale.cell_id})
+        env.step({"type": "delete_cell", "stage": "reproducibility_check", "cell_id": stale.cell_id})
         check = env.step(
             {
                 "type": "add_cell",
+                "stage": "feature_pipeline_building",
                 "cell_type": "code",
                 "source": "print('stale' in globals())",
                 "execute": True,
@@ -97,7 +250,7 @@ def test_restart_and_run_all_clears_interactive_stale_state(tmp_path):
         )
         assert "True" in check.stdout
 
-        clean = env.step({"type": "restart_and_run_all"})
+        clean = env.step({"type": "restart_and_run_all", "stage": "reproducibility_check"})
         assert "successfully" in clean.stdout
         cell = env.notebook.get_cell(check.cell_id)
         assert "False" in cell.outputs[0]["text"]
@@ -111,29 +264,31 @@ def test_validate_and_submit_require_clean_run(tmp_path):
         env.step(
             {
                 "type": "add_cell",
+                "stage": "feature_pipeline_building",
                 "cell_type": "code",
                 "source": _constant_model_source(),
                 "execute": True,
             }
         )
 
-        rejected = env.step({"type": "validate", "model_var": "model"})
+        rejected = env.step({"type": "validate", "stage": "validation_analysis", "model_var": "model"})
         assert "restart_and_run_all" in rejected.stderr
 
-        clean = env.step({"type": "restart_and_run_all"})
+        clean = env.step({"type": "restart_and_run_all", "stage": "reproducibility_check"})
         assert "successfully" in clean.stdout
 
-        validated = env.step({"type": "validate", "model_var": "model"})
+        validated = env.step({"type": "validate", "stage": "validation_analysis", "model_var": "model"})
         assert validated.validation_metric == 0.5
 
         env.step(
             {
                 "type": "add_cell",
+                "stage": "feature_pipeline_building",
                 "cell_type": "markdown",
                 "source": "changed after validation",
             }
         )
-        dirty_submit = env.step({"type": "submit", "model_var": "model"})
+        dirty_submit = env.step({"type": "submit", "stage": "submission", "model_var": "model"})
         assert "restart_and_run_all" in dirty_submit.stderr
     finally:
         env.close()
@@ -145,15 +300,16 @@ def test_successful_submit_hides_score_from_agent_context_and_keeps_private_summ
         env.step(
             {
                 "type": "add_cell",
+                "stage": "feature_pipeline_building",
                 "cell_type": "code",
                 "source": _constant_model_source(),
                 "execute": True,
             }
         )
-        env.step({"type": "restart_and_run_all"})
-        env.step({"type": "validate", "model_var": "model"})
+        env.step({"type": "restart_and_run_all", "stage": "reproducibility_check"})
+        env.step({"type": "validate", "stage": "validation_analysis", "model_var": "model"})
 
-        submit = env.step({"type": "submit", "model_var": "model"})
+        submit = env.step({"type": "submit", "stage": "submission", "model_var": "model"})
         feedback = submit.to_feedback_message()
 
         assert submit.submitted
@@ -180,16 +336,17 @@ def test_hidden_submit_failure_is_generic(tmp_path):
         env.step(
             {
                 "type": "add_cell",
+                "stage": "feature_pipeline_building",
                 "cell_type": "code",
                 "source": _strict_one_hot_source(),
                 "execute": True,
             }
         )
-        env.step({"type": "restart_and_run_all"})
-        validated = env.step({"type": "validate", "model_var": "model"})
+        env.step({"type": "restart_and_run_all", "stage": "reproducibility_check"})
+        validated = env.step({"type": "validate", "stage": "validation_analysis", "model_var": "model"})
         assert not validated.stderr
 
-        submit = env.step({"type": "submit", "model_var": "model"})
+        submit = env.step({"type": "submit", "stage": "submission", "model_var": "model"})
         assert submit.submitted
         assert "hidden test split" in submit.stderr
         assert "green" not in submit.stderr
@@ -204,6 +361,7 @@ def test_kernel_visible_artifacts_do_not_expose_private_evaluation_state(tmp_pat
         env.step(
             {
                 "type": "add_cell",
+                "stage": "feature_pipeline_building",
                 "cell_type": "code",
                 "source": _constant_model_source(),
                 "execute": True,
@@ -213,6 +371,7 @@ def test_kernel_visible_artifacts_do_not_expose_private_evaluation_state(tmp_pat
         before_submit = env.step(
             {
                 "type": "add_cell",
+                "stage": "feature_pipeline_building",
                 "cell_type": "code",
                 "source": _workspace_probe_source(),
                 "execute": True,
@@ -221,12 +380,13 @@ def test_kernel_visible_artifacts_do_not_expose_private_evaluation_state(tmp_pat
         assert "PRIVATE_LEAK" not in before_submit.stdout
         assert "test.csv" not in before_submit.stdout
 
-        env.step({"type": "restart_and_run_all"})
-        env.step({"type": "validate", "model_var": "model"})
+        env.step({"type": "restart_and_run_all", "stage": "reproducibility_check"})
+        env.step({"type": "validate", "stage": "validation_analysis", "model_var": "model"})
 
         after_validate = env.step(
             {
                 "type": "add_cell",
+                "stage": "feature_pipeline_building",
                 "cell_type": "code",
                 "source": _workspace_probe_source(),
                 "execute": True,
@@ -236,9 +396,9 @@ def test_kernel_visible_artifacts_do_not_expose_private_evaluation_state(tmp_pat
         assert "final_test_metric" not in after_validate.stdout
         assert "private_checklist_coverage" not in after_validate.stdout
 
-        env.step({"type": "restart_and_run_all"})
-        env.step({"type": "validate", "model_var": "model"})
-        submit = env.step({"type": "submit", "model_var": "model"})
+        env.step({"type": "restart_and_run_all", "stage": "reproducibility_check"})
+        env.step({"type": "validate", "stage": "validation_analysis", "model_var": "model"})
+        submit = env.step({"type": "submit", "stage": "submission", "model_var": "model"})
         assert submit.submitted
 
         direct_probe = env.kernel.execute_cell(_workspace_probe_source())
@@ -274,6 +434,7 @@ def test_notebook_step_budget_blocks_actions_after_exhaustion(tmp_path, mode):
         first = env.step(
             {
                 "type": "add_cell",
+                "stage": "feature_pipeline_building",
                 "cell_type": "code",
                 "source": "budget_value = 1\nprint('ran once')",
                 "execute": True,
@@ -286,6 +447,7 @@ def test_notebook_step_budget_blocks_actions_after_exhaustion(tmp_path, mode):
         blocked = env.step(
             {
                 "type": "add_cell",
+                "stage": "feature_pipeline_building",
                 "cell_type": "code",
                 "source": "budget_value = 2\nprint('should not run')",
                 "execute": True,
@@ -299,7 +461,7 @@ def test_notebook_step_budget_blocks_actions_after_exhaustion(tmp_path, mode):
         assert "1" in probe.stdout
         assert "2" not in probe.stdout
 
-        validate = env.step({"type": "validate", "model_var": "model"})
+        validate = env.step({"type": "validate", "stage": "validation_analysis", "model_var": "model"})
         assert "Step budget exhausted" in validate.stderr
         assert env.state.step == env.state.max_steps
     finally:
@@ -313,17 +475,18 @@ def test_submit_is_allowed_after_budget_exhaustion_for_validated_candidate(tmp_p
         env.step(
             {
                 "type": "add_cell",
+                "stage": "feature_pipeline_building",
                 "cell_type": "code",
                 "source": _constant_model_source(),
                 "execute": False,
             }
         )
-        env.step({"type": "restart_and_run_all"})
-        validated = env.step({"type": "validate", "model_var": "model"})
+        env.step({"type": "restart_and_run_all", "stage": "reproducibility_check"})
+        validated = env.step({"type": "validate", "stage": "validation_analysis", "model_var": "model"})
         assert validated.done
         assert validated.validation_metric == 0.5
 
-        submit = env.step({"type": "submit", "model_var": "model"})
+        submit = env.step({"type": "submit", "stage": "submission", "model_var": "model"})
         assert submit.submitted
         assert submit.done
         assert env.get_summary()["final_test_metric"] == 1.0
@@ -362,6 +525,7 @@ def test_notebook_env_docker_backend_end_to_end(tmp_path):
         bootstrap = env.step(
             {
                 "type": "add_cell",
+                "stage": "feature_pipeline_building",
                 "cell_type": "code",
                 "source": (
                     "print(train_df.shape)\n"
@@ -380,16 +544,17 @@ def test_notebook_env_docker_backend_end_to_end(tmp_path):
         env.step(
             {
                 "type": "add_cell",
+                "stage": "feature_pipeline_building",
                 "cell_type": "code",
                 "source": _constant_model_source(),
                 "execute": False,
             }
         )
-        clean = env.step({"type": "restart_and_run_all"})
+        clean = env.step({"type": "restart_and_run_all", "stage": "reproducibility_check"})
         assert "successfully" in clean.stdout
-        validated = env.step({"type": "validate", "model_var": "model"})
+        validated = env.step({"type": "validate", "stage": "validation_analysis", "model_var": "model"})
         assert validated.validation_metric == 0.5
-        submit = env.step({"type": "submit", "model_var": "model"})
+        submit = env.step({"type": "submit", "stage": "submission", "model_var": "model"})
         assert submit.submitted
         assert submit.test_metric is None
         assert env.get_summary()["final_test_metric"] == 1.0
@@ -516,7 +681,7 @@ def test_finalize_action_auto_discovers_nonstandard_candidate_name(tmp_path):
         )
         env.step(Action.add_cell_action(cell, cell_type="code", execute=True))
 
-        observation = env.step({"type": "finalize", "model_var": "auto"})
+        observation = env.step({"type": "finalize", "stage": "submission", "model_var": "auto"})
 
         assert observation.submitted is True
         assert env.get_summary()["valid_submit"] is True
@@ -542,7 +707,7 @@ best_model = LogisticRegression(max_iter=200).fit(X, y)
         assert "raw validation" in observation.stderr
         assert "ValueError" in observation.stderr or "could not" in observation.stderr
 
-        repeated = env.step({"type": "run_cell", "cell_id": observation.cell_id})
+        repeated = env.step({"type": "run_cell", "stage": "validation_analysis", "cell_id": observation.cell_id})
         assert repeated.stderr.count("[MODEL CHECK]") <= 1
 
         private_dir = Path(env.get_summary()["private_episode_dir"])
@@ -567,9 +732,9 @@ model = LogisticRegression(max_iter=200).fit(X, y)
                 execute=False,
             )
         )
-        env.step({"type": "restart_and_run_all"})
+        env.step({"type": "restart_and_run_all", "stage": "reproducibility_check"})
 
-        observation = env.step({"type": "validate", "model_var": "model"})
+        observation = env.step({"type": "validate", "stage": "validation_analysis", "model_var": "model"})
 
         assert "[MODEL CHECK]" in observation.stderr
         assert "model" in observation.stderr
@@ -594,10 +759,10 @@ def test_validate_scoring_failure_returns_blocker_without_registration(tmp_path)
                 execute=False,
             )
         )
-        env.step({"type": "restart_and_run_all"})
+        env.step({"type": "restart_and_run_all", "stage": "reproducibility_check"})
 
         before_failures = env.model_check_failure_count
-        observation = env.step({"type": "validate", "model_var": "model"})
+        observation = env.step({"type": "validate", "stage": "validation_analysis", "model_var": "model"})
 
         assert observation.validation_metric is None
         assert "[MODEL CHECK]" in observation.stderr
@@ -635,10 +800,10 @@ model = LogisticRegression(max_iter=200).fit(X, y)
                 execute=False,
             )
         )
-        env.step({"type": "restart_and_run_all"})
+        env.step({"type": "restart_and_run_all", "stage": "reproducibility_check"})
         before_failures = env.model_check_failure_count
 
-        observation = env.step({"type": "validate", "model_var": "model"})
+        observation = env.step({"type": "validate", "stage": "validation_analysis", "model_var": "model"})
 
         assert "[MODEL CHECK]" in observation.stderr
         assert env.model_check_failure_count == before_failures + 1
@@ -675,9 +840,9 @@ model = Pipeline([
 model.fit(X, y)
 """.strip()
         env.step(Action.add_cell_action(source, cell_type="code", execute=False))
-        env.step({"type": "restart_and_run_all"})
+        env.step({"type": "restart_and_run_all", "stage": "reproducibility_check"})
 
-        observation = env.step({"type": "validate", "model_var": "model"})
+        observation = env.step({"type": "validate", "stage": "validation_analysis", "model_var": "model"})
 
         assert observation.validation_metric == 0.5
         assert observation.stderr == ""
@@ -688,8 +853,8 @@ model.fit(X, y)
 def test_inspect_and_profile_are_compact_and_do_not_include_hidden_test(tmp_path):
     env = _make_env(tmp_path, hidden_green=True)
     try:
-        inspect_obs = env.step({"type": "inspect_data"})
-        profile_obs = env.step({"type": "profile_data", "profile": "compact"})
+        inspect_obs = env.step({"type": "inspect_data", "stage": "data_schema_inspection"})
+        profile_obs = env.step({"type": "profile_data", "stage": "data_quality_inspection", "profile": "compact"})
 
         assert "[DATA INSPECTION]" in inspect_obs.stdout
         assert "[DATA PROFILE]" in profile_obs.stdout
@@ -732,7 +897,7 @@ def test_ydata_profile_artifacts_remain_private(tmp_path, monkeypatch):
     monkeypatch.setattr("gym.notebook_env.run_ydata_profile", fake_ydata)
     env = _make_env(tmp_path, hidden_green=True)
     try:
-        observation = env.step({"type": "profile_data", "profile": "ydata"})
+        observation = env.step({"type": "profile_data", "stage": "data_quality_inspection", "profile": "ydata"})
 
         private_dir = Path(env.get_summary()["private_episode_dir"])
         assert (private_dir / "data_profile_ydata.html").exists()
@@ -767,9 +932,9 @@ alt_model.fit(X_train, y_train)
                 execute=True,
             )
         )
-        listed = env.step({"type": "list_candidates"})
-        checked = env.step({"type": "check_candidate", "model_var": "auto"})
-        quick = env.step({"type": "quick_validate", "model_var": "auto"})
+        listed = env.step({"type": "list_candidates", "stage": "candidate_training"})
+        checked = env.step({"type": "check_candidate", "stage": "validation_analysis", "model_var": "auto"})
+        quick = env.step({"type": "quick_validate", "stage": "validation_analysis", "model_var": "auto"})
 
         assert "alt_model" in listed.stdout
         assert "alt_model" in checked.stdout
@@ -784,7 +949,7 @@ def test_cleanlab_diagnose_disabled_fallback(tmp_path, monkeypatch):
     monkeypatch.delenv("AUTOVIBE_ENABLE_CLEANLAB", raising=False)
     env = _make_env(tmp_path)
     try:
-        observation = env.step({"type": "cleanlab_diagnose", "model_var": "auto"})
+        observation = env.step({"type": "cleanlab_diagnose", "stage": "validation_analysis", "model_var": "auto"})
 
         assert "[CLEANLAB DIAGNOSTIC]" in observation.stdout
         assert "disabled" in observation.stdout
@@ -822,7 +987,7 @@ model.fit(X, y)
 """.strip()
         env.step(Action.add_cell_action(source, cell_type="code", execute=True))
 
-        observation = env.step({"type": "cleanlab_diagnose", "model_var": "model"})
+        observation = env.step({"type": "cleanlab_diagnose", "stage": "validation_analysis", "model_var": "model"})
 
         private_dir = Path(env.get_summary()["private_episode_dir"])
         assert (private_dir / "cleanlab_diagnostics_private.json").exists()
@@ -862,6 +1027,7 @@ model.fit(X, y)
         observation = env.step(
             {
                 "type": "tune_hyperparameters",
+                "stage": "model_improvement",
                 "model_var": "model",
                 "search_space": {"clf__max_depth": {"type": "int", "low": 1, "high": 2}},
                 "n_trials": 3,
@@ -871,7 +1037,7 @@ model.fit(X, y)
 
         assert "[TUNING]" in observation.stdout
         assert "new_model_var=tuned_model" in observation.stdout
-        listed = env.step({"type": "list_candidates"})
+        listed = env.step({"type": "list_candidates", "stage": "candidate_training"})
         assert "tuned_model" in listed.stdout
     finally:
         env.close()

@@ -11,7 +11,7 @@ import { Donut } from "../components/charts";
 const STEP_ICON: Record<string, string> = {
   add_cell: "plus", update_cell: "edit", edit_cell: "edit", delete_cell: "trash",
   run_cell: "play", restart_and_run_all: "refresh", inspect_notebook: "notebook",
-  validate: "check", submit: "check2",
+  validate: "check", submit: "check2", think: "sparkles",
 };
 
 const TABS = [
@@ -23,17 +23,45 @@ const TABS = [
   { id: "logs", label: "Логи", icon: "terminal" },
 ];
 
-const THOUGHT_ACTION_LABEL: Record<string, string> = {
+const ACTION_TYPE_LABEL: Record<string, string> = {
   code: "код", add_cell: "ячейка", update_cell: "правка", delete_cell: "удаление",
   run_cell: "запуск", restart_and_run_all: "перезапуск", validate: "валидация",
-  submit: "сабмит", finalize: "финал", inspect_notebook: "осмотр",
+  submit: "сабмит", finalize: "финал", inspect_notebook: "осмотр", think: "мысль",
 };
+
+const STAGE_LABELS: Record<string, string> = {
+  planning: "Планирование",
+  data_schema_inspection: "Структура данных",
+  target_metric_inspection: "Target и метрика",
+  data_quality_inspection: "Качество данных",
+  leakage_split_inspection: "Утечки и split",
+  preprocessing_design: "Проектирование preprocessing",
+  feature_pipeline_building: "Сборка pipeline",
+  baseline_modeling: "Baseline-модель",
+  candidate_training: "Обучение candidate",
+  validation_analysis: "Анализ валидации",
+  model_improvement: "Улучшение модели",
+  reproducibility_check: "Проверка воспроизводимости",
+  submission: "Сабмит",
+  unknown: "—",
+};
+
+function stageLabel(stage?: string | null) {
+  return STAGE_LABELS[stage || "unknown"] ?? STAGE_LABELS.unknown;
+}
+
+function actionTone(type: string) {
+  if (type === "submit") return "green";
+  if (type === "validate" || type === "quick_validate" || type === "check_candidate") return "blue";
+  if (type === "think") return "accent";
+  return "neutral";
+}
 
 function ThoughtsTab({ id, live }: { id: string; live: boolean }) {
   const { data, loading } = useAsync(() => api.thoughts(id), [id], live ? 2500 : 0);
   if (loading && !data) return <Skeleton h={200} />;
-  const notes = data ?? [];
-  if (!notes.length)
+  const thoughtItems = data ?? [];
+  if (!thoughtItems.length)
     return (
       <EmptyState
         icon="sparkles"
@@ -43,7 +71,7 @@ function ThoughtsTab({ id, live }: { id: string; live: boolean }) {
     );
   return (
     <div className="thoughts">
-      {notes.map((n, i) => (
+      {thoughtItems.map((n, i) => (
         <div key={i} className="thought">
           <div className="thought-rail">
             <span className="thought-dot" />
@@ -51,9 +79,10 @@ function ThoughtsTab({ id, live }: { id: string; live: boolean }) {
           <div className="thought-body">
             <div className="thought-head">
               <span className="st mono">шаг {n.step}</span>
-              <span className="tag">{THOUGHT_ACTION_LABEL[n.action] ?? n.action}</span>
+              <span className="tag">{ACTION_TYPE_LABEL[n.type] ?? n.type}</span>
+              <span className="tag">{stageLabel(n.stage)}</span>
             </div>
-            <div className="thought-text">{n.text}</div>
+            <div className="thought-text">{n.thoughts}</div>
           </div>
         </div>
       ))}
@@ -115,16 +144,19 @@ function TrajectoryTab({ id, live }: { id: string; live: boolean }) {
       {steps.map((s, i) => (
         <div key={i} className={`traj-step${live && i === steps.length - 1 ? " before-live" : ""}`}>
           <div className="traj-marker">
-            <div className={`traj-dot ${s.action}`}>
-              <Icon name={STEP_ICON[s.kind ?? ""] ?? (s.action === "submit" ? "check2" : s.action === "validate" ? "check" : "code")} size={15} />
+            <div className={`traj-dot ${s.type}`}>
+              <Icon name={STEP_ICON[s.type] ?? "code"} size={15} />
             </div>
           </div>
           <div className="traj-card">
             <div className="th">
               <span className="st">шаг {s.step}</span>
-              <Tag tone={s.action === "submit" ? "green" : s.action === "validate" ? "blue" : "neutral"}>{s.title}</Tag>
+              <Tag tone={actionTone(s.type)}>{ACTION_TYPE_LABEL[s.type] ?? s.type}</Tag>
+              <Tag tone="neutral">{stageLabel(s.stage)}</Tag>
+              <span className="st">{s.title}</span>
               {s.budgetRemaining !== undefined && s.budgetRemaining !== null && <span className="st">осталось {s.budgetRemaining}</span>}
             </div>
+            {s.thoughts && <div className="thought-inline">{s.thoughts}</div>}
             {s.code && <CodeBlock code={s.code} />}
             {s.feedback.map((f, fi) => (
               <div key={fi} className="fb">
@@ -213,7 +245,7 @@ function LogsTab({ id, live }: { id: string; live: boolean }) {
           {msgs.map((m, i) => (
             <div key={i} className={`log-msg ${m.role}`}>
               <div className="role">{m.role === "assistant" ? "агент" : m.role === "tool" ? "среда" : m.role}</div>
-              {m.role === "assistant" && m.action !== "submit" ? <CodeBlock code={m.text} /> : <pre>{m.text}</pre>}
+              {m.role === "assistant" && m.type !== "submit" ? <CodeBlock code={m.text} /> : <pre>{m.text}</pre>}
             </div>
           ))}
         </div>
@@ -280,6 +312,8 @@ export default function RunDetail() {
             <ChipMetric label="ошибок" value={run.errors} />
             <span className="vline" />
             <ChipMetric label="шагов" value={`${run.step}${run.steps ? `/${run.steps}` : ""}`} />
+            <span className="vline" />
+            <ChipMetric label="Этап" value={stageLabel(run.currentStage)} />
             <span className="vline" />
             <ChipMetric label="токены (in+out)" value={`${formatTokens(run.tokIn)} + ${formatTokens(run.tokOut)}`} />
             <span className="vline" />

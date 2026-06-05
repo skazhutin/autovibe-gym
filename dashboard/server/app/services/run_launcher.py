@@ -144,7 +144,7 @@ def _runner_args(cfg: dict[str, Any]) -> list[str]:
         if cfg.get("maxSteps"):
             args += ["--max-steps", str(cfg["maxSteps"])]
         # Persistent agent scratchpad — only the notebook (gym/iterative) modes
-        # support it (multi-turn, so notes can be re-shown to the agent).
+        # support it (multi-turn, so thoughts can be re-shown to the agent).
         if cfg.get("enableThoughts"):
             args += ["--enable-thoughts"]
         # Checklist hint frequency (only gym_with_checklist emits hints).

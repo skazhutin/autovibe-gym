@@ -240,12 +240,49 @@ def _feedback_trace(episode_dir: Path | None) -> list[dict]:
     return _read_json(episode_dir / "feedback_trace.json") or []
 
 
+def _episode_summary(episode_dir: Path | None) -> dict[str, Any]:
+    if not episode_dir:
+        return {}
+    data = _read_json(episode_dir / "episode_summary.json")
+    return data if isinstance(data, dict) else {}
+
+
 def thoughts(episode_dir: Path | None) -> list[dict]:
-    """Agent scratchpad notes (when the run had the thoughts mode on)."""
+    """Visible agent thoughts (when the run had thoughts mode on)."""
     if not episode_dir:
         return []
     data = _read_json(episode_dir / "scratchpad.json")
-    return data if isinstance(data, list) else []
+    if not isinstance(data, list):
+        return []
+    out: list[dict] = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        text = item.get("thoughts")
+        # Read legacy scratchpad.json files without exposing legacy field names.
+        if text is None:
+            text = item.get("text")
+        out.append({
+            "step": item.get("step"),
+            "type": item.get("type") or item.get("action") or "think",
+            "stage": item.get("stage") or "unknown",
+            "thoughts": text or "",
+            "timestamp": item.get("timestamp"),
+        })
+    return out
+
+
+def current_stage(episode_dir: Path | None) -> str | None:
+    summary = _episode_summary(episode_dir)
+    if summary.get("current_stage"):
+        return str(summary["current_stage"])
+    for entry in reversed(_feedback_trace(episode_dir)):
+        if entry.get("stage"):
+            return str(entry["stage"])
+    for entry in reversed(_events(episode_dir)):
+        if entry.get("stage"):
+            return str(entry["stage"])
+    return None
 
 
 def _notebook_path(episode_dir: Path | None) -> Path | None:
@@ -314,20 +351,21 @@ def _channel(item: dict) -> str:
 def trajectory(episode_dir: Path | None) -> list[dict[str, Any]]:
     steps: list[dict] = []
     for entry in _feedback_trace(episode_dir):
-        action = entry.get("action", "code")
+        action_type = entry.get("type") or entry.get("action") or "code"
         title = {
             "add_cell": "Добавлена ячейка", "edit_cell": "Изменена ячейка",
             "update_cell": "Изменена ячейка", "delete_cell": "Удалена ячейка",
             "run_cell": "Выполнена ячейка", "restart_and_run_all": "Чистый перезапуск",
             "validate": "Валидация кандидата", "submit": "Финальный сабмит",
-        }.get(action, action)
+            "think": "Мысль агента",
+        }.get(action_type, action_type)
         feedback = [{"ch": _channel(it), "text": it.get("message", "")} for it in (entry.get("feedback_items") or [])]
         if entry.get("stderr"):
             feedback.append({"ch": "runtime", "text": entry["stderr"].strip()[:2000]})
-        ui_action = "submit" if action == "submit" else ("validate" if action == "validate" else "code")
         steps.append({
-            "step": entry.get("step"), "action": ui_action, "kind": action, "title": title,
+            "step": entry.get("step"), "type": action_type, "stage": entry.get("stage") or "unknown", "title": title,
             "code": entry.get("code") or "", "budgetRemaining": entry.get("budget_remaining"),
+            "thoughts": entry.get("thoughts") or "",
             "feedback": feedback,
         })
     return steps
@@ -351,9 +389,10 @@ def errors(episode_dir: Path | None) -> list[dict[str, Any]]:
 def logs(episode_dir: Path | None) -> list[dict[str, Any]]:
     msgs: list[dict] = []
     for entry in _feedback_trace(episode_dir):
+        action_type = entry.get("type") or entry.get("action")
         code = entry.get("code") or ""
         if code:
-            msgs.append({"role": "assistant", "text": code, "action": entry.get("action")})
+            msgs.append({"role": "assistant", "text": code, "type": action_type})
         parts = []
         if entry.get("stdout"):
             parts.append(entry["stdout"].rstrip())
@@ -447,5 +486,6 @@ def episode_progress(episode_dir: Path | None, target_col: str = "") -> dict[str
         "checklist": closed,
         "checklistTotal": CHECK_TOTAL,
         "checklistCoverage": coverage,
+        "currentStage": current_stage(episode_dir),
         "notebookCells": len([c for c in nb["cells"] if c["type"] == "code"]),
     }

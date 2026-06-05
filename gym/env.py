@@ -9,7 +9,7 @@ from .cell_history import CellHistory
 from .checklist import Checklist
 from .data_profile import build_dataset_card, format_profile_for_agent, build_compact_profile
 from .executor import CodeExecutor
-from .protocol import Action, Observation, StepResult, coerce_action
+from .protocol import AGENT_STAGE_VALUES, Action, ActionParseError, Observation, StepResult, coerce_action
 from .workspace import Workspace
 
 MODEL_VALIDATION_HINT = (
@@ -97,6 +97,8 @@ class GymEnv:
         self.final_status: str | None = None
         self.null_reason: str | None = None
         self._start_time = time.time()
+        self.enable_thoughts = False
+        self.current_stage: str | None = None
 
     def reset(self) -> dict:
         self.state.step = 0
@@ -109,6 +111,7 @@ class GymEnv:
         self.final_status = None
         self.null_reason = None
         self._start_time = time.time()
+        self.current_stage = None
         return self._build_context_prompt()
 
     def step(self, action: Action | dict[str, Any] | str) -> Observation:
@@ -116,7 +119,22 @@ class GymEnv:
         if self.state.submitted:
             raise RuntimeError("Environment already finalized via submit().")
 
-        parsed = coerce_action(action)
+        try:
+            parsed = coerce_action(action)
+        except ActionParseError as exc:
+            return self._contract_observation("invalid_action", str(exc), action_type="invalid_action")
+        contract_error = self._validate_action_contract(parsed)
+        if contract_error is not None:
+            key, message = contract_error
+            return self._contract_observation(
+                key,
+                message,
+                action_type=parsed.type,
+                stage=parsed.stage or None,
+                thoughts=parsed.thoughts or None,
+                model_var=parsed.model_var if parsed.type == "validate" else None,
+            )
+        self.current_stage = parsed.stage
         if parsed.type == "submit":
             return self.submit_by_name(parsed.model_var)
         if parsed.type == "validate":
@@ -175,6 +193,7 @@ class GymEnv:
                     action=parsed.type,
                     step=self.state.step,
                     budget_remaining=self.budget_remaining(),
+                    stage=parsed.stage,
                     stdout=f"[{parsed.type.upper()}] This tool is available in NotebookGymEnv.",
                     checklist_coverage=self.checklist.coverage(),
                     model_var=parsed.model_var,
@@ -182,6 +201,49 @@ class GymEnv:
             )
 
         return self._run_code(parsed)
+
+    def _validate_action_contract(self, action: Action) -> tuple[str, str] | None:
+        if not action.stage:
+            return (
+                "missing_stage",
+                "Every JSON action must include a non-empty 'stage' from the allowed stage enum.",
+            )
+        if action.stage not in AGENT_STAGE_VALUES:
+            return (
+                "unknown_stage",
+                f"Unknown stage '{action.stage}'. Use one of the allowed stage values.",
+            )
+        if action.type == "think":
+            return ("think_disabled", "Thoughts mode is disabled, so type 'think' is not allowed.")
+        if action.stage == "planning":
+            return ("planning_disabled", "Thoughts mode is disabled, so stage 'planning' is not allowed.")
+        if action.thoughts:
+            return ("thoughts_disabled", "Thoughts mode is disabled, so do not include 'thoughts'.")
+        return None
+
+    def _contract_observation(
+        self,
+        key: str,
+        message: str,
+        *,
+        action_type: str,
+        stage: str | None = None,
+        thoughts: str | None = None,
+        model_var: str | None = None,
+    ) -> Observation:
+        del key
+        return self._record_observation(
+            Observation(
+                action=action_type,
+                step=self.state.step,
+                budget_remaining=self.budget_remaining(),
+                stage=stage,
+                thoughts=thoughts,
+                stderr=message,
+                checklist_coverage=self.checklist.coverage(),
+                model_var=model_var,
+            )
+        )
 
     def submit_by_name(self, model_var: str = "model") -> Observation:
         """Submit a model stored in the workspace by variable name."""
@@ -346,14 +408,18 @@ class GymEnv:
                 "it can predict raw validation features. Fix any [MODEL CHECK] "
                 "feedback before submitting.\n\n"
                 "Each response must be one JSON action:\n"
-                '  {"type": "code", "code": "print(train_df.shape)"}\n'
-                '  {"type": "submit", "model_var": "best_model"}\n\n'
+                '  {"type": "code", "stage": "data_schema_inspection", "code": "print(train_df.shape)"}\n'
+                '  {"type": "submit", "stage": "submission", "model_var": "best_model"}\n\n'
+                "Every action must include a non-planning stage. Thoughts mode is disabled here: "
+                "do not include thoughts, do not use type think, and do not use stage planning.\n\n"
                 "Use code actions to train and compare models. Submit exactly once "
                 "when your best model is assigned to a workspace variable."
             )
         }
 
     def _record_observation(self, observation: Observation) -> Observation:
+        if observation.stage is None:
+            observation.stage = self.current_stage
         self.state.history.append(observation)
         self.state.cell_history.append_observation(observation)
         return observation

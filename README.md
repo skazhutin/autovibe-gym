@@ -156,48 +156,55 @@ GymAgent
   -> next JSON Action
 ```
 
-Actions:
+Actions always use canonical `type` and must include a deterministic `stage`:
 
 ```json
-{"type": "code", "code": "print(train_df.shape)"}
+{"type": "code", "stage": "data_schema_inspection", "code": "print(train_df.shape)"}
 ```
 
 Legacy `code` actions are still accepted, but the current protocol is
 cell-oriented:
 
 ```json
-{"type": "add_cell", "cell_type": "code", "source": "print(train_df.shape)", "execute": true}
+{"type": "add_cell", "stage": "feature_pipeline_building", "cell_type": "code", "source": "print(train_df.shape)", "execute": true}
 ```
 
 ```json
-{"type": "restart_and_run_all"}
+{"type": "restart_and_run_all", "stage": "reproducibility_check"}
 ```
 
 ```json
-{"type": "validate", "model_var": "model"}
+{"type": "validate", "stage": "validation_analysis", "model_var": "model"}
 ```
 
 ```json
-{"type": "submit", "model_var": "model"}
+{"type": "submit", "stage": "submission", "model_var": "model"}
+```
+
+When `--enable-thoughts` is set, every action also includes a short visible
+`thoughts` summary. The first action must be a non-mutating planning thought:
+
+```json
+{"type": "think", "stage": "planning", "thoughts": "I will inspect the data, build and validate a reproducible pipeline, and submit only when ready."}
 ```
 
 Useful gym tools are also JSON actions:
 
 ```json
-{"type": "inspect_data"}
-{"type": "profile_data", "profile": "compact"}
-{"type": "list_candidates"}
-{"type": "check_candidate", "model_var": "auto"}
-{"type": "quick_validate", "model_var": "auto"}
-{"type": "finalize", "model_var": "auto"}
+{"type": "inspect_data", "stage": "data_schema_inspection"}
+{"type": "profile_data", "stage": "data_quality_inspection", "profile": "compact"}
+{"type": "list_candidates", "stage": "candidate_training"}
+{"type": "check_candidate", "stage": "validation_analysis", "model_var": "auto"}
+{"type": "quick_validate", "stage": "validation_analysis", "model_var": "auto"}
+{"type": "finalize", "stage": "submission", "model_var": "auto"}
 ```
 
 Optional diagnostics are available when configured/installed:
 
 ```json
-{"type": "profile_data", "profile": "ydata"}
-{"type": "cleanlab_diagnose", "model_var": "auto"}
-{"type": "tune_hyperparameters", "model_var": "model", "search_space": {}, "n_trials": 10}
+{"type": "profile_data", "stage": "data_quality_inspection", "profile": "ydata"}
+{"type": "cleanlab_diagnose", "stage": "validation_analysis", "model_var": "auto"}
+{"type": "tune_hyperparameters", "stage": "model_improvement", "model_var": "model", "search_space": {}, "n_trials": 10}
 ```
 
 Each episode creates `solution.ipynb` and treats it as the source of truth.
@@ -225,6 +232,7 @@ notebook_events.json
 feedback_trace.json
 validation_trajectory.json
 episode_summary.json
+scratchpad.json          # only when thoughts mode is enabled
 ```
 
 These public JSON artifacts are sanitized: hidden test metrics, private

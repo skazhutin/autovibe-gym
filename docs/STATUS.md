@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-05 (full visibility for failed runs across all modes)
+**Last updated:** 2026-06-06 (deterministic action type/stage/thoughts observability)
 **Phase:** Hardening after first full H200 recon + building the local control-panel dashboard for configuring/launching/inspecting runs.
 
 ---
@@ -21,14 +21,14 @@ test, sandbox, and logging gaps.
 |------|--------|-------|
 | `notebook.py` | Done | nbformat v4 document editing, stable cell ids, revisions, outputs, Python export |
 | `jupyter_kernel.py` | Done | persistent local `ipykernel`; Docker kernel backend with loopback-only ZMQ ports and workspace path translation |
-| `notebook_env.py` | Done | real notebook action loop, clean restart-and-run-all, validate, submit, public/private artifacts |
+| `notebook_env.py` | Done | real notebook action loop, clean restart-and-run-all, validate, submit, deterministic `type`/`stage`/`thoughts` contract, non-mutating `think`, public/private artifacts |
 | `feedback.py` | Done | runtime/contract/checklist/terminal feedback items and generic hidden checklist policy |
 | `candidates.py` | Done | candidate records and validation registry |
 | `modes.py` | Done | `gym_with_checklist` and `iterative_no_checklist` share the same backend |
-| `protocol.py` | Done | notebook actions added; legacy `code` action remains compatible |
-| `agent.py` | Done | prompt updated for notebook actions and clean-run/validate/submit contract |
+| `protocol.py` | Done | canonical action enum, required stage enum, canonical `thoughts`, and `think`; legacy `code` action remains compatible |
+| `agent.py` | Done | minimal prompt requires `type`/`stage`; thoughts mode requires `thoughts` and initial `think`/`planning` |
 | `llm.py` | Done | OpenAI-compatible, Google/Gemini, and LiteLLM client selection |
-| `env.py` | Legacy maintained | old subprocess/Docker environment retained for compatibility tests |
+| `env.py` | Legacy maintained | old subprocess/Docker environment retained for compatibility tests; rejects `think`/`planning`/`thoughts` because thoughts mode is disabled |
 | `executor.py` | Legacy/baseline | Docker/subprocess executor retained for non-notebook baselines |
 
 ### Experiments (`experiments/`)
@@ -76,8 +76,19 @@ Last local run:
 python -m pytest
 ```
 
-Result after all-mode orchestration: `222 passed` (one sklearn
+Result after deterministic action observability: `236 passed` (one sklearn
 `InconsistentVersionWarning` from the Docker notebook pickle smoke).
+Current deterministic action observability cycle:
+
+- Canonical action schema now uses `type`, required `stage`, canonical
+  `thoughts`, and non-mutating `think`.
+- `python -m pytest` -> `236 passed`, one existing sklearn warning.
+- Dashboard TypeScript build + Vite production build passed via bundled Node
+  runtime (`tsc -b`, `vite build`).
+- Browser smoke on `http://127.0.0.1:8010/runs/live_codex_stage`: Run Detail
+  header showed `Этап = Анализ валидации`; Trajectory rendered `think`,
+  type/stage badges, and inline thoughts; Thoughts tab rendered scratchpad
+  entries; desktop and mobile viewport console checks had no warnings/errors.
 Current dashboard multi-select cycle:
 
 - `python -m pytest tests/test_dashboard.py tests/test_experiments.py` -> `39 passed`
@@ -309,6 +320,7 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 
 | Date | Change |
 |------|--------|
+| 2026-06-06 | Deterministic action observability: agent JSON actions now use canonical `type`, required ordered `stage`, canonical `thoughts` in thoughts mode, and non-mutating `think`; NotebookGymEnv/GymEnv enforce the contract, artifacts/API/dashboard expose current stage and thoughts, docs/tests updated |
 | 2026-06-05 | Failed runs now expose all available info across every mode: repeated single-shot writes a full multi-attempt episode (every attempt's code + error visible in Notebook/Trajectory/Errors/Logs, not just the best), the run record carries `failReason`/`finalStatus` from the runner's `null_reason`/`final_status`, and the detail page always shows the fail banner with the status label |
 | 2026-06-05 | Dashboard launcher clamps `--max-tokens` to the selected model's `maxTokens` cap, so providers with tight per-minute token limits (e.g. Groq free ~6000 TPM) don't 413 when the New Run form leaves the default high |
 | 2026-06-05 | Dashboard tabs visual fix: removed the 1px vertical overflow in tab menus by moving the divider into the tab strip and dropping the negative tab margin |
@@ -316,7 +328,7 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 | 2026-06-04 | Dashboard sidebar cleanup: removed the bottom `Команда / локальный режим` block and its unused styles |
 | 2026-06-04 | Normalized product-mode display labels: dashboard short labels now show `Flexible gym`, and fixed transitions display as `Fixed gym` in dashboard and shared matrix metadata |
 | 2026-06-02 | Dashboard trajectory visual fix: aligned the live "агент выполняет шаг…" spinner with the timeline marker column and adjusted the connector so the grey line meets the spinner's top center |
-| 2026-06-02 | Agent thoughts/scratchpad: optional `notes` field on any action; with `--enable-thoughts` (gym/iterative) the env stores notes, re-injects them every turn ([YOUR NOTES SO FAR]), persists `scratchpad.json`. Dashboard: New Run toggle (gym/iterative) + a «Мысли» tab rendering the notes timeline. One PR. |
+| 2026-06-02 | Agent thoughts/scratchpad: initial visible-thoughts support for gym/iterative runs with `--enable-thoughts`, persistent `scratchpad.json`, context reinjection, dashboard New Run toggle, and a «Мысли» tab. |
 | 2026-06-03 | Propagated child runner failures from `experiments.run`: batch summaries still print, but the wrapper exits non-zero when any selected product mode fails |
 | 2026-06-03 | Cleaned up New Run budget controls: removed the budget-preset subhint and added Problems-style tooltip hints to budget parameter fields |
 | 2026-06-03 | Added two-state environment badges to New Run mode cards: `Среда` for the three environment-backed modes and `Без среды` for the two non-environment modes |
@@ -330,7 +342,7 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 | 2026-06-02 | Single-shot/repeated now show code + checklist coverage in the dashboard: the legacy runners emit a synthesized episode (solution.ipynb, notebook_events, feedback_trace, summary) into `--workspace-dir` and log `checklist_coverage` measured from the generated code, so Notebook/Trajectory/Checklist tabs populate for these modes too |
 | 2026-06-02 | Single-shot/repeated now produce a score locally: raised legacy executor timeout 60→300s, prompts require a fitted predict-ready model, and the runner auto-fits an unfitted submitted model before scoring (gpt-oss-120b left it unfitted). Verified single_shot=0.931 f1 on example_dry_bean |
 | 2026-06-02 | Dashboard local-execution fix: single-shot/repeated use the legacy executor which defaulted to `docker` from .env → "no candidate" on a Mac without Docker. Local launches now force the in-process `subprocess` executor + local kernel (env `AUTOVIBE_DASHBOARD_EXECUTOR`) |
-| 2026-06-02 | Dashboard visual polish: fixed sidebar (position:fixed), dumbbell logo replacing the «A» mark, cleaner gear/trash icons, and a rebuilt trajectory timeline — per-step icon badges by step kind (add/edit/delete/restart/run/validate/submit) with opaque fills and a clean connector line |
+| 2026-06-02 | Dashboard visual polish: fixed sidebar (position:fixed), dumbbell logo replacing the «A» mark, cleaner gear/trash icons, and a rebuilt trajectory timeline — per-step icon badges by step type (add/edit/delete/restart/run/validate/submit) with opaque fills and a clean connector line |
 | 2026-06-02 | Dashboard checklist consistency: tab count uses the recorded `checklist_coverage` (single source of truth, matches the run banner) and exactly that many items render green; aligned the live-banner count to the same formula |
 | 2026-06-02 | Dashboard execution modes: per-run selector «на сервере (SSH) / на компьютере» on New Run (overrides the global default); local mode runs gym on the machine and calls the remote LLM (works off-VPN) |
 | 2026-06-02 | Dashboard remote execution: run the gym on the GPU server over SSH while the site stays local (`services/remote_exec.py`: ssh/rsync launch + artifact sync + run-summary parse; key auth or optional expect password); configurable in Settings with a connectivity probe |

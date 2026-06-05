@@ -95,7 +95,7 @@ def main():
     )
     parser.add_argument("--workspace-dir", default=None)
     parser.add_argument("--enable-thoughts", action="store_true",
-                        help="Let the agent keep a persistent scratchpad of notes.")
+                        help="Let the agent keep a persistent scratchpad of visible thoughts.")
     parser.add_argument("--hint-cooldown", type=int, default=2,
                         help="Steps between consecutive checklist hints (gym mode).")
     parser.add_argument("--experiment-name", default="autovibe-gym")

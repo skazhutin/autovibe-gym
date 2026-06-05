@@ -169,12 +169,50 @@ def test_reset_clears_cell_history():
     assert len(env.state.cell_history) == 0
 
 
+def test_legacy_env_rejects_noncanonical_action_contract_fields():
+    env = _make_env()
+    env.reset()
+
+    missing_stage = env.step({"type": "inspect_data"})
+    assert "stage" in missing_stage.stderr
+    assert missing_stage.step == 0
+
+    unknown_stage = env.step({"type": "inspect_data", "stage": "made_up_stage"})
+    assert "Unknown stage" in unknown_stage.stderr
+    assert unknown_stage.step == 0
+
+    thinking = env.step(
+        {
+            "type": "think",
+            "stage": "validation_analysis",
+            "thoughts": "Reflecting should be disabled here.",
+        }
+    )
+    assert "type 'think' is not allowed" in thinking.stderr
+    assert thinking.step == 0
+
+    planning = env.step({"type": "inspect_data", "stage": "planning"})
+    assert "stage 'planning' is not allowed" in planning.stderr
+    assert planning.step == 0
+
+    thoughted = env.step(
+        {
+            "type": "inspect_data",
+            "stage": "data_schema_inspection",
+            "thoughts": "Disabled mode should reject this.",
+        }
+    )
+    assert "do not include 'thoughts'" in thoughted.stderr
+    assert thoughted.step == 0
+
+
 def test_manual_preprocessing_model_gets_raw_validation_hint():
     env = _make_categorical_env()
     env.reset()
 
     result = env.step({
         "type": "code",
+        "stage": "feature_pipeline_building",
         "code": """
 from sklearn.linear_model import LogisticRegression
 
@@ -196,6 +234,7 @@ def test_pipeline_model_passes_raw_validation_check():
 
     result = env.step({
         "type": "code",
+        "stage": "feature_pipeline_building",
         "code": """
 from sklearn.compose import ColumnTransformer
 from sklearn.dummy import DummyClassifier
@@ -231,6 +270,7 @@ def test_submit_with_raw_validation_failure_does_not_finalize_env():
     env.reset()
     env.step({
         "type": "code",
+        "stage": "feature_pipeline_building",
         "code": """
 from sklearn.linear_model import LogisticRegression
 
@@ -241,7 +281,7 @@ best_model.fit(X_train, y_train)
 """.strip(),
     })
 
-    result = env.step({"type": "submit", "model_var": "best_model"})
+    result = env.step({"type": "submit", "stage": "submission", "model_var": "best_model"})
 
     assert result.submitted is False
     assert env.state.submitted is False
@@ -275,6 +315,7 @@ def test_hidden_test_failure_closes_without_leaking_hidden_values():
     env.reset()
     train_result = env.step({
         "type": "code",
+        "stage": "feature_pipeline_building",
         "code": """
 from sklearn.compose import ColumnTransformer
 from sklearn.dummy import DummyClassifier
@@ -295,7 +336,7 @@ best_model.fit(X_train, y_train)
     })
     assert "[MODEL CHECK]" not in "\n".join(train_result.hints)
 
-    result = env.step({"type": "submit", "model_var": "best_model"})
+    result = env.step({"type": "submit", "stage": "submission", "model_var": "best_model"})
 
     assert result.submitted is True
     assert result.done is True

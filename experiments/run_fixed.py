@@ -19,9 +19,7 @@ import time
 
 from experiments.modes import add_mode_metadata_args, mode_metadata_params
 from gym import NotebookGymEnv
-from dataclasses import replace
-from gym.agent import NOTES_PROMPT, SYSTEM_PROMPT
-from gym.protocol import extract_reasoning
+from gym.agent import SYSTEM_PROMPT, THOUGHTS_DISABLED_PROMPT, THOUGHTS_ENABLED_PROMPT
 from gym.datasets import DatasetSplits, load_dataset_splits, metric_from_name, resolve_metric
 from gym.llm import LiteLLMClient, OpenAICompatibleLLMClient
 from gym.protocol import ACTION_JSON_SCHEMA, Action, ActionParseError
@@ -223,7 +221,9 @@ class FixedTransitionsAgent:
             response = self.client.complete(
                 model=self.model,
                 max_tokens=self.max_tokens,
-                system=SYSTEM_PROMPT + (NOTES_PROMPT if thoughts_on else ""),
+                system=SYSTEM_PROMPT + (
+                    THOUGHTS_ENABLED_PROMPT if thoughts_on else THOUGHTS_DISABLED_PROMPT
+                ),
                 messages=self.messages,
             )
             stage_turns += 1
@@ -247,10 +247,6 @@ class FixedTransitionsAgent:
                 })
                 continue
 
-            if thoughts_on and not getattr(action, "notes", ""):
-                prose = extract_reasoning(response.text)
-                if len(prose) >= 4:
-                    action = replace(action, notes=prose[:4000])
             observation = self.env.step(action)
             last_action = action.type
             if action.type in CODE_OR_NOTEBOOK_STEP_ACTIONS:
@@ -451,7 +447,7 @@ def main():
     parser.add_argument("--sandbox-timeout", type=int, default=None)
     parser.add_argument("--workspace-dir", default=None)
     parser.add_argument("--enable-thoughts", action="store_true",
-                        help="Let the agent keep a persistent scratchpad of notes.")
+                        help="Let the agent keep a persistent scratchpad of visible thoughts.")
     parser.add_argument("--experiment-name", default="autovibe-gym")
     parser.add_argument("--run-name", default=None)
     add_mode_metadata_args(parser)

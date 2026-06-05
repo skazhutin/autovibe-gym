@@ -35,7 +35,7 @@ from .jupyter_kernel import (
 )
 from .modes import EpisodeMode, resolve_episode_mode
 from .notebook import NotebookDocument
-from .protocol import Action, Observation, coerce_action
+from .protocol import AGENT_STAGE_VALUES, Action, ActionParseError, Observation, coerce_action
 
 
 def _default_kernel_backend() -> KernelExecutionBackend:
@@ -225,6 +225,9 @@ class NotebookGymEnv:
         self._model_check_seen: set[tuple[str, str | None, str]] = set()
         self._agent_trace_turn = 0
         self._start_time = time.time()
+        self.current_stage: str | None = None
+        self._accepted_agent_actions = 0
+        self._active_action: Action | None = None
 
     def reset(self) -> dict:
         self.close()
@@ -272,6 +275,9 @@ class NotebookGymEnv:
         self._model_check_seen = set()
         self._agent_trace_turn = 0
         self._start_time = time.time()
+        self.current_stage = None
+        self._accepted_agent_actions = 0
+        self._active_action = None
         self._save_artifacts()
         return self._build_context_prompt()
 
@@ -289,9 +295,29 @@ class NotebookGymEnv:
     def step(self, action: Action | dict[str, Any] | str) -> Observation:
         if self.state.submitted:
             raise RuntimeError("Environment already finalized via submit().")
-        parsed = coerce_action(action)
-        if self.enable_thoughts and getattr(parsed, "notes", ""):
-            self._add_note(parsed.notes, parsed.type)
+        try:
+            parsed = coerce_action(action)
+        except ActionParseError as exc:
+            return self._reject_action_contract(
+                "invalid_action",
+                str(exc),
+                action_type="invalid_action",
+            )
+
+        contract_error = self._validate_action_contract(parsed)
+        if contract_error is not None:
+            key, message = contract_error
+            return self._reject_action_contract(
+                key,
+                message,
+                action_type=parsed.type,
+                stage=parsed.stage or None,
+                thoughts=parsed.thoughts or None,
+                model_var=parsed.model_var if parsed.type == "validate" else None,
+                cell_id=parsed.cell_id,
+            )
+
+        self._accept_action(parsed)
         if self.state.step >= self.state.max_steps and parsed.type not in {"submit", "finalize"}:
             observation = self._observation(
                 action=parsed.type,
@@ -311,7 +337,15 @@ class NotebookGymEnv:
         self._consume_step(parsed)
 
         if parsed.type == "code":
-            parsed = Action.add_cell_action(parsed.code, cell_type="code", execute=True)
+            parsed = Action.add_cell_action(
+                parsed.code,
+                cell_type="code",
+                execute=True,
+                stage=parsed.stage,
+                thoughts=parsed.thoughts,
+            )
+        if parsed.type == "think":
+            return self._think(parsed)
         if parsed.type == "add_cell":
             return self._add_cell(parsed)
         if parsed.type == "update_cell":
@@ -371,6 +405,7 @@ class NotebookGymEnv:
 
     def _consume_step(self, action: Action) -> None:
         tool_actions = {
+            "think",
             "submit",
             "inspect_data",
             "profile_data",
@@ -382,11 +417,96 @@ class NotebookGymEnv:
             "finalize",
         }
         if action.type in tool_actions:
-            if action.type != "submit":
+            if action.type not in {"submit", "think"}:
                 self.tool_calls_total += 1
             return
         else:
             self.state.step += 1
+
+    def _validate_action_contract(self, action: Action) -> tuple[str, str] | None:
+        if not action.stage:
+            return (
+                "missing_stage",
+                "Every JSON action must include a non-empty 'stage' from the allowed stage enum.",
+            )
+        if action.stage not in AGENT_STAGE_VALUES:
+            return (
+                "unknown_stage",
+                f"Unknown stage '{action.stage}'. Use one of the allowed stage values.",
+            )
+        has_thoughts = bool((action.thoughts or "").strip())
+        if not self.enable_thoughts:
+            if action.type == "think":
+                return (
+                    "think_disabled",
+                    "Thoughts mode is disabled, so type 'think' is not allowed.",
+                )
+            if action.stage == "planning":
+                return (
+                    "planning_disabled",
+                    "Thoughts mode is disabled, so stage 'planning' is not allowed.",
+                )
+            if has_thoughts:
+                return (
+                    "thoughts_disabled",
+                    "Thoughts mode is disabled, so do not include 'thoughts'.",
+                )
+            return None
+
+        if not has_thoughts:
+            return (
+                "missing_thoughts",
+                "Thoughts mode is enabled, so every JSON action must include non-empty 'thoughts'.",
+            )
+        if self._accepted_agent_actions == 0:
+            if action.type != "think" or action.stage != "planning":
+                return (
+                    "initial_planning_required",
+                    "Thoughts mode is enabled, so the first action must be type 'think' with stage 'planning'.",
+                )
+            return None
+        if action.stage == "planning":
+            return (
+                "planning_repeated",
+                "Stage 'planning' is only allowed for the first thoughts-enabled think action.",
+            )
+        return None
+
+    def _accept_action(self, action: Action) -> None:
+        self.current_stage = action.stage
+        self._active_action = action
+        self._accepted_agent_actions += 1
+        if self.enable_thoughts and action.thoughts:
+            self._add_thought(action)
+
+    def _reject_action_contract(
+        self,
+        key: str,
+        message: str,
+        *,
+        action_type: str,
+        stage: str | None = None,
+        thoughts: str | None = None,
+        model_var: str | None = None,
+        cell_id: str | None = None,
+    ) -> Observation:
+        feedback = self._contract_feedback(key, message, severity="blocker", cell_id=cell_id)
+        self._record_event(
+            action=action_type,
+            stage=stage,
+            thoughts=thoughts,
+            blocked=key,
+        )
+        observation = self._observation(
+            action=action_type,
+            feedback_items=[feedback],
+            done=False,
+            model_var=model_var,
+            cell_id=cell_id,
+            stage=stage,
+            thoughts=thoughts,
+        )
+        return self._record_observation(observation)
 
     def restart_and_run_all(self) -> Observation:
         self.kernel.restart()
@@ -825,7 +945,8 @@ class NotebookGymEnv:
         summary = {
             "steps_used": self.state.step,
             "thoughts_enabled": self.enable_thoughts,
-            "notes_count": len(self.scratchpad),
+            "thoughts_count": len(self.scratchpad),
+            "current_stage": self.current_stage,
             "checklist_coverage": self.checklist.coverage(),
             "private_checklist_coverage": self.checklist.coverage(),
             "error_count": error_count,
@@ -871,6 +992,21 @@ class NotebookGymEnv:
         summary["null_reason"] = null_reason
         summary["finalize_path"] = finalize_path
         return summary
+
+    def _think(self, action: Action) -> Observation:
+        self._record_event(
+            action="think",
+            non_mutating=True,
+            thoughts=action.thoughts,
+            stage=action.stage,
+        )
+        observation = self._observation(
+            action="think",
+            stdout="[THINK] Thought recorded. Notebook, kernel, data, validation, and submission state were not changed.",
+            stage=action.stage,
+            thoughts=action.thoughts,
+        )
+        return self._record_observation(observation)
 
     def _add_cell(self, action: Action) -> Observation:
         # Weak models sometimes emit add_cell with an empty 'source' (or put the
@@ -1066,6 +1202,8 @@ class NotebookGymEnv:
         final_status: str | None = None,
         null_reason: str | None = None,
         finalize_path: str | None = None,
+        stage: str | None = None,
+        thoughts: str | None = None,
     ) -> Observation:
         feedback_items = feedback_items or []
         stderr = "\n".join(
@@ -1073,10 +1211,17 @@ class NotebookGymEnv:
             for item in feedback_items
             if item.visible_to_agent and item.channel == "contract"
         )
+        active = self._active_action
+        observation_stage = stage if stage is not None else (active.stage if active else self.current_stage)
+        observation_thoughts = thoughts if thoughts is not None else (
+            active.thoughts if active and self.enable_thoughts else None
+        )
         return Observation(
             action=action,
             step=self.state.step,
             budget_remaining=self.budget_remaining(),
+            stage=observation_stage,
+            thoughts=observation_thoughts,
             stdout=stdout,
             stderr=stderr,
             hints=hints or [],
@@ -1094,31 +1239,36 @@ class NotebookGymEnv:
         )
 
     def _record_observation(self, observation: Observation) -> Observation:
+        if observation.stage is None:
+            observation.stage = self.current_stage
         self.state.history.append(observation)
         self.feedback_trace.append(self._visible_observation_dict(observation))
         self._save_artifacts()
         return observation
 
-    def _add_note(self, text: str, action_type: str) -> None:
-        """Append a free-form agent note to the persistent scratchpad."""
-        note = {
+    def _add_thought(self, action: Action) -> None:
+        """Append a visible agent thought to the persistent scratchpad."""
+        thought = {
             "step": self.state.step + 1,
-            "action": action_type,
-            "text": str(text).strip(),
+            "type": action.type,
+            "stage": action.stage,
+            "thoughts": str(action.thoughts).strip(),
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         }
-        self.scratchpad.append(note)
-        self._record_event(action="note", note=note["text"])
+        self.scratchpad.append(thought)
 
     def scratchpad_digest(self, max_notes: int = 30, max_chars: int = 4000) -> str:
-        """Render the accumulated notes to re-inject into the agent context."""
+        """Render accumulated visible thoughts to re-inject into the agent context."""
         if not self.scratchpad:
             return ""
-        lines = [f"- (step {n['step']}) {n['text']}" for n in self.scratchpad[-max_notes:]]
+        lines = [
+            f"- (step {n['step']}, {n.get('stage') or 'unknown'}) {n['thoughts']}"
+            for n in self.scratchpad[-max_notes:]
+        ]
         body = "\n".join(lines)
         if len(body) > max_chars:
             body = body[-max_chars:]
-        return "[YOUR NOTES SO FAR]\n" + body
+        return "[YOUR THOUGHTS SO FAR]\n" + body
 
     def _record_event(self, **event: Any) -> None:
         event_record = {
@@ -1127,6 +1277,10 @@ class NotebookGymEnv:
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "notebook_revision": self.notebook.revision,
         }
+        if "stage" not in event and self.current_stage:
+            event_record["stage"] = self.current_stage
+        if "thoughts" not in event and self._active_action and self.enable_thoughts:
+            event_record["thoughts"] = self._active_action.thoughts
         event_record.update(event)
         self.events.append(_json_safe(event_record))
 
@@ -1172,6 +1326,7 @@ class NotebookGymEnv:
         data = observation.to_dict()
         data.pop("test_metric", None)
         data.pop("checklist_coverage", None)
+        data.pop("action", None)
         return _json_safe(data)
 
     def get_public_summary(self) -> dict:
@@ -1198,6 +1353,10 @@ class NotebookGymEnv:
     def _public_event(self, event: dict[str, Any]) -> dict[str, Any]:
         public = copy.deepcopy(event)
         public.pop("private", None)
+        if "type" not in public and "action" in public:
+            public["type"] = public.pop("action")
+        else:
+            public.pop("action", None)
         candidate = public.get("candidate")
         if isinstance(candidate, dict):
             candidate.pop("artifact_path", None)
@@ -2170,6 +2329,7 @@ with open(_AutovibePath({self.kernel.kernel_visible_path(tmp_path)!r}), "rb") as
             "feedback_trace.json",
             "validation_trajectory.json",
             "episode_summary.json",
+            "scratchpad.json",
         ):
             path = self.workspace_dir / filename
             if path.exists():

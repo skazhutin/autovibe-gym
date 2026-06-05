@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import json
 import sys
 from types import SimpleNamespace
 
 import pytest
 
-from dashboard.server.app.config import default_python_bin
+from dashboard.server.app.config import REPO_ROOT, default_python_bin
 from dashboard.server.app.services import mlflow_store, run_launcher
 
 
@@ -153,6 +154,98 @@ def test_checklist_uses_authoritative_fallback_when_episode_artifacts_missing():
 
     assert data["coverage"] == 0.88
     assert data["closed"] == round(0.88 * data["total"])
+
+
+def test_episode_artifacts_expose_current_stage_type_and_thoughts(tmp_path):
+    (tmp_path / "episode_summary.json").write_text(
+        json.dumps({"current_stage": "validation_analysis"}),
+        encoding="utf-8",
+    )
+    (tmp_path / "feedback_trace.json").write_text(
+        json.dumps(
+            [
+                {
+                    "type": "think",
+                    "step": 0,
+                    "budget_remaining": 20,
+                    "stage": "planning",
+                    "thoughts": "I will inspect data, validate a candidate, and submit only when ready.",
+                    "stdout": "[THINK] Thought recorded.",
+                    "feedback_items": [],
+                },
+                {
+                    "type": "add_cell",
+                    "step": 1,
+                    "budget_remaining": 19,
+                    "stage": "feature_pipeline_building",
+                    "thoughts": "I am building a reproducible preprocessing pipeline.",
+                    "code": "model = pipeline",
+                    "feedback_items": [{"channel": "runtime", "message": "ok"}],
+                },
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "scratchpad.json").write_text(
+        json.dumps(
+            [
+                {
+                    "step": 1,
+                    "type": "think",
+                    "stage": "planning",
+                    "thoughts": "I will inspect data first.",
+                    "timestamp": "2026-06-05T00:00:00Z",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "notebook_events.json").write_text(
+        json.dumps(
+            [
+                {"type": "think", "step": 0, "stage": "planning", "non_mutating": True},
+                {"type": "add_cell", "step": 1, "stage": "feature_pipeline_building"},
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    assert mlflow_store.current_stage(tmp_path) == "validation_analysis"
+
+    trajectory = mlflow_store.trajectory(tmp_path)
+    assert trajectory[0]["type"] == "think"
+    assert trajectory[0]["stage"] == "planning"
+    assert trajectory[0]["thoughts"].startswith("I will inspect")
+    assert "action" not in trajectory[0]
+    assert trajectory[1]["type"] == "add_cell"
+    assert trajectory[1]["stage"] == "feature_pipeline_building"
+    assert trajectory[1]["thoughts"] == "I am building a reproducible preprocessing pipeline."
+
+    thoughts = mlflow_store.thoughts(tmp_path)
+    assert thoughts == [
+        {
+            "step": 1,
+            "type": "think",
+            "stage": "planning",
+            "thoughts": "I will inspect data first.",
+            "timestamp": "2026-06-05T00:00:00Z",
+        }
+    ]
+
+    progress = mlflow_store.episode_progress(tmp_path)
+    assert progress["currentStage"] == "validation_analysis"
+
+
+def test_run_detail_frontend_declares_stage_and_think_rendering():
+    source = (REPO_ROOT / "dashboard" / "web" / "src" / "pages" / "RunDetail.tsx").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'label="Этап"' in source
+    assert 'think: "мысль"' in source
+    assert 'planning: "Планирование"' in source
+    assert "stageLabel(s.stage)" in source
+    assert "s.thoughts" in source
 
 
 def test_run_launcher_planned_steps_match_dashboard_modes():
