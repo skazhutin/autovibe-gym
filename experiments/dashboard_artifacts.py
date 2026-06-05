@@ -86,3 +86,103 @@ def write_episode_artifacts(
         "checklist_coverage": coverage,
     })
     return coverage
+
+
+def _attempt_outputs(stdout: str, stderr: str, error_name: str | None) -> list[dict]:
+    outs: list[dict] = []
+    if stdout:
+        outs.append({"output_type": "stream", "name": "stdout", "text": stdout})
+    if error_name:
+        outs.append({"output_type": "error", "ename": error_name,
+                     "evalue": (stderr or "")[:500], "traceback": [stderr or ""]})
+    elif stderr:
+        outs.append({"output_type": "stream", "name": "stderr", "text": stderr})
+    return outs
+
+
+def write_attempts_episode(
+    workspace_dir: str | Path,
+    *,
+    attempts: list[dict[str, Any]],
+    target_col: str = "",
+    coverage: float | None = None,
+    metric_name: str = "metric",
+) -> float | None:
+    """Emit a multi-step episode for the repeated single-shot runner so EVERY
+    attempt — including ones that crashed or never produced a model — shows up in
+    the dashboard Notebook / Trajectory / Errors / Logs tabs, not just the best
+    one. Each ``attempts`` item is a dict with keys: ``attempt`` (1-based),
+    ``code``, ``stdout``, ``stderr``, ``error_name`` (or None), ``val_metric``
+    (or None), ``is_best`` (bool). Returns the checklist coverage that was used.
+    """
+    ws = Path(workspace_dir)
+    ws.mkdir(parents=True, exist_ok=True)
+    if not attempts:
+        return coverage
+
+    # Coverage: prefer the explicit value; else compute from the best (or last)
+    # attempt that actually ran, so a fully-failed run still gets a sane 0-ish.
+    if coverage is None:
+        ref = next((a for a in attempts if a.get("is_best")), attempts[-1])
+        coverage = checklist_coverage(ref.get("code", ""), ref.get("stdout", ""), target_col)
+
+    cells: list[dict] = []
+    events: list[dict] = []
+    trace: list[dict] = []
+    error_count = 0
+    for a in attempts:
+        step = int(a.get("attempt") or (len(events) + 1))
+        code = a.get("code") or ""
+        stdout = a.get("stdout") or ""
+        stderr = a.get("stderr") or ""
+        error_name = a.get("error_name")
+        val_metric = a.get("val_metric")
+        is_best = bool(a.get("is_best"))
+        if error_name:
+            error_count += 1
+        outs = _attempt_outputs(stdout, stderr, error_name)
+
+        if val_metric is not None:
+            head = f"### Попытка {step} — {metric_name} на валидации: {val_metric:.4f}"
+        elif error_name:
+            head = f"### Попытка {step} — ошибка: {error_name}"
+        else:
+            head = f"### Попытка {step} — без валидного кандидата"
+        if is_best:
+            head += "  ·  ✅ лучшая"
+        cells.append({"cell_type": "markdown", "metadata": {}, "source": head})
+        cells.append({"cell_type": "code", "execution_count": step, "metadata": {},
+                      "source": code, "outputs": outs})
+
+        events.append({
+            "step": step, "action": "add_cell", "cell_id": f"attempt_{step:02d}",
+            "source_after": code, "executed": True,
+            "execution_result": {
+                "execution_count": step, "outputs": outs, "stdout": stdout, "stderr": stderr,
+                "error_name": error_name, "error_value": (stderr or "")[:500] if error_name else None,
+                "traceback": [stderr or ""] if error_name else [], "success": error_name is None,
+            },
+        })
+
+        feedback_items: list[dict] = []
+        if val_metric is not None:
+            feedback_items.append({"channel": "validation", "severity": "info",
+                                   "message": f"{metric_name} на валидации: {val_metric:.4f}"
+                                              + ("  (лучшая попытка)" if is_best else "")})
+        if error_name:
+            feedback_items.append({"channel": "runtime", "severity": "error",
+                                   "message": f"{error_name}: {(stderr or '').strip()[:400]}"})
+        trace.append({
+            "action": "add_cell", "step": step, "code": code, "stdout": stdout,
+            "stderr": stderr, "feedback_items": feedback_items,
+        })
+
+    _write(ws / "solution.ipynb",
+           {"cells": cells, "metadata": {}, "nbformat": 4, "nbformat_minor": 5})
+    _write(ws / "notebook_events.json", events)
+    _write(ws / "feedback_trace.json", trace)
+    _write(ws / "episode_summary.json", {
+        "steps_used": len(attempts), "error_count": error_count,
+        "checklist_coverage": coverage,
+    })
+    return coverage

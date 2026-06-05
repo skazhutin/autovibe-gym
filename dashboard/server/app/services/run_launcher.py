@@ -341,7 +341,8 @@ def _refresh(local_id: str) -> dict[str, Any] | None:
         rec = mlflow_store.get_run(mlflow_id)
         if rec:
             for key in ("status", "score", "metric", "checklist", "checklistCoverage",
-                        "checklistTotal", "errors", "step", "steps", "tokIn", "tokOut"):
+                        "checklistTotal", "errors", "step", "steps", "tokIn", "tokOut",
+                        "failReason", "finalStatus"):
                 if key in rec and rec[key] is not None:
                     meta[key] = rec[key]
     if meta["status"] == "running":

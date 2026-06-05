@@ -39,6 +39,7 @@ export interface Run {
   mlflowId?: string | null;
   thoughtsEnabled?: boolean;
   failReason?: string;
+  finalStatus?: string | null;
   command?: string;
 }
 

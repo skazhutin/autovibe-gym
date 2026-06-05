@@ -194,6 +194,8 @@ def main():
         total_output_tokens = 0
         errors_count = 0
         attempt_log = []
+        attempt_records: list[dict] = []
+        best_attempt_idx = -1
 
         for attempt in range(max_attempts):
             prompt = _build_attempt_prompt(task_prompt, best_val, attempt)
@@ -255,6 +257,7 @@ def main():
                         best_model = model_obj
                         best_code = code
                         best_stdout = stdout
+                        best_attempt_idx = attempt
                 except Exception as exc:
                     preflight_error = f"{type(exc).__name__}: {exc}"
                     attempt_error = (attempt_error or "") + f" [val_eval: {preflight_error}]"
@@ -272,6 +275,23 @@ def main():
                 "raw_validation_ready": raw_validation_ready,
                 "submit_preflight_error": preflight_error,
                 "error": attempt_error,
+            })
+            # Extract a short exception label for the notebook error output.
+            error_name = None
+            if attempt_error:
+                for line in reversed((stderr or "").strip().splitlines()):
+                    line = line.strip()
+                    if line and ":" in line and line.split(":", 1)[0].isidentifier():
+                        error_name = line.split(":", 1)[0]
+                        break
+                error_name = error_name or (preflight_error.split(":", 1)[0] if preflight_error else "Error")
+            attempt_records.append({
+                "attempt": attempt + 1,
+                "code": code,
+                "stdout": stdout,
+                "stderr": (attempt_error or stderr or ""),
+                "error_name": error_name,
+                "val_metric": val_metric,
             })
             mlflow.log_text(code, f"attempt_{attempt + 1:02d}_solution.py")
             mlflow.log_text(stdout, f"attempt_{attempt + 1:02d}_stdout.txt")
@@ -324,15 +344,19 @@ def main():
             "output_tokens": total_output_tokens,
             "elapsed_seconds": elapsed,
         }
-        from experiments.dashboard_artifacts import checklist_coverage, write_episode_artifacts
+        from experiments.dashboard_artifacts import checklist_coverage, write_attempts_episode
         coverage = checklist_coverage(best_code, best_stdout, target_col) if best_code else None
         if coverage is not None:
             metrics["checklist_coverage"] = coverage
         metrics["steps_used"] = len(attempt_log)
-        if args.workspace_dir and best_code:
-            write_episode_artifacts(args.workspace_dir, code=best_code, stdout=best_stdout,
-                                    target_col=target_col, coverage=coverage,
-                                    steps=len(attempt_log))
+        # Always emit an episode — even a fully-failed run — so EVERY attempt
+        # (code + error) is visible in the dashboard, not just the best one.
+        if args.workspace_dir and attempt_records:
+            for rec in attempt_records:
+                rec["is_best"] = rec["attempt"] == best_attempt_idx + 1
+            write_attempts_episode(args.workspace_dir, attempts=attempt_records,
+                                   target_col=target_col, coverage=coverage,
+                                   metric_name=metric_name)
         if best_val is not None:
             metrics["best_val_metric"] = best_val
             metrics["best_validation_metric"] = best_val

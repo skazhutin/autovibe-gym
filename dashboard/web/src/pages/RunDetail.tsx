@@ -300,8 +300,12 @@ export default function RunDetail() {
         </div>
       </Card>
 
-      {(run.status === "failed" || run.status === "null") && run.failReason && (
-        <div className="fail-banner"><Icon name="alert" size={18} /><span>{run.failReason}</span></div>
+      {(run.status === "failed" || run.status === "null") && (
+        <div className="fail-banner">
+          <Icon name="alert" size={18} />
+          <span>{run.failReason || "Прогон завершился без валидного сабмита. Подробности — во вкладках «Ноутбук», «Траектория», «Ошибки» и «Логи»."}</span>
+          {run.finalStatus && <span className="mono faint" style={{ marginLeft: "auto", fontSize: 12 }}>{run.finalStatus}</span>}
+        </div>
       )}
 
       <div style={{ marginTop: 24 }}>
