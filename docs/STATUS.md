@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-04 (dashboard logo mark refresh)
+**Last updated:** 2026-06-05 (dashboard tab-menu vertical scroll cleanup)
 **Phase:** Hardening after first full H200 recon + building the local control-panel dashboard for configuring/launching/inspecting runs.
 
 ---
@@ -118,6 +118,9 @@ Current common-runner failure-propagation cycle:
 - `experiments.run` now exits with the first failed child return code after
   printing the batch summary, even when `--stop-on-failure` is not set.
 - `python -m pytest tests/test_experiments.py` -> `27 passed`.
+Current dashboard run-detail tabs cycle:
+
+- Dashboard tab menus no longer have a 1px vertical overflow: the divider line is drawn inside the tab strip and tab buttons no longer use a negative bottom margin.
 Current dashboard/product-mode label cycle:
 
 - Dashboard mode labels now display `Flexible gym` wherever the gym product mode
@@ -306,6 +309,7 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 
 | Date | Change |
 |------|--------|
+| 2026-06-05 | Dashboard tabs visual fix: removed the 1px vertical overflow in tab menus by moving the divider into the tab strip and dropping the negative tab margin |
 | 2026-06-04 | Dashboard logo refresh: replaced the H-like yellow-square mark with a diagonal dumbbell AutoVibe mark |
 | 2026-06-04 | Dashboard sidebar cleanup: removed the bottom `Команда / локальный режим` block and its unused styles |
 | 2026-06-04 | Normalized product-mode display labels: dashboard short labels now show `Flexible gym`, and fixed transitions display as `Fixed gym` in dashboard and shared matrix metadata |
