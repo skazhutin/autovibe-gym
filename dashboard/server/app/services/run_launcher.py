@@ -127,8 +127,16 @@ def _runner_args(cfg: dict[str, Any]) -> list[str]:
         args = ["-m", module, "--mode", cfg.get("budgetMode", "local")]
     if cfg.get("model"):
         args += ["--model", cfg["model"]]
-    if cfg.get("maxTokens"):
-        args += ["--max-tokens", str(cfg["maxTokens"])]
+    max_tokens = cfg.get("maxTokens")
+    # Clamp to the model's own cap so providers with tight per-minute token
+    # limits (e.g. Groq free tier ~6000 TPM) don't 413 when the form leaves the
+    # default high. The model record's maxTokens is the per-request ceiling.
+    model = model_store.get_model(cfg["modelId"]) if cfg.get("modelId") else None
+    if model and model.get("maxTokens"):
+        cap = int(model["maxTokens"])
+        max_tokens = min(int(max_tokens), cap) if max_tokens else cap
+    if max_tokens:
+        args += ["--max-tokens", str(max_tokens)]
     if cfg.get("seed") is not None:
         args += ["--seed", str(cfg["seed"])]
     if episode:
