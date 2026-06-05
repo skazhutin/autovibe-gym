@@ -12,6 +12,19 @@ class LLMResponse:
     output_tokens: int = 0
 
 
+def _message_text(message) -> str:
+    """Extract the assistant text. Some models (gpt-oss/harmony, o1-style) leave
+    `content` empty and put the answer in a `reasoning` field — fall back to it."""
+    content = getattr(message, "content", None)
+    if content:
+        return content
+    reasoning = getattr(message, "reasoning", None)
+    if not reasoning:
+        extra = getattr(message, "model_extra", None) or {}
+        reasoning = extra.get("reasoning") or extra.get("reasoning_content")
+    return reasoning or ""
+
+
 class LLMClient(Protocol):
     def complete(
         self,
@@ -89,7 +102,7 @@ class LiteLLMClient:
             messages=[{"role": "system", "content": system}] + messages,
         )
         usage = response.usage
-        text = response.choices[0].message.content or ""
+        text = _message_text(response.choices[0].message)
         return LLMResponse(
             text=text.strip(),
             input_tokens=getattr(usage, "prompt_tokens", 0) if usage else 0,
@@ -139,7 +152,7 @@ class OpenAICompatibleLLMClient:
             messages=[{"role": "system", "content": system}] + messages,
         )
         usage = response.usage
-        text = response.choices[0].message.content or ""
+        text = _message_text(response.choices[0].message)
         return LLMResponse(
             text=text.strip(),
             input_tokens=usage.prompt_tokens if usage else 0,

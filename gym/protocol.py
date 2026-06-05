@@ -211,7 +211,7 @@ class Action:
 
         if action_type == "add_cell":
             return cls.add_cell_action(
-                _normalize_source(str(payload.get("source") or "")),
+                _normalize_source(str(payload.get("source") or payload.get("code") or "")),
                 cell_type=str(payload.get("cell_type") or "code"),
                 execute=bool(payload.get("execute", False)),
             )
@@ -220,7 +220,7 @@ class Action:
             return cls(
                 type="update_cell",
                 cell_id=str(payload.get("cell_id") or ""),
-                source=_normalize_source(str(payload.get("source") or "")),
+                source=_normalize_source(str(payload.get("source") or payload.get("code") or "")),
                 execute=bool(payload.get("execute", False)),
             )
 
