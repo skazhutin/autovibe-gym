@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-05 (dashboard tab-menu vertical scroll cleanup)
+**Last updated:** 2026-06-05 (launcher clamps max-tokens to model cap)
 **Phase:** Hardening after first full H200 recon + building the local control-panel dashboard for configuring/launching/inspecting runs.
 
 ---
@@ -309,6 +309,7 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 
 | Date | Change |
 |------|--------|
+| 2026-06-05 | Dashboard launcher clamps `--max-tokens` to the selected model's `maxTokens` cap, so providers with tight per-minute token limits (e.g. Groq free ~6000 TPM) don't 413 when the New Run form leaves the default high |
 | 2026-06-05 | Dashboard tabs visual fix: removed the 1px vertical overflow in tab menus by moving the divider into the tab strip and dropping the negative tab margin |
 | 2026-06-04 | Dashboard logo refresh: replaced the H-like yellow-square mark with a diagonal dumbbell AutoVibe mark |
 | 2026-06-04 | Dashboard sidebar cleanup: removed the bottom `Команда / локальный режим` block and its unused styles |
