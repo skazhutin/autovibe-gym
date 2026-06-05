@@ -96,9 +96,27 @@ def _derive_status(info_status: str, metrics: dict) -> str:
     return "null"
 
 
+def _fail_reason(tags: dict, params: dict, status: str) -> str | None:
+    """Human-readable explanation for a run that didn't submit cleanly, taken
+    from the runner's recorded null_reason / final_status."""
+    if status not in ("failed", "null"):
+        return None
+    reason = (tags.get("null_reason") or params.get("null_reason") or "").strip()
+    if reason:
+        return reason
+    final_status = (tags.get("final_status") or params.get("final_status") or "").strip()
+    _LABELS = {
+        "no_candidate_found": "Не создан ни один пригодный к валидации кандидат.",
+        "submit_blocked_preflight": "Кандидат не прошёл предварительную проверку перед сабмитом.",
+        "hidden_submit_failed": "Сабмит упал на скрытом тесте.",
+    }
+    return _LABELS.get(final_status) or (final_status or None)
+
+
 def _run_record(run) -> dict[str, Any]:
     params = run.data.params or {}
     metrics = run.data.metrics or {}
+    tags = run.data.tags or {}
     info = run.info
     mode_param = params.get("experiment_type") or params.get("episode_mode") or ""
     ui_mode = _MODE_MAP.get(mode_param, "gym")
@@ -132,6 +150,8 @@ def _run_record(run) -> dict[str, Any]:
         "mode": ui_mode,
         "requestedMode": requested_mode,
         "batchId": batch_id,
+        "finalStatus": tags.get("final_status") or params.get("final_status") or None,
+        "failReason": _fail_reason(tags, params, _derive_status(info.status, metrics)),
         "productMode": product_mode,
         "modeLabel": params.get("mode_label") or product_mode,
         "modeOrder": mode_order,

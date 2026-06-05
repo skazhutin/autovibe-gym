@@ -301,7 +301,11 @@ export default function RunDetail() {
       </Card>
 
       {(run.status === "failed" || run.status === "null") && run.failReason && (
-        <div className="fail-banner"><Icon name="alert" size={18} /><span>{run.failReason}</span></div>
+        <div className="fail-banner">
+          <Icon name="alert" size={18} />
+          <span>{run.failReason}</span>
+          {run.finalStatus && <span className="mono faint" style={{ marginLeft: "auto", fontSize: 12 }}>{run.finalStatus}</span>}
+        </div>
       )}
 
       <div style={{ marginTop: 24 }}>
