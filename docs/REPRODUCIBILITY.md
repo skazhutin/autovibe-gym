@@ -12,19 +12,22 @@
 docker build -t autovibe-gym .
 ```
 
-### Environment variables
+### Model registry
 
-Copy `.env.example` to `.env` and fill in:
+Model names, providers, endpoint URLs, and per-model API keys live in the shared
+model registry, not in `.env`:
 
 ```bash
-LLM_BASE_URL=http://llm.letovo.site:8809/openai   # or any OpenAI-compatible endpoint
-LLM_API_KEY=<your-key>
-LLM_MODEL=deepseek-v4-flash                        # or groq/llama-3.3-70b-versatile etc.
-MLFLOW_TRACKING_URI=file:///autovibe/mlruns        # or mlflow server URL
+python -m experiments.models list
+python -m experiments.models add \
+  --name deepseek-v4-flash \
+  --provider "OpenAI-совместимый" \
+  --base-url http://llm.letovo.site:8809/openai \
+  --api-key <your-key>
 ```
 
-LiteLLM provider routing: if `LLM_MODEL` contains `/` (e.g. `groq/llama-3.3-70b-versatile`),
-the client automatically uses the LiteLLM Python SDK instead of the OpenAI-compatible adapter.
+`MLFLOW_TRACKING_URI` can still be set in the environment when you want a
+separate MLflow store; otherwise runners use local `sqlite:///mlflow.db`.
 
 ---
 
@@ -96,9 +99,6 @@ python -m experiments.run_all_modes_matrix \
 ```bash
 docker run --rm \
   -v /path/to/autovibe-gym:/autovibe \
-  -e LLM_BASE_URL=http://... \
-  -e LLM_API_KEY=... \
-  -e LLM_MODEL=deepseek-v4-flash \
   -e MLFLOW_TRACKING_URI=file:///autovibe/mlruns \
   autovibe-gym \
   -m experiments.run_baseline \

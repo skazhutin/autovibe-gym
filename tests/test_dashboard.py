@@ -340,6 +340,28 @@ def test_run_launcher_llm_env_maps_gemini_and_litellm_providers(monkeypatch):
     assert run_launcher._llm_env({"modelId": "lite"})["LLM_PROVIDER"] == "litellm"
 
 
+def test_run_launcher_gemini_model_does_not_need_base_url(monkeypatch):
+    monkeypatch.setattr(
+        run_launcher.model_store,
+        "get_model",
+        lambda model_id: {
+            "id": model_id,
+            "name": "gemini-2.5-flash",
+            "provider": "Gemini",
+            "apiKey": "gemini-key",
+            "baseUrl": "",
+        },
+    )
+
+    env = run_launcher._llm_env({"modelId": "gemini"})
+
+    assert env["LLM_PROVIDER"] == "google"
+    assert env["LLM_MODEL"] == "gemini-2.5-flash"
+    assert env["GEMINI_API_KEY"] == "gemini-key"
+    assert "LLM_BASE_URL" not in env
+    assert "LLM_API_KEY" not in env
+
+
 def test_run_launcher_python_available_accepts_paths_and_rejects_missing(tmp_path):
     assert run_launcher._python_available(sys.executable)
     assert not run_launcher._python_available(str(tmp_path / "missing-python"))

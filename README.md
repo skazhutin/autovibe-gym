@@ -49,12 +49,14 @@ docker run --rm \
   -m scripts.prepare_datasets --dataset student_dropout
 ```
 
-### Step 4 — Set your API key
+### Step 4 — Configure a model
 
 ```bash
-export LLM_BASE_URL="<provided separately>"   # OpenAI-compatible endpoint
-export LLM_API_KEY="<provided separately>"    # API key
-export LLM_MODEL="deepseek-v4-flash"
+python -m experiments.models add \
+  --name deepseek-v4-flash \
+  --provider "OpenAI-совместимый" \
+  --base-url "<provided separately>" \
+  --api-key "<provided separately>"
 ```
 
 ### Step 5 — Run all 4 modes
@@ -63,9 +65,6 @@ export LLM_MODEL="deepseek-v4-flash"
 DS="/autovibe/datasets/student_dropout/prepared"
 DOCKER="docker run --rm \
   -v $(pwd):/autovibe \
-  -e LLM_BASE_URL=$LLM_BASE_URL \
-  -e LLM_API_KEY=$LLM_API_KEY \
-  -e LLM_MODEL=$LLM_MODEL \
   -e MLFLOW_TRACKING_URI=file:///autovibe/mlruns \
   autovibe-gym"
 
@@ -76,7 +75,7 @@ $DOCKER -m experiments.run \
   --dataset-dir $DS \
   --mode all \
   --budget-mode cloud \
-  --model $LLM_MODEL
+  --model deepseek-v4-flash
 
 # Or run each mode manually:
 
@@ -98,7 +97,7 @@ Or run the four product modes in one command with the batch runner:
 ```bash
 $DOCKER -m experiments.run_all_modes_matrix \
   --datasets /autovibe/datasets/student_dropout/prepared \
-  --models $LLM_MODEL \
+  --models deepseek-v4-flash \
   --mode cloud
 ```
 
@@ -294,27 +293,34 @@ AUTOVIBE_EXECUTOR_BACKEND=subprocess python -m pytest
 
 ## LLM Providers
 
-By default AutoVibe Gym keeps the existing OpenAI-compatible client. This covers
-local vLLM, OpenAI, LiteLLM, and other proxies that expose `/v1/chat/completions`:
+AutoVibe Gym uses the shared model registry for model names, providers,
+endpoints, and per-model API keys. Use the dashboard Models page or the CLI:
 
 ```bash
-LLM_PROVIDER=openai
-LLM_BASE_URL=http://localhost:8000/v1
-LLM_API_KEY=local
-LLM_MODEL=Qwen/Qwen2.5-Coder-7B-Instruct
+python -m experiments.models list
+python -m experiments.models add \
+  --name Qwen/Qwen2.5-Coder-7B-Instruct \
+  --provider "OpenAI-совместимый" \
+  --base-url http://localhost:8000/v1 \
+  --api-key local
 ```
 
-For Google AI Studio / Gemini on a laptop, switch the provider and set a token:
+OpenAI-compatible entries cover local vLLM, OpenAI, LiteLLM proxies, Yandex AI
+through its OpenAI-compatible endpoint, and any other `/v1/chat/completions`
+server. Gemini does not use a Base URL:
 
 ```bash
-LLM_PROVIDER=google
-GEMINI_API_KEY=your-token
-LLM_MODEL=gemini-2.5-flash
+python -m experiments.models add \
+  --name gemini-2.5-flash \
+  --provider Gemini \
+  --api-key your-token
 ```
 
-`LLM_PROVIDER=gemini` and `GOOGLE_API_KEY` are accepted aliases. If `LLM_MODEL`
-is omitted, the default model is `Qwen/Qwen2.5-Coder-7B-Instruct` for the
-OpenAI-compatible provider and `gemini-2.5-flash` for Google.
+Then pass either the model id or the model name to any runner:
+
+```bash
+python -m experiments.run_gym --dataset-dir datasets/demo/prepared --model gemini-2.5-flash
+```
 
 ## MLflow
 
@@ -348,8 +354,8 @@ The non-notebook controls remain:
 For a single entrypoint, use `experiments.run`:
 
 ```bash
-python -m experiments.run --dataset-dir datasets/example_dry_bean/prepared --mode single_shot
-python -m experiments.run --dataset-dir datasets/example_dry_bean/prepared --mode all --dry-run
+python -m experiments.run --dataset-dir datasets/example_dry_bean/prepared --mode single_shot --model deepseek-v4-flash
+python -m experiments.run --dataset-dir datasets/example_dry_bean/prepared --mode all --model deepseek-v4-flash --dry-run
 ```
 
 `--mode all` expands to four separate product runs in this order:

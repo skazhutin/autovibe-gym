@@ -346,6 +346,7 @@ def test_run_matrix_dry_run_prints_plan(tmp_path, capsys, monkeypatch):
         "run_matrix",
         "--datasets", str(tmp_path / "ds_a"),
         "--episode-modes", "gym_with_checklist",
+        "--model", "fake-model",
         "--dry-run",
     ])
 
@@ -374,6 +375,7 @@ def test_run_matrix_exits_when_no_datasets(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr("sys.argv", [
         "run_matrix",
         "--datasets-root", str(tmp_path),
+        "--model", "fake-model",
         "--dry-run",
     ])
 

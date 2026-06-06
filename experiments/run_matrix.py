@@ -53,7 +53,7 @@ def _run_single(
     dataset_dir: str,
     episode_mode: str,
     mode: str,
-    model: str | None,
+    model: str,
     experiment_name: str,
     extra_args: list[str],
 ) -> int:
@@ -65,8 +65,7 @@ def _run_single(
         "--mode", mode,
         "--experiment-name", experiment_name,
     ]
-    if model:
-        cmd.extend(["--model", model])
+    cmd.extend(["--model", model])
     cmd.extend(extra_args)
     result = subprocess.run(cmd)
     return result.returncode
@@ -96,7 +95,7 @@ def main() -> None:
         choices=["local", "cloud"],
         help="Step budget and token budget preset (default: local).",
     )
-    parser.add_argument("--model", default=None, help="LLM model override.")
+    parser.add_argument("--model", required=True, help="Model id or name from the shared model registry.")
     parser.add_argument(
         "--experiment-name",
         default="autovibe_matrix",
@@ -136,14 +135,14 @@ def main() -> None:
     total = len(matrix)
 
     print(f"[run_matrix] Matrix: {len(datasets)} dataset(s) x {len(args.episode_modes)} mode(s) = {total} run(s)")
-    print(f"[run_matrix] mode={args.mode}  model={args.model or '(env default)'}  experiment={args.experiment_name}")
+    print(f"[run_matrix] mode={args.mode}  model={args.model}  experiment={args.experiment_name}")
     print()
 
     for i, (dataset_dir, episode_mode) in enumerate(matrix, 1):
         dataset_label = Path(dataset_dir).name
         print(f"[run_matrix] [{i}/{total}] {dataset_label}  mode={episode_mode}")
         if args.dry_run:
-            print(f"  -> (dry-run) python -m experiments.run_gym --dataset-dir {dataset_dir} --episode-mode {episode_mode} --mode {args.mode}")
+            print(f"  -> (dry-run) python -m experiments.run_gym --dataset-dir {dataset_dir} --episode-mode {episode_mode} --mode {args.mode} --model {args.model}")
             continue
 
         started = time.time()

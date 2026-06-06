@@ -18,7 +18,7 @@ from gym.datasets import (
     metric_from_name,
     resolve_metric,
 )
-from gym.llm import default_model_name
+from gym.model_config import apply_model_reference
 
 try:
     from dotenv import load_dotenv
@@ -82,7 +82,7 @@ def main():
     parser.add_argument("--target", help="Target column for --dataset CSV mode")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--mode", choices=["local", "cloud"], default="local")
-    parser.add_argument("--model", default=None, help="Override LLM_MODEL env var")
+    parser.add_argument("--model", required=True, help="Model id or name from the shared model registry")
     parser.add_argument("--max-steps", type=int, default=None)
     parser.add_argument("--max-tokens", type=int, default=None)
     parser.add_argument("--sandbox-timeout", type=int, default=None)
@@ -119,7 +119,7 @@ def main():
     )
 
     dataset_name = _dataset_name(splits, args.dataset)
-    model_name = args.model or default_model_name()
+    model_name = apply_model_reference(args.model)
     run_name = args.run_name or f"gym_{dataset_name}_{model_name.split('/')[-1]}"
 
     import mlflow

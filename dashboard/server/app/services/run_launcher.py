@@ -28,6 +28,7 @@ from typing import Any
 from ..config import get_settings
 from . import model_store, remote_exec
 from experiments.modes import ALL_PRODUCT_MODES, BATCH_REQUESTED_MODE, MODE_BY_DASHBOARD_MODE
+from gym.model_config import runtime_env_for_model
 
 # local_id -> {"proc": Popen, "meta": dict}
 _ACTIVE: dict[str, dict[str, Any]] = {}
@@ -194,20 +195,7 @@ def _llm_env(cfg: dict[str, Any]) -> dict[str, str]:
     }
     model = model_store.get_model(cfg["modelId"]) if cfg.get("modelId") else None
     if model:
-        provider = str(model.get("provider") or "").strip().lower()
-        if "gemini" in provider or "google" in provider:
-            out["LLM_PROVIDER"] = "google"
-        elif "litellm" in provider or "lite" in provider:
-            out["LLM_PROVIDER"] = "litellm"
-        else:
-            out["LLM_PROVIDER"] = "openai"
-        if model.get("name"):
-            out["LLM_MODEL"] = model["name"]
-        if model.get("baseUrl"):
-            out["LLM_BASE_URL"] = model["baseUrl"]
-        key = model.get("apiKey") or os.getenv(model.get("apiKeyEnv") or "LLM_API_KEY", "")
-        if key:
-            out["LLM_API_KEY"] = key
+        out.update(runtime_env_for_model(model))
     if cfg.get("temp") is not None:
         out["LLM_TEMPERATURE"] = str(cfg["temp"])
     return out
@@ -224,8 +212,8 @@ def _build_env(cfg: dict[str, Any]) -> dict[str, str]:
     env["PYTHONPATH"] = str(s.repo_root) + os.pathsep + env.get("PYTHONPATH", "")
     env["MLFLOW_TRACKING_URI"] = s.mlflow_tracking_uri
     # Local execution has no Docker: force the in-process executor for the legacy
-    # single-shot/repeated runners (the .env default is docker) and a local kernel
-    # for notebook modes. Overridable via AUTOVIBE_DASHBOARD_EXECUTOR.
+    # single-shot/repeated runners and a local kernel for notebook modes.
+    # Overridable via AUTOVIBE_DASHBOARD_EXECUTOR.
     env["AUTOVIBE_EXECUTOR_BACKEND"] = os.getenv("AUTOVIBE_DASHBOARD_EXECUTOR", "subprocess")
     env["AUTOVIBE_KERNEL_BACKEND"] = "local"
     # LLM connection + thread caps (load_dotenv won't override these explicit vars).

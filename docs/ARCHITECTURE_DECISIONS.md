@@ -30,16 +30,15 @@
 - OpenAI GPT → `https://api.openai.com/v1`
 - Anthropic (через прокси или `litellm proxy`) → `http://localhost:4000/v1`
 
-```python
-# Конфигурация через .env / CLI флаг
-client = OpenAI(base_url=os.getenv("LLM_BASE_URL", "http://localhost:8000/v1"),
-                api_key=os.getenv("LLM_API_KEY", "local"))
-```
+Runtime LLM settings are resolved from the shared model registry before a run
+starts. The registry record supplies provider, model name, endpoint URL when the
+provider needs one, and the per-model API key.
 
 ### Последствия
 - `agent.py` рефакторится на `openai` SDK
 - `requirements.txt`: убрать `anthropic`, добавить `openai`
-- Добавить в `.env.example`: `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`
+- Add shared model registry management instead of storing model settings or LLM
+  API keys in `.env`.
 
 ---
 
@@ -176,7 +175,8 @@ vllm serve Qwen/Qwen2.5-Coder-7B-Instruct \
 ### Последствия
 - `scripts/start_vllm.sh` — скрипт запуска сервера под каждую модель
 - Добавить `vllm` в `requirements.txt` (серверная зависимость, можно в отдельный файл)
-- `LLM_BASE_URL=http://localhost:8000/v1` для локальных моделей
+- local model endpoints are stored as OpenAI-compatible model records in the
+  shared registry
 
 ---
 

@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-06 (deterministic action type/stage/thoughts observability)
+**Last updated:** 2026-06-06 (model registry is the source of truth for LLM config)
 **Phase:** Hardening after first full H200 recon + building the local control-panel dashboard for configuring/launching/inspecting runs.
 
 ---
@@ -93,6 +93,18 @@ Current deterministic action observability cycle:
   now explicitly set `LLM_PROVIDER` (`openai`, `google`, or `litellm`) so a
   `.env` Gemini default cannot route OpenAI-compatible dashboard models through
   the Google SDK; `python -m pytest tests/test_dashboard.py -q` -> `17 passed`.
+Current model-registry config cycle:
+
+- `.env.example` and local `.env` no longer contain LLM model settings or LLM
+  API keys; model names, provider, endpoint URL, and per-model API key live in
+  the shared model registry.
+- Added `python -m experiments.models` for CLI model registry management.
+- `experiments.run`, `run_matrix`, and the `run_*` scripts require `--model` and
+  resolve it as a model id/name from the registry.
+- Gemini models no longer require or send Base URL; LiteLLM receives the
+  per-model key through the registry-backed runtime path.
+- `python -m pytest tests/test_llm.py tests/test_dashboard.py tests/test_experiments.py -q` -> `64 passed`.
+- Dashboard TypeScript build (`tsc -b`) and Vite production build passed.
 Current dashboard multi-select cycle:
 
 - `python -m pytest tests/test_dashboard.py tests/test_experiments.py` -> `39 passed`
@@ -325,6 +337,7 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 | Date | Change |
 |------|--------|
 | 2026-06-06 | Dashboard launcher now passes explicit `LLM_PROVIDER` from the selected model provider, preventing OpenAI-compatible models from inheriting a Gemini `.env` default |
+| 2026-06-06 | LLM model configuration moved out of `.env` into the shared model registry with CLI management, required `--model` registry resolution, provider-specific Gemini/LiteLLM runtime env, and no LLM keys in `.env` |
 | 2026-06-06 | Deterministic action observability: agent JSON actions now use canonical `type`, required ordered `stage`, canonical `thoughts` in thoughts mode, and non-mutating `think`; NotebookGymEnv/GymEnv enforce the contract, artifacts/API/dashboard expose current stage and thoughts, docs/tests updated |
 | 2026-06-05 | Failed runs now expose all available info across every mode: repeated single-shot writes a full multi-attempt episode (every attempt's code + error visible in Notebook/Trajectory/Errors/Logs, not just the best), the run record carries `failReason`/`finalStatus` from the runner's `null_reason`/`final_status`, and the detail page always shows the fail banner with the status label |
 | 2026-06-05 | Dashboard launcher clamps `--max-tokens` to the selected model's `maxTokens` cap, so providers with tight per-minute token limits (e.g. Groq free ~6000 TPM) don't 413 when the New Run form leaves the default high |

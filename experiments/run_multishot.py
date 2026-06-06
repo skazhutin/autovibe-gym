@@ -26,7 +26,8 @@ from experiments.modes import add_mode_metadata_args, mode_metadata_params
 from gym.data_profile import build_dataset_card
 from gym.datasets import load_dataset_splits, resolve_metric
 from gym.executor import CodeExecutor
-from gym.llm import default_model_name, make_llm_client
+from gym.llm import make_llm_client
+from gym.model_config import apply_model_reference
 from gym.protocol import Action
 from gym.scoring import score_with_coercion
 
@@ -110,7 +111,7 @@ def main():
     parser.add_argument("--target")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--mode", choices=["local", "cloud"], default="local")
-    parser.add_argument("--model", default=None)
+    parser.add_argument("--model", required=True, help="Model id or name from the shared model registry")
     parser.add_argument("--shots", type=int, default=None)
     parser.add_argument("--max-tokens", type=int, default=None)
     parser.add_argument("--workspace-dir", default=None, help="Emit dashboard episode artifacts here.")
@@ -146,7 +147,7 @@ def main():
         os.path.basename(dataset_source.rstrip("/\\"))
     )[0]
 
-    model_name = args.model or default_model_name()
+    model_name = apply_model_reference(args.model)
     run_name = args.run_name or f"repeated_single_shot{max_attempts}_{dataset_name}_{model_name.split('/')[-1]}"
 
     client = make_llm_client()

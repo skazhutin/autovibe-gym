@@ -6,7 +6,8 @@ Use this checklist before running a demo or sharing results externally.
 
 ## Environment
 
-- [ ] `.env` exists and has `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`
+- [ ] The needed LLM models exist in the shared model registry (`python -m experiments.models list`)
+- [ ] `.env` has no LLM model settings or LLM API keys
 - [ ] `MLFLOW_TRACKING_URI` is set (or defaults to `sqlite:///mlflow.db`)
 - [ ] `AUTOVIBE_KERNEL_BACKEND=docker` if using the container sandbox
 - [ ] Docker daemon running and `autovibe-gym-sandbox:latest` built
@@ -53,11 +54,11 @@ Use this checklist before running a demo or sharing results externally.
 
 - [ ] Dry-run preview is correct:
   ```bash
-  python -m experiments.run_matrix --dry-run
+  python -m experiments.run_matrix --model deepseek-v4-flash --dry-run
   ```
 - [ ] Full matrix completes without errors:
   ```bash
-  python -m experiments.run_matrix --mode local
+  python -m experiments.run_matrix --mode local --model deepseek-v4-flash
   ```
 
 ## MLflow

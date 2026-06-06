@@ -5,6 +5,7 @@ import { Button, Card, Dot, EmptyState, Field, Modal, Skeleton, Spinner, Tag } f
 import { Icon } from "../components/Icon";
 
 const PROVIDERS = ["OpenAI-совместимый", "vLLM", "Gemini", "LiteLLM"];
+const needsBaseUrl = (provider: string) => provider === "OpenAI-совместимый" || provider === "vLLM";
 
 function ModelModal({ initial, onClose, onDone }: { initial?: ModelRec; onClose: () => void; onDone: () => void }) {
   const [f, setF] = useState({
@@ -19,11 +20,19 @@ function ModelModal({ initial, onClose, onDone }: { initial?: ModelRec; onClose:
   const [busy, setBusy] = useState(false);
   const [test, setTest] = useState<string | null>(null);
   const set = (k: string, v: string | number) => setF((s) => ({ ...s, [k]: v }));
+  const showBaseUrl = needsBaseUrl(f.provider);
 
   async function save() {
     if (!f.name) return;
     setBusy(true);
-    const payload = { ...f, ctx: Number(f.ctx), temp: Number(f.temp), maxTokens: Number(f.maxTokens), apiKey: f.apiKey || undefined };
+    const payload = {
+      ...f,
+      baseUrl: showBaseUrl ? f.baseUrl : "",
+      ctx: Number(f.ctx),
+      temp: Number(f.temp),
+      maxTokens: Number(f.maxTokens),
+      apiKey: f.apiKey || undefined,
+    };
     try {
       if (initial) await api.updateModel(initial.id, payload);
       else await api.createModel(payload);
@@ -52,7 +61,7 @@ function ModelModal({ initial, onClose, onDone }: { initial?: ModelRec; onClose:
           <Field label="Провайдер"><select className="input" value={f.provider} onChange={(e) => set("provider", e.target.value)}>{PROVIDERS.map((p) => <option key={p}>{p}</option>)}</select></Field>
           <Field label="Контекст (токены)"><input className="input mono" value={f.ctx} onChange={(e) => set("ctx", e.target.value.replace(/\D/g, ""))} /></Field>
         </div>
-        <Field label="Base URL"><input className="input mono" value={f.baseUrl} onChange={(e) => set("baseUrl", e.target.value)} placeholder="http://host:8000/v1" /></Field>
+        {showBaseUrl && <Field label="Base URL"><input className="input mono" value={f.baseUrl} onChange={(e) => set("baseUrl", e.target.value)} placeholder="http://host:8000/v1" /></Field>}
         <Field label="API-ключ" hint={initial?.hasApiKey ? "оставьте пустым, чтобы не менять" : "необязательно"}><input className="input" type="password" value={f.apiKey} onChange={(e) => set("apiKey", e.target.value)} placeholder="••••••••" /></Field>
         <div className="grid-2">
           <Field label="Температура по умолч."><input className="input mono" value={f.temp} onChange={(e) => set("temp", e.target.value)} /></Field>
