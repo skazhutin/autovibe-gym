@@ -194,6 +194,13 @@ def _llm_env(cfg: dict[str, Any]) -> dict[str, str]:
     }
     model = model_store.get_model(cfg["modelId"]) if cfg.get("modelId") else None
     if model:
+        provider = str(model.get("provider") or "").strip().lower()
+        if "gemini" in provider or "google" in provider:
+            out["LLM_PROVIDER"] = "google"
+        elif "litellm" in provider or "lite" in provider:
+            out["LLM_PROVIDER"] = "litellm"
+        else:
+            out["LLM_PROVIDER"] = "openai"
         if model.get("name"):
             out["LLM_MODEL"] = model["name"]
         if model.get("baseUrl"):

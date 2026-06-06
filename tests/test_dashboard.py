@@ -302,6 +302,44 @@ def test_run_launcher_fixed_mode_uses_fixed_runner():
     assert "--max-steps" in args
 
 
+def test_run_launcher_llm_env_sets_provider_from_selected_model(monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "google")
+
+    monkeypatch.setattr(
+        run_launcher.model_store,
+        "get_model",
+        lambda model_id: {
+            "id": model_id,
+            "name": "nvidia/nemotron-3-ultra-550b-a55b:free",
+            "provider": "OpenAI-compatible",
+            "baseUrl": "https://openrouter.ai/api/v1",
+            "apiKey": "sk-test",
+        },
+    )
+
+    env = run_launcher._llm_env({"modelId": "openrouter"})
+
+    assert env["LLM_PROVIDER"] == "openai"
+    assert env["LLM_MODEL"] == "nvidia/nemotron-3-ultra-550b-a55b:free"
+    assert env["LLM_BASE_URL"] == "https://openrouter.ai/api/v1"
+    assert env["LLM_API_KEY"] == "sk-test"
+
+
+def test_run_launcher_llm_env_maps_gemini_and_litellm_providers(monkeypatch):
+    records = {
+        "gemini": {"provider": "Gemini", "name": "gemini-2.5-flash"},
+        "lite": {"provider": "LiteLLM", "name": "groq/llama-3.3-70b-versatile"},
+    }
+    monkeypatch.setattr(
+        run_launcher.model_store,
+        "get_model",
+        lambda model_id: records[model_id],
+    )
+
+    assert run_launcher._llm_env({"modelId": "gemini"})["LLM_PROVIDER"] == "google"
+    assert run_launcher._llm_env({"modelId": "lite"})["LLM_PROVIDER"] == "litellm"
+
+
 def test_run_launcher_python_available_accepts_paths_and_rejects_missing(tmp_path):
     assert run_launcher._python_available(sys.executable)
     assert not run_launcher._python_available(str(tmp_path / "missing-python"))

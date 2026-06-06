@@ -89,6 +89,10 @@ Current deterministic action observability cycle:
   header showed `Этап = Анализ валидации`; Trajectory rendered `think`,
   type/stage badges, and inline thoughts; Thoughts tab rendered scratchpad
   entries; desktop and mobile viewport console checks had no warnings/errors.
+- Follow-up launcher check after a real dashboard run: selected model records
+  now explicitly set `LLM_PROVIDER` (`openai`, `google`, or `litellm`) so a
+  `.env` Gemini default cannot route OpenAI-compatible dashboard models through
+  the Google SDK; `python -m pytest tests/test_dashboard.py -q` -> `17 passed`.
 Current dashboard multi-select cycle:
 
 - `python -m pytest tests/test_dashboard.py tests/test_experiments.py` -> `39 passed`
@@ -320,6 +324,7 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 
 | Date | Change |
 |------|--------|
+| 2026-06-06 | Dashboard launcher now passes explicit `LLM_PROVIDER` from the selected model provider, preventing OpenAI-compatible models from inheriting a Gemini `.env` default |
 | 2026-06-06 | Deterministic action observability: agent JSON actions now use canonical `type`, required ordered `stage`, canonical `thoughts` in thoughts mode, and non-mutating `think`; NotebookGymEnv/GymEnv enforce the contract, artifacts/API/dashboard expose current stage and thoughts, docs/tests updated |
 | 2026-06-05 | Failed runs now expose all available info across every mode: repeated single-shot writes a full multi-attempt episode (every attempt's code + error visible in Notebook/Trajectory/Errors/Logs, not just the best), the run record carries `failReason`/`finalStatus` from the runner's `null_reason`/`final_status`, and the detail page always shows the fail banner with the status label |
 | 2026-06-05 | Dashboard launcher clamps `--max-tokens` to the selected model's `maxTokens` cap, so providers with tight per-minute token limits (e.g. Groq free ~6000 TPM) don't 413 when the New Run form leaves the default high |
