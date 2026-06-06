@@ -258,13 +258,18 @@ def test_run_launcher_planned_steps_match_dashboard_modes():
     assert run_launcher._planned_steps({"mode": "all"}) == 5
 
 
-def test_run_launcher_batch_mode_uses_common_runner_with_selected_modes():
+def test_run_launcher_batch_mode_uses_common_runner_with_selected_modes(monkeypatch):
+    monkeypatch.setattr(
+        run_launcher.model_store,
+        "get_model",
+        lambda model_id: {"id": model_id, "name": "fake-model", "maxTokens": 4096},
+    )
     args = run_launcher._runner_args(
         {
             "mode": "batch",
             "modes": ["single", "repeated", "iterative", "gym", "fixed"],
             "budgetMode": "local",
-            "model": "fake-model",
+            "modelId": "fake",
             "runName": "dash_live_unit",
             "maxSteps": 8,
             "shots": 4,
@@ -287,12 +292,17 @@ def test_run_launcher_batch_mode_uses_common_runner_with_selected_modes():
     assert "--shots" in args
 
 
-def test_run_launcher_fixed_mode_uses_fixed_runner():
+def test_run_launcher_fixed_mode_uses_fixed_runner(monkeypatch):
+    monkeypatch.setattr(
+        run_launcher.model_store,
+        "get_model",
+        lambda model_id: {"id": model_id, "name": "fake-model", "maxTokens": 4096},
+    )
     args = run_launcher._runner_args(
         {
             "mode": "fixed",
             "budgetMode": "local",
-            "model": "fake-model",
+            "modelId": "fake",
             "runName": "dash_live_unit",
             "maxSteps": 8,
         }
@@ -300,6 +310,45 @@ def test_run_launcher_fixed_mode_uses_fixed_runner():
 
     assert args[:2] == ["-m", "experiments.run_fixed"]
     assert "--max-steps" in args
+
+
+def test_run_launcher_uses_model_name_from_model_id(monkeypatch):
+    monkeypatch.setattr(
+        run_launcher.model_store,
+        "get_model",
+        lambda model_id: {
+            "id": model_id,
+            "name": "nvidia/nemotron-3-ultra-550b-a55b:free",
+            "provider": "OpenAI-совместимый",
+            "baseUrl": "https://openrouter.ai/api/v1",
+            "maxTokens": 4096,
+        },
+    )
+
+    args = run_launcher._runner_args(
+        {
+            "mode": "gym",
+            "budgetMode": "local",
+            "modelId": "openrouter",
+            "runName": "dash_live_unit",
+            "maxSteps": 8,
+        }
+    )
+
+    assert "--model" in args
+    assert args[args.index("--model") + 1] == "nvidia/nemotron-3-ultra-550b-a55b:free"
+
+
+def test_run_launcher_requires_model_id():
+    with pytest.raises(ValueError, match="Model must be selected"):
+        run_launcher._runner_args(
+            {
+                "mode": "gym",
+                "budgetMode": "local",
+                "runName": "dash_live_unit",
+                "maxSteps": 8,
+            }
+        )
 
 
 def test_run_launcher_llm_env_sets_provider_from_selected_model(monkeypatch):
