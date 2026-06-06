@@ -1506,6 +1506,31 @@ table.data tbody tr.clickable:hover {
 .swatch.active { border-color: var(--text); }
 
 /* ============ Thoughts (agent scratchpad) ============ */
+/* Post-run model self-summary, shown above the step-by-step thoughts. */
+.run-summary {
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-radius: var(--r-md);
+  background: linear-gradient(180deg, var(--accent-wash), var(--surface));
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+.run-summary-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+.run-summary-title { font-weight: 650; font-size: 13px; letter-spacing: .01em; }
+.run-summary-model { margin-left: auto; font-size: 11px; color: var(--text-dim); }
+.run-summary-body { padding: 12px 16px; font-size: 14px; line-height: 1.55; }
+.run-summary-body p { margin: 0 0 8px; }
+.run-summary-body p:last-child { margin-bottom: 0; }
+.run-summary-body ul { margin: 0 0 8px; padding-left: 18px; }
+.run-summary-body ul:last-child { margin-bottom: 0; }
+.run-summary-body li { margin: 2px 0; }
+.run-summary-body strong { color: var(--text); font-weight: 650; }
+
 .thoughts { display: flex; flex-direction: column; gap: 12px; }
 .thought { display: flex; gap: 14px; align-items: stretch; position: relative; }
 .thought-rail { flex: none; width: 22px; display: flex; justify-content: center; }
