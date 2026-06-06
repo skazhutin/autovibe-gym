@@ -175,6 +175,18 @@ def main():
             env.close()
         summary.update(mode_metadata_params(args, args.episode_mode))
 
+        # Best-effort: ask the model to summarize its own solution and persist it
+        # as run_summary.json so the dashboard «Мысли» tab can show it on top.
+        from gym.run_summary import generate_and_write
+
+        generate_and_write(
+            agent.client,
+            agent.model,
+            summary.get("episode_workspace") or args.workspace_dir,
+            conversation=agent.messages,
+            max_tokens=min(max_tokens, 700),
+        )
+
         has_test_metric = summary.get("final_test_metric") is not None
         metrics = {
             "checklist_coverage": summary["checklist_coverage"],

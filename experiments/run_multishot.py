@@ -358,6 +358,27 @@ def main():
             write_attempts_episode(args.workspace_dir, attempts=attempt_records,
                                    target_col=target_col, coverage=coverage,
                                    metric_name=metric_name)
+        # Best-effort self-summary of the best attempt (validation metric is not
+        # hidden), persisted as run_summary.json for the dashboard «Мысли» tab.
+        if args.workspace_dir and best_code:
+            from gym.run_summary import generate_and_write
+
+            convo = [
+                {"role": "user", "content": task_prompt},
+                {"role": "assistant", "content": f"```python\n{best_code}\n```"},
+            ]
+            if best_val is not None:
+                convo.append({
+                    "role": "user",
+                    "content": f"Лучшая попытка дала {metric_name} на валидации = {best_val:.4f}.",
+                })
+            generate_and_write(
+                client,
+                model_name,
+                args.workspace_dir,
+                conversation=convo,
+                max_tokens=min(max_tokens, 700),
+            )
         if best_val is not None:
             metrics["best_val_metric"] = best_val
             metrics["best_validation_metric"] = best_val
