@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-06 (model registry is the source of truth for LLM config)
+**Last updated:** 2026-06-06 (model registry is source of truth for LLM config; ML toolbox deps added; dashboard table polish)
 **Phase:** Hardening after first full H200 recon + building the local control-panel dashboard for configuring/launching/inspecting runs.
 
 ---
@@ -339,6 +339,10 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 | 2026-06-06 | Dashboard launcher now passes explicit `LLM_PROVIDER` from the selected model provider, preventing OpenAI-compatible models from inheriting a Gemini `.env` default |
 | 2026-06-06 | LLM model configuration moved out of `.env` into the shared model registry with CLI management, required `--model` registry resolution, provider-specific Gemini/LiteLLM runtime env, and no LLM keys in `.env` |
 | 2026-06-06 | Deterministic action observability: agent JSON actions now use canonical `type`, required ordered `stage`, canonical `thoughts` in thoughts mode, and non-mutating `think`; NotebookGymEnv/GymEnv enforce the contract, artifacts/API/dashboard expose current stage and thoughts, docs/tests updated |
+| 2026-06-06 | Added LLM-agent ML toolbox to requirements.txt + pyproject.toml: catboost, seaborn, plotly, optuna, shap, imbalanced-learn, category_encoders, statsmodels, tabulate — all missing from the venv, all commonly reached for by agents; seaborn was already listed in requirements.txt but never installed (PR #53) |
+| 2026-06-06 | Dashboard runs table: added `.truncate` CSS (max-width 220px, ellipsis) on model and dataset columns to eliminate horizontal micro-scroll caused by long model names after chevron removal (PR #50) |
+| 2026-06-06 | Dashboard runs table: removed the chevron `›` column at row end — rows are visibly clickable without it (PR #49) |
+| 2026-06-05 | Found "sweet-spot" weak model for gym-vs-single-shot gap experiments: `llama-3.1-8b-instant` on Groq (val≈0.661 single-shot); added to models.json (gitignored). OpenRouter free limit (50 req/day) inadequate for gym runs. Groq TPM cap (~6000) handled by PR #47 max-tokens clamp |
 | 2026-06-05 | Failed runs now expose all available info across every mode: repeated single-shot writes a full multi-attempt episode (every attempt's code + error visible in Notebook/Trajectory/Errors/Logs, not just the best), the run record carries `failReason`/`finalStatus` from the runner's `null_reason`/`final_status`, and the detail page always shows the fail banner with the status label |
 | 2026-06-05 | Dashboard launcher clamps `--max-tokens` to the selected model's `maxTokens` cap, so providers with tight per-minute token limits (e.g. Groq free ~6000 TPM) don't 413 when the New Run form leaves the default high |
 | 2026-06-05 | Dashboard tabs visual fix: removed the 1px vertical overflow in tab menus by moving the divider into the tab strip and dropping the negative tab margin |
