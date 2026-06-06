@@ -82,6 +82,15 @@ FINALIZE EARLY — DO NOT RUN OUT OF STEPS:
   model, but ONLY if a clean restart_and_run_all succeeds — so keep the
   notebook reproducible at all times.
 
+IF SUBMIT FAILS ON HIDDEN DATA:
+- If you get a "Submit failed on hidden test set" blocker you have retries.
+  This means your model raised an error on private held-out rows. Fix it:
+  1. Make the Pipeline robust: handle unseen categories (OrdinalEncoder with
+     handle_unknown='use_encoded_value'), missing values, mixed dtypes.
+  2. Never apply any transformation outside the Pipeline.
+  3. Then: restart_and_run_all → validate → submit again.
+- Do NOT skip the restart_and_run_all + validate cycle before resubmitting.
+
 KEEP THE CLEAN RUN FAST AND ROBUST:
 - restart_and_run_all re-executes EVERY cell top-to-bottom on a fresh kernel,
   and each cell must finish within the cell time limit. One failing or slow

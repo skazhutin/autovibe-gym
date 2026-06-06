@@ -331,6 +331,13 @@ def test_successful_submit_hides_score_from_agent_context_and_keeps_private_summ
 
 
 def test_hidden_submit_failure_is_generic(tmp_path):
+    """Hidden-test submit failures give retry feedback until retries are exhausted.
+
+    First two failures: not submitted (done=False), generic retry message —
+    no hidden data details are leaked.
+    Third failure: submitted=True (terminal), generic termination message —
+    still no hidden data leaked.
+    """
     env = _make_env(tmp_path, hidden_green=True)
     try:
         env.step(
@@ -346,10 +353,28 @@ def test_hidden_submit_failure_is_generic(tmp_path):
         validated = env.step({"type": "validate", "stage": "validation_analysis", "model_var": "model"})
         assert not validated.stderr
 
-        submit = env.step({"type": "submit", "stage": "submission", "model_var": "model"})
-        assert submit.submitted
-        assert "hidden test split" in submit.stderr
-        assert "green" not in submit.stderr
+        # Attempt 1 — retry path: NOT submitted yet, generic retry message.
+        submit1 = env.step({"type": "submit", "stage": "submission", "model_var": "model"})
+        assert not submit1.submitted, "First hidden-test failure should allow retry"
+        assert not submit1.done
+        assert "hidden test set" in submit1.stderr.lower() or "hidden" in submit1.stderr.lower()
+        assert "green" not in submit1.stderr   # no hidden data leaked
+        assert env.get_summary()["submit_failure_type"]
+
+        # Attempt 2 — another retry, must redo restart_and_run_all + validate.
+        env.step({"type": "restart_and_run_all", "stage": "reproducibility_check"})
+        env.step({"type": "validate", "stage": "validation_analysis", "model_var": "model"})
+        submit2 = env.step({"type": "submit", "stage": "submission", "model_var": "model"})
+        assert not submit2.submitted, "Second hidden-test failure should still allow retry"
+        assert "green" not in submit2.stderr
+
+        # Attempt 3 — retries exhausted: terminal failure.
+        env.step({"type": "restart_and_run_all", "stage": "reproducibility_check"})
+        env.step({"type": "validate", "stage": "validation_analysis", "model_var": "model"})
+        submit3 = env.step({"type": "submit", "stage": "submission", "model_var": "model"})
+        assert submit3.submitted, "Third hidden-test failure should terminate the episode"
+        assert "hidden test split" in submit3.stderr
+        assert "green" not in submit3.stderr
         assert env.get_summary()["submit_failure_type"]
     finally:
         env.close()

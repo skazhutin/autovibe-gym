@@ -272,6 +272,7 @@ class NotebookGymEnv:
         self.contract_feedback_count = 0
         self.model_check_failure_count = 0
         self.errors_count = 0
+        self.hidden_submit_fail_count = 0
         self._model_check_seen = set()
         self._agent_trace_turn = 0
         self._start_time = time.time()
@@ -794,20 +795,60 @@ class NotebookGymEnv:
             )
             return self._record_observation(observation)
         except Exception as exc:
-            self.state.submitted = True
-            self.private_summary["valid_submit"] = False
-            self.private_summary["final_test_metric"] = None
+            self.hidden_submit_fail_count += 1
+            _max_retries = 3
+            _steps_left = self.budget_remaining()
+            _can_retry = _steps_left > 0 and self.hidden_submit_fail_count < _max_retries
+
             self.private_summary["submit_failure_type"] = type(exc).__name__
-            self.private_summary["final_status"] = "hidden_submit_failed"
-            self.private_summary["null_reason"] = (
-                "Candidate passed validation but failed during private hidden-test submission."
-            )
             self.private_summary.setdefault("finalize_path", "agent_submit")
             self._record_event(
                 action="submit_failed",
                 model_var=model_var,
                 candidate_id=candidate.candidate_id,
-                private={"failure_type": type(exc).__name__},
+                private={
+                    "failure_type": type(exc).__name__,
+                    "can_retry": _can_retry,
+                    "hidden_submit_fail_count": self.hidden_submit_fail_count,
+                },
+            )
+
+            if _can_retry:
+                # The hidden test failed but the agent has steps left — let them
+                # fix their Pipeline and try again.  Reset the validation state so
+                # they MUST do restart_and_run_all → validate → submit again (same
+                # rigorous check). We don't expose why hidden test failed (no data
+                # leakage), only that it failed and a retry is possible.
+                self.last_validated_candidate_id = None
+                _retries_left = _max_retries - self.hidden_submit_fail_count
+                observation = self._observation(
+                    action="submit",
+                    feedback_items=[
+                        self._contract_feedback(
+                            "hidden_submit_failed_retry",
+                            "Submit failed on the hidden test set — your model could not "
+                            "produce predictions on the private held-out rows. "
+                            "No details about the hidden data are available. "
+                            "Fix the robustness of your solution (e.g. ensure your "
+                            "Pipeline handles all dtypes and unseen values), then "
+                            "restart_and_run_all → validate → submit again. "
+                            f"({_retries_left} retry attempt{'s' if _retries_left != 1 else ''} remaining)",
+                            severity="blocker",
+                        )
+                    ],
+                    done=False,
+                    model_var=model_var,
+                )
+                return self._record_observation(observation)
+
+            # No more retries (budget exhausted or attempt limit reached) — record
+            # the terminal failure and end the episode.
+            self.state.submitted = True
+            self.private_summary["valid_submit"] = False
+            self.private_summary["final_test_metric"] = None
+            self.private_summary["final_status"] = "hidden_submit_failed"
+            self.private_summary["null_reason"] = (
+                "Candidate passed validation but failed during private hidden-test submission."
             )
             observation = self._observation(
                 action="submit",
