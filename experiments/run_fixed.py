@@ -19,11 +19,10 @@ import time
 
 from experiments.modes import add_mode_metadata_args, mode_metadata_params
 from gym import NotebookGymEnv
-from dataclasses import replace
-from gym.agent import NOTES_PROMPT, SYSTEM_PROMPT
-from gym.protocol import extract_reasoning
+from gym.agent import SYSTEM_PROMPT, THOUGHTS_DISABLED_PROMPT, THOUGHTS_ENABLED_PROMPT
 from gym.datasets import DatasetSplits, load_dataset_splits, metric_from_name, resolve_metric
-from gym.llm import LiteLLMClient, OpenAICompatibleLLMClient
+from gym.llm import make_llm_client
+from gym.model_config import apply_model_reference
 from gym.protocol import ACTION_JSON_SCHEMA, Action, ActionParseError
 
 try:
@@ -132,12 +131,6 @@ TOOL_ACTIONS = {
     "finalize",
 }
 
-def _default_llm_client(model: str):
-    if "/" in model:
-        return LiteLLMClient()
-    return OpenAICompatibleLLMClient()
-
-
 class FixedTransitionsAgent:
     """
     Wraps NotebookGymEnv and drives the agent through a fixed sequence of stages.
@@ -159,7 +152,7 @@ class FixedTransitionsAgent:
         self.stages = stages
         self.model = model
         self.max_tokens = max_tokens
-        self.client = client or _default_llm_client(model)
+        self.client = client or make_llm_client()
         self.messages: list[dict] = []
         self.total_input_tokens = 0
         self.total_output_tokens = 0
@@ -223,7 +216,9 @@ class FixedTransitionsAgent:
             response = self.client.complete(
                 model=self.model,
                 max_tokens=self.max_tokens,
-                system=SYSTEM_PROMPT + (NOTES_PROMPT if thoughts_on else ""),
+                system=SYSTEM_PROMPT + (
+                    THOUGHTS_ENABLED_PROMPT if thoughts_on else THOUGHTS_DISABLED_PROMPT
+                ),
                 messages=self.messages,
             )
             stage_turns += 1
@@ -247,10 +242,6 @@ class FixedTransitionsAgent:
                 })
                 continue
 
-            if thoughts_on and not getattr(action, "notes", ""):
-                prose = extract_reasoning(response.text)
-                if len(prose) >= 4:
-                    action = replace(action, notes=prose[:4000])
             observation = self.env.step(action)
             last_action = action.type
             if action.type in CODE_OR_NOTEBOOK_STEP_ACTIONS:
@@ -440,7 +431,7 @@ def main():
     parser.add_argument("--target", help="Target column for --dataset CSV mode")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--mode", choices=["local", "cloud"], default="local")
-    parser.add_argument("--model", default=None, help="Override LLM_MODEL env var")
+    parser.add_argument("--model", required=True, help="Model id or name from the shared model registry")
     parser.add_argument("--max-tokens", type=int, default=None)
     parser.add_argument(
         "--max-steps",
@@ -451,7 +442,7 @@ def main():
     parser.add_argument("--sandbox-timeout", type=int, default=None)
     parser.add_argument("--workspace-dir", default=None)
     parser.add_argument("--enable-thoughts", action="store_true",
-                        help="Let the agent keep a persistent scratchpad of notes.")
+                        help="Let the agent keep a persistent scratchpad of visible thoughts.")
     parser.add_argument("--experiment-name", default="autovibe-gym")
     parser.add_argument("--run-name", default=None)
     add_mode_metadata_args(parser)
@@ -475,7 +466,7 @@ def main():
     max_steps = args.max_steps or (sum(s["budget"] for s in stages) + 5)
 
     dataset_name = _dataset_name(splits, args.dataset_dir or args.dataset)
-    model_name = args.model or os.getenv("LLM_MODEL", "Qwen/Qwen2.5-Coder-7B-Instruct")
+    model_name = apply_model_reference(args.model)
     run_name = args.run_name or f"fixed_{dataset_name}_{model_name.split('/')[-1]}"
 
     import mlflow

@@ -38,6 +38,7 @@ export interface Run {
   source?: "mlflow" | "live";
   mlflowId?: string | null;
   thoughtsEnabled?: boolean;
+  currentStage?: string | null;
   failReason?: string;
   finalStatus?: string | null;
   command?: string;
@@ -245,8 +246,9 @@ export type FeedbackChannel =
 
 export interface TrajectoryStep {
   step: number;
-  action: "code" | "validate" | "submit";
-  kind?: string;
+  type: string;
+  stage?: string | null;
+  thoughts?: string;
   title: string;
   code: string;
   budgetRemaining?: number;
@@ -279,7 +281,7 @@ export interface RunError {
 export interface LogMessage {
   role: "system" | "user" | "assistant" | "tool";
   text: string;
-  action?: string;
+  type?: string;
 }
 export interface LogsData {
   messages: LogMessage[];
@@ -388,7 +390,7 @@ export const api = {
   notebook: (id: string) => req<{ cells: NotebookCell[] }>(`/runs/${id}/notebook`),
   trajectory: (id: string) => req<TrajectoryStep[]>(`/runs/${id}/trajectory`),
   thoughts: (id: string) =>
-    req<{ step: number; action: string; text: string; timestamp?: string }[]>(
+    req<{ step: number; type: string; stage?: string; thoughts: string; timestamp?: string }[]>(
       `/runs/${id}/thoughts`
     ),
   checklist: (id: string) => req<ChecklistData>(`/runs/${id}/checklist`),

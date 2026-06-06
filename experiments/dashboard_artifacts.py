@@ -68,7 +68,8 @@ def write_episode_artifacts(
     _write(ws / "solution.ipynb", nb)
 
     event = {
-        "step": 1, "action": "add_cell", "cell_id": "cell_01", "source_after": code,
+        "step": 1, "type": "add_cell", "stage": "candidate_training",
+        "cell_id": "cell_01", "source_after": code,
         "executed": True,
         "execution_result": {
             "execution_count": 1, "outputs": outputs, "stdout": stdout, "stderr": stderr,
@@ -78,12 +79,13 @@ def write_episode_artifacts(
     }
     _write(ws / "notebook_events.json", [event])
     _write(ws / "feedback_trace.json", [{
-        "action": "add_cell", "step": 1, "code": code, "stdout": stdout,
+        "type": "add_cell", "stage": "candidate_training",
+        "step": 1, "code": code, "stdout": stdout,
         "stderr": stderr, "feedback_items": [],
     }])
     _write(ws / "episode_summary.json", {
         "steps_used": steps, "error_count": 1 if error_name else 0,
-        "checklist_coverage": coverage,
+        "checklist_coverage": coverage, "current_stage": "candidate_training",
     })
     return coverage
 
@@ -155,7 +157,8 @@ def write_attempts_episode(
                       "source": code, "outputs": outs})
 
         events.append({
-            "step": step, "action": "add_cell", "cell_id": f"attempt_{step:02d}",
+            "step": step, "type": "add_cell", "stage": "candidate_training",
+            "cell_id": f"attempt_{step:02d}",
             "source_after": code, "executed": True,
             "execution_result": {
                 "execution_count": step, "outputs": outs, "stdout": stdout, "stderr": stderr,
@@ -173,7 +176,8 @@ def write_attempts_episode(
             feedback_items.append({"channel": "runtime", "severity": "error",
                                    "message": f"{error_name}: {(stderr or '').strip()[:400]}"})
         trace.append({
-            "action": "add_cell", "step": step, "code": code, "stdout": stdout,
+            "type": "add_cell", "stage": "candidate_training",
+            "step": step, "code": code, "stdout": stdout,
             "stderr": stderr, "feedback_items": feedback_items,
         })
 
@@ -183,6 +187,6 @@ def write_attempts_episode(
     _write(ws / "feedback_trace.json", trace)
     _write(ws / "episode_summary.json", {
         "steps_used": len(attempts), "error_count": error_count,
-        "checklist_coverage": coverage,
+        "checklist_coverage": coverage, "current_stage": "candidate_training",
     })
     return coverage

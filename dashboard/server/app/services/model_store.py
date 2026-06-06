@@ -1,9 +1,4 @@
-"""Model registry persisted to ``data/models.json``.
-
-The gym itself has no model registry — it reads a single ``LLM_MODEL`` from the
-environment. The dashboard keeps a small registry so the user can pick between
-several configured endpoints. Launching a run passes the chosen model's name to
-the runner via ``--model`` (and its connection via env, see run_launcher)."""
+"""Model registry persisted to ``data/models.json``."""
 from __future__ import annotations
 
 import json
@@ -11,51 +6,31 @@ import os
 import urllib.error
 import urllib.request
 import uuid
-from pathlib import Path
 from typing import Any
 
 from ..config import get_settings
-
-PROVIDERS = ["vLLM", "OpenAI-совместимый", "Gemini", "LiteLLM"]
-
-# The team's LLM server (OpenAI-compatible proxy) and the models it serves.
-LETOVO_BASE = "http://llm.letovo.site:8809/openai"
-TEAM_MODELS = [
-    {"name": "gemma-4-26b", "ctx": 32768},
-    {"name": "deepseek-v4-flash", "ctx": 65536},
-]
-
-
-def _read_env_file(path: Path) -> dict[str, str]:
-    env: dict[str, str] = {}
-    if not path.exists():
-        return env
-    for line in path.read_text("utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, val = line.partition("=")
-        env[key.strip()] = val.strip().strip('"').strip("'")
-    return env
+from gym.model_config import (
+    LETOVO_BASE,
+    OPENAI_COMPATIBLE_LABEL,
+    PROVIDERS,
+    TEAM_MODELS,
+    provider_uses_base_url,
+    runtime_env_for_model,
+)
 
 
 def _seed() -> list[dict[str, Any]]:
     """Seed the registry with the team's gemma + deepseek models on the shared
-    Letovo LLM server. The API key is provided separately — paste it once on the
-    Models screen (or set LLM_API_KEY); the base/provider are preconfigured."""
+    Letovo LLM server. Paste the API key once on the Models screen; the
+    base/provider are preconfigured."""
     s = get_settings()
-    env = _read_env_file(s.repo_root / ".env")
-    base = env.get("LLM_BASE_URL", "")
-    # Ignore the .env placeholder; use the real server base for the team models.
-    if not base or "<server-ip>" in base:
-        base = LETOVO_BASE
     return [
         {
             "id": uuid.uuid4().hex[:8],
             "name": m["name"],
-            "provider": "OpenAI-совместимый",
-            "baseUrl": base,
-            "apiKeyEnv": "LLM_API_KEY",
+            "provider": OPENAI_COMPATIBLE_LABEL,
+            "baseUrl": LETOVO_BASE,
+            "apiKeyEnv": "",
             "apiKey": "",
             "ctx": m["ctx"],
             "temp": 0.4,
@@ -96,9 +71,9 @@ def create_model(payload: dict[str, Any]) -> dict[str, Any]:
     record = {
         "id": uuid.uuid4().hex[:8],
         "name": payload["name"],
-        "provider": payload.get("provider") or "OpenAI-совместимый",
+        "provider": payload.get("provider") or OPENAI_COMPATIBLE_LABEL,
         "baseUrl": payload.get("baseUrl") or "",
-        "apiKeyEnv": payload.get("apiKeyEnv") or "LLM_API_KEY",
+        "apiKeyEnv": payload.get("apiKeyEnv") or "",
         "apiKey": payload.get("apiKey") or "",
         "ctx": payload.get("ctx") or 32768,
         "temp": payload.get("temp", 0.4),
@@ -154,7 +129,14 @@ def check_health(model_id: str) -> dict[str, Any]:
     model = get_model(model_id)
     if model is None:
         return {"online": False, "error": "model not found"}
-    api_key = model.get("apiKey") or os.getenv(model.get("apiKeyEnv") or "LLM_API_KEY", "")
+    if not provider_uses_base_url(model.get("provider")):
+        env = runtime_env_for_model(model)
+        configured = bool(env.get("GEMINI_API_KEY") or env.get("GOOGLE_API_KEY") or env.get("LLM_API_KEY"))
+        result = {"online": configured, "status": "configured" if configured else "missing api key"}
+        _set_online(model_id, configured)
+        return result
+    api_key_env = model.get("apiKeyEnv") or ""
+    api_key = model.get("apiKey") or (os.getenv(api_key_env, "") if api_key_env else "")
     result = _probe(model.get("baseUrl", ""), api_key)
     _set_online(model_id, bool(result.get("online")))
     return result
@@ -166,10 +148,13 @@ def server_health() -> dict[str, Any]:
     models = _load()
     seen: dict[str, dict[str, Any]] = {}
     for m in models:
+        if not provider_uses_base_url(m.get("provider")):
+            continue
         base = (m.get("baseUrl") or "").rstrip("/")
         if not base or base in seen:
             continue
-        api_key = m.get("apiKey") or os.getenv(m.get("apiKeyEnv") or "LLM_API_KEY", "")
+        api_key_env = m.get("apiKeyEnv") or ""
+        api_key = m.get("apiKey") or (os.getenv(api_key_env, "") if api_key_env else "")
         res = _probe(base, api_key)
         seen[base] = {"baseUrl": base, **res}
     servers = list(seen.values())

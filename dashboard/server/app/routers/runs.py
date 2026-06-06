@@ -78,6 +78,7 @@ def _enrich_live(meta: dict) -> dict:
     merged["checklist"] = prog["checklist"]
     merged["checklistTotal"] = prog["checklistTotal"]
     merged["checklistCoverage"] = prog["checklistCoverage"]
+    merged["currentStage"] = prog.get("currentStage") or meta.get("currentStage")
     return merged
 
 
@@ -137,11 +138,13 @@ def get_run(run_id: str) -> dict:
             if rec:
                 merged = {**rec, **{k: v for k, v in live.items() if v is not None}}
                 merged["id"] = run_id
+                merged["currentStage"] = mlflow_store.current_stage(_episode_dir(run_id))
                 return merged
         return live
     rec = mlflow_store.get_run(run_id)
     if rec is None:
         raise HTTPException(404, f"Run '{run_id}' not found")
+    rec["currentStage"] = mlflow_store.current_stage(_episode_dir(run_id))
     return rec
 
 

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import json
 import sys
 from types import SimpleNamespace
 
 import pytest
 
-from dashboard.server.app.config import default_python_bin
+from dashboard.server.app.config import REPO_ROOT, default_python_bin
 from dashboard.server.app.services import mlflow_store, run_launcher
 
 
@@ -155,6 +156,98 @@ def test_checklist_uses_authoritative_fallback_when_episode_artifacts_missing():
     assert data["closed"] == round(0.88 * data["total"])
 
 
+def test_episode_artifacts_expose_current_stage_type_and_thoughts(tmp_path):
+    (tmp_path / "episode_summary.json").write_text(
+        json.dumps({"current_stage": "validation_analysis"}),
+        encoding="utf-8",
+    )
+    (tmp_path / "feedback_trace.json").write_text(
+        json.dumps(
+            [
+                {
+                    "type": "think",
+                    "step": 0,
+                    "budget_remaining": 20,
+                    "stage": "planning",
+                    "thoughts": "I will inspect data, validate a candidate, and submit only when ready.",
+                    "stdout": "[THINK] Thought recorded.",
+                    "feedback_items": [],
+                },
+                {
+                    "type": "add_cell",
+                    "step": 1,
+                    "budget_remaining": 19,
+                    "stage": "feature_pipeline_building",
+                    "thoughts": "I am building a reproducible preprocessing pipeline.",
+                    "code": "model = pipeline",
+                    "feedback_items": [{"channel": "runtime", "message": "ok"}],
+                },
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "scratchpad.json").write_text(
+        json.dumps(
+            [
+                {
+                    "step": 1,
+                    "type": "think",
+                    "stage": "planning",
+                    "thoughts": "I will inspect data first.",
+                    "timestamp": "2026-06-05T00:00:00Z",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "notebook_events.json").write_text(
+        json.dumps(
+            [
+                {"type": "think", "step": 0, "stage": "planning", "non_mutating": True},
+                {"type": "add_cell", "step": 1, "stage": "feature_pipeline_building"},
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    assert mlflow_store.current_stage(tmp_path) == "validation_analysis"
+
+    trajectory = mlflow_store.trajectory(tmp_path)
+    assert trajectory[0]["type"] == "think"
+    assert trajectory[0]["stage"] == "planning"
+    assert trajectory[0]["thoughts"].startswith("I will inspect")
+    assert "action" not in trajectory[0]
+    assert trajectory[1]["type"] == "add_cell"
+    assert trajectory[1]["stage"] == "feature_pipeline_building"
+    assert trajectory[1]["thoughts"] == "I am building a reproducible preprocessing pipeline."
+
+    thoughts = mlflow_store.thoughts(tmp_path)
+    assert thoughts == [
+        {
+            "step": 1,
+            "type": "think",
+            "stage": "planning",
+            "thoughts": "I will inspect data first.",
+            "timestamp": "2026-06-05T00:00:00Z",
+        }
+    ]
+
+    progress = mlflow_store.episode_progress(tmp_path)
+    assert progress["currentStage"] == "validation_analysis"
+
+
+def test_run_detail_frontend_declares_stage_and_think_rendering():
+    source = (REPO_ROOT / "dashboard" / "web" / "src" / "pages" / "RunDetail.tsx").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'label="Этап"' in source
+    assert 'think: "мысль"' in source
+    assert 'planning: "Планирование"' in source
+    assert "stageLabel(s.stage)" in source
+    assert "s.thoughts" in source
+
+
 def test_run_launcher_planned_steps_match_dashboard_modes():
     assert run_launcher._planned_steps({"mode": "single"}) == 1
     assert run_launcher._planned_steps({"mode": "repeated", "shots": 4}) == 4
@@ -165,13 +258,18 @@ def test_run_launcher_planned_steps_match_dashboard_modes():
     assert run_launcher._planned_steps({"mode": "all"}) == 5
 
 
-def test_run_launcher_batch_mode_uses_common_runner_with_selected_modes():
+def test_run_launcher_batch_mode_uses_common_runner_with_selected_modes(monkeypatch):
+    monkeypatch.setattr(
+        run_launcher.model_store,
+        "get_model",
+        lambda model_id: {"id": model_id, "name": "fake-model", "maxTokens": 4096},
+    )
     args = run_launcher._runner_args(
         {
             "mode": "batch",
             "modes": ["single", "repeated", "iterative", "gym", "fixed"],
             "budgetMode": "local",
-            "model": "fake-model",
+            "modelId": "fake",
             "runName": "dash_live_unit",
             "maxSteps": 8,
             "shots": 4,
@@ -194,12 +292,17 @@ def test_run_launcher_batch_mode_uses_common_runner_with_selected_modes():
     assert "--shots" in args
 
 
-def test_run_launcher_fixed_mode_uses_fixed_runner():
+def test_run_launcher_fixed_mode_uses_fixed_runner(monkeypatch):
+    monkeypatch.setattr(
+        run_launcher.model_store,
+        "get_model",
+        lambda model_id: {"id": model_id, "name": "fake-model", "maxTokens": 4096},
+    )
     args = run_launcher._runner_args(
         {
             "mode": "fixed",
             "budgetMode": "local",
-            "model": "fake-model",
+            "modelId": "fake",
             "runName": "dash_live_unit",
             "maxSteps": 8,
         }
@@ -207,6 +310,105 @@ def test_run_launcher_fixed_mode_uses_fixed_runner():
 
     assert args[:2] == ["-m", "experiments.run_fixed"]
     assert "--max-steps" in args
+
+
+def test_run_launcher_uses_model_name_from_model_id(monkeypatch):
+    monkeypatch.setattr(
+        run_launcher.model_store,
+        "get_model",
+        lambda model_id: {
+            "id": model_id,
+            "name": "nvidia/nemotron-3-ultra-550b-a55b:free",
+            "provider": "OpenAI-совместимый",
+            "baseUrl": "https://openrouter.ai/api/v1",
+            "maxTokens": 4096,
+        },
+    )
+
+    args = run_launcher._runner_args(
+        {
+            "mode": "gym",
+            "budgetMode": "local",
+            "modelId": "openrouter",
+            "runName": "dash_live_unit",
+            "maxSteps": 8,
+        }
+    )
+
+    assert "--model" in args
+    assert args[args.index("--model") + 1] == "nvidia/nemotron-3-ultra-550b-a55b:free"
+
+
+def test_run_launcher_requires_model_id():
+    with pytest.raises(ValueError, match="Model must be selected"):
+        run_launcher._runner_args(
+            {
+                "mode": "gym",
+                "budgetMode": "local",
+                "runName": "dash_live_unit",
+                "maxSteps": 8,
+            }
+        )
+
+
+def test_run_launcher_llm_env_sets_provider_from_selected_model(monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "google")
+
+    monkeypatch.setattr(
+        run_launcher.model_store,
+        "get_model",
+        lambda model_id: {
+            "id": model_id,
+            "name": "nvidia/nemotron-3-ultra-550b-a55b:free",
+            "provider": "OpenAI-compatible",
+            "baseUrl": "https://openrouter.ai/api/v1",
+            "apiKey": "sk-test",
+        },
+    )
+
+    env = run_launcher._llm_env({"modelId": "openrouter"})
+
+    assert env["LLM_PROVIDER"] == "openai"
+    assert env["LLM_MODEL"] == "nvidia/nemotron-3-ultra-550b-a55b:free"
+    assert env["LLM_BASE_URL"] == "https://openrouter.ai/api/v1"
+    assert env["LLM_API_KEY"] == "sk-test"
+
+
+def test_run_launcher_llm_env_maps_gemini_and_litellm_providers(monkeypatch):
+    records = {
+        "gemini": {"provider": "Gemini", "name": "gemini-2.5-flash"},
+        "lite": {"provider": "LiteLLM", "name": "groq/llama-3.3-70b-versatile"},
+    }
+    monkeypatch.setattr(
+        run_launcher.model_store,
+        "get_model",
+        lambda model_id: records[model_id],
+    )
+
+    assert run_launcher._llm_env({"modelId": "gemini"})["LLM_PROVIDER"] == "google"
+    assert run_launcher._llm_env({"modelId": "lite"})["LLM_PROVIDER"] == "litellm"
+
+
+def test_run_launcher_gemini_model_does_not_need_base_url(monkeypatch):
+    monkeypatch.setattr(
+        run_launcher.model_store,
+        "get_model",
+        lambda model_id: {
+            "id": model_id,
+            "name": "gemini-2.5-flash",
+            "provider": "Gemini",
+            "apiKey": "gemini-key",
+            "baseUrl": "",
+        },
+    )
+
+    env = run_launcher._llm_env({"modelId": "gemini"})
+
+    assert env["LLM_PROVIDER"] == "google"
+    assert env["LLM_MODEL"] == "gemini-2.5-flash"
+    assert env["GEMINI_API_KEY"] == "gemini-key"
+    assert "LLM_BASE_URL" not in env
+    assert "LLM_API_KEY" not in env
 
 
 def test_run_launcher_python_available_accepts_paths_and_rejects_missing(tmp_path):

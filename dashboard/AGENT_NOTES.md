@@ -85,8 +85,8 @@ primitives), charts.jsx (CodeBlock + SVG charts), screens-*.jsx, app.jsx (shell+
   target, source, desc
 - Checklist 8 items: id,label,desc,closedStep
 - Notebook: cells [{n, code, out:{type:stdout|table|error|submit,...}}]
-- Trajectory: steps [{step, action(code|validate|submit), title, code, feedback:[{ch:runtime|
-  contract|checklist|checklist-hint|terminal, text}]}]
+- Trajectory: steps [{step, type(code|validate|submit|think|...), stage, thoughts?, title,
+  code, feedback:[{ch:runtime|contract|checklist|checklist-hint|terminal, text}]}]
 - Logs: [{role:system|user|assistant|tool, text}]
 Score fmt: RMSE 1dp, RMSLE 4dp, else 3dp. Improve% over baseline: min→(b-s)/b*100 else (s-b)/b*100.
 
@@ -143,11 +143,11 @@ GET  /runs/{id}/events (SSE/poll for live)
   VISUAL FIXES (branch dev/claude/dashboard-visual-fixes, PR #27): sidebar position:fixed (+ .main
   margin-left); dumbbell logo in .mark; cleaner gear/trash icon paths; trajectory rebuilt as flex
   row [marker][card] with .traj-step::after connector (z-index:0) spanning full row; marker = 30px
-  badge with line icon chosen by step `kind` (backend trajectory() now emits raw `kind`), opaque
+  badge with line icon chosen by step `type` (backend trajectory() emits canonical `type`), opaque
   fills (validate/submit mixed with --surface, not transparent, so the connector doesn't show
   through); "code" icon redefined to centered chevrons. Gotcha that burned time: HMR/stale build +
   a duplicate uvicorn made changes "not show" — restart vite (clear node_modules/.vite) AND keep a
-  single backend; verify served module via curl localhost:5173/src/... and kind via the :5173 proxy.
+  single backend; verify served module via curl localhost:5173/src/... and type via the :5173 proxy.
 - next ideas: open draft PR; optional gym-side incremental artifact flush for true live streaming;
   run a real end-to-end launch once an LLM endpoint is reachable.
 
@@ -159,13 +159,13 @@ BACKEND=local (override AUTOVIBE_DASHBOARD_EXECUTOR). Verified docker error gone
 shot fail "Pipeline has no attribute predict" = LLM output quality (unfitted/partial pipeline), not
 infra — would need baseline prompt tuning.
 
-## Agent thoughts/scratchpad (PR: dev/claude/llm-thoughts)
-protocol.Action has optional `notes` (parsed via from_payload wrapper + replace; to_dict wrapper).
-NotebookGymEnv(enable_thoughts): _add_note() in step() top → self.scratchpad; scratchpad_digest()
-re-injected by agent._build_feedback each turn; persisted to workspace/scratchpad.json; summary
-notes_count/thoughts_enabled. agent.py appends NOTES_PROMPT to system prompt only when enabled.
-run_gym --enable-thoughts. Dashboard: run_launcher adds --enable-thoughts ONLY for episode (gym/
-iterative) when cfg.enableThoughts; mlflow_store.thoughts() reads scratchpad.json; GET /runs/{id}/
-thoughts. Frontend: «Мысли» tab (RunDetail), New Run toggle gated by thoughtsSupported, sparkles icon.
-Only gym/iterative support it (multi-turn). Verified: protocol parse, env capture+digest+persist,
-launcher gating, thoughts endpoint.
+## Agent thoughts/scratchpad (current deterministic contract)
+protocol.Action uses canonical `type`, required environment `stage`, and optional visible
+`thoughts` only when thoughts mode is enabled. `notes`, `action`, `action_type`, and `kind`
+are rejected for new action payloads.
+`NotebookGymEnv(enable_thoughts)` requires the first accepted action to be
+`{"type":"think","stage":"planning","thoughts":"..."}`; later `think` is allowed only with
+a non-planning stage and does not mutate notebook/kernel/data or the normal code-step budget.
+Thoughts are persisted to `scratchpad.json`, re-injected by `scratchpad_digest()` as
+`[YOUR THOUGHTS SO FAR]`, and surfaced through `GET /runs/{id}/thoughts`.
+Dashboard trajectory/current-stage APIs emit canonical `type`, `stage`, and `thoughts`.

@@ -162,14 +162,14 @@ autovibe-gym/
 | Слой | Технология | Причина |
 |---|---|---|
 | Agent protocol | JSON `Action` / structured `Observation` | Явный контракт между LLM и средой |
-| LLM client | `LLMClient` + `openai` SDK + `LLM_BASE_URL` | Работает с vLLM (H200), OpenAI, любым OpenAI-совместимым прокси |
+| LLM client | `LLMClient` + shared model registry | Работает с vLLM (H200), OpenAI-compatible endpoints, Gemini, LiteLLM |
 | Model serving | `vLLM` (на сервере H200) | OpenAI-compatible API, лучший throughput |
 | Sandbox | `subprocess` + timeout + pickle | Изолированный процесс, сервер-safe |
 | Experiment tracking | `MLflow` (local) | Без облака, visual UI, сравнение runs |
 | Data | `pandas`, `numpy` | Стандарт DS |
 | ML | `scikit-learn`, `xgboost`, `lightgbm` | LLM хорошо знает эти библиотеки |
 | Metrics | `sklearn.metrics` | |
-| Config | `python-dotenv` | `.env` файл для API keys и URL |
+| Config | model registry + `python-dotenv` | models/endpoints/LLM keys в реестре; `.env` только для инфраструктуры |
 | CLI | `argparse` | Без фреймворков |
 | Python | 3.11+ | Type hints, `X \| Y` union syntax |
 

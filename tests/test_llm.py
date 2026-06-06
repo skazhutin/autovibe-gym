@@ -1,3 +1,4 @@
+import os
 import sys
 import types
 
@@ -15,6 +16,11 @@ from gym.llm import (
     _wait_for_min_request_interval,
     default_model_name,
     make_llm_client,
+)
+from gym.model_config import (
+    apply_model_reference,
+    provider_uses_base_url,
+    runtime_env_for_model,
 )
 
 
@@ -243,3 +249,79 @@ def test_google_client_generates_content_with_system_instruction(monkeypatch):
         "max_output_tokens": 77,
     }
     assert response == LLMResponse(text="response", input_tokens=13, output_tokens=8)
+
+
+def test_litellm_client_passes_registry_api_key(monkeypatch):
+    requests = []
+
+    def fake_completion(**kwargs):
+        requests.append(kwargs)
+        usage = types.SimpleNamespace(prompt_tokens=3, completion_tokens=4)
+        message = types.SimpleNamespace(content="ok")
+        choice = types.SimpleNamespace(message=message)
+        return types.SimpleNamespace(usage=usage, choices=[choice])
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=fake_completion))
+    monkeypatch.setenv("AUTOVIBE_LITELLM_API_KEY", "lite-key")
+
+    from gym.llm import LiteLLMClient
+
+    response = LiteLLMClient().complete(
+        system="system",
+        messages=[{"role": "user", "content": "hello"}],
+        model="groq/llama-3.3-70b-versatile",
+        max_tokens=12,
+    )
+
+    assert response == LLMResponse(text="ok", input_tokens=3, output_tokens=4)
+    assert requests[0]["api_key"] == "lite-key"
+    assert requests[0]["model"] == "groq/llama-3.3-70b-versatile"
+
+
+def test_model_config_builds_provider_specific_env_without_env_keys(monkeypatch):
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+
+    gemini_env = runtime_env_for_model(
+        {"name": "gemini-2.5-flash", "provider": "Gemini", "apiKey": "token"}
+    )
+    openai_env = runtime_env_for_model(
+        {
+            "name": "model-a",
+            "provider": "OpenAI-совместимый",
+            "baseUrl": "https://example.test/v1",
+            "apiKey": "secret",
+        }
+    )
+    litellm_env = runtime_env_for_model(
+        {"name": "groq/llama-3.3-70b-versatile", "provider": "LiteLLM", "apiKey": "lite"}
+    )
+
+    assert not provider_uses_base_url("Gemini")
+    assert gemini_env == {
+        "LLM_PROVIDER": "google",
+        "LLM_MODEL": "gemini-2.5-flash",
+        "GEMINI_API_KEY": "token",
+        "GOOGLE_API_KEY": "token",
+    }
+    assert openai_env["LLM_PROVIDER"] == "openai"
+    assert openai_env["LLM_BASE_URL"] == "https://example.test/v1"
+    assert openai_env["LLM_API_KEY"] == "secret"
+    assert litellm_env == {
+        "LLM_PROVIDER": "litellm",
+        "LLM_MODEL": "groq/llama-3.3-70b-versatile",
+        "AUTOVIBE_LITELLM_API_KEY": "lite",
+    }
+
+
+def test_apply_model_reference_resolves_registry_name(tmp_path, monkeypatch):
+    registry = tmp_path / "models.json"
+    registry.write_text(
+        '[{"id":"m1","name":"gemini-2.5-flash","provider":"Gemini","apiKey":"token"}]',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("AUTOVIBE_MODELS_CONFIG", str(registry))
+
+    assert apply_model_reference("m1") == "gemini-2.5-flash"
+    assert os.environ["LLM_PROVIDER"] == "google"
+    assert os.environ["GEMINI_API_KEY"] == "token"

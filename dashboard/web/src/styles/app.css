@@ -1520,3 +1520,14 @@ table.data tbody tr.clickable:hover {
 .thought-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .thought-head .st { font-size: 11px; color: var(--text-faint); }
 .thought-text { font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+.thought-inline {
+  color: var(--text-dim);
+  background: var(--accent-wash);
+  border-left: 3px solid var(--accent);
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

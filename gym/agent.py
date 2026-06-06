@@ -6,9 +6,8 @@ import os
 from .env import GymEnv
 from .llm import LLMClient, default_model_name, make_llm_client
 from .notebook_env import NotebookGymEnv
-from dataclasses import replace
 
-from .protocol import ACTION_JSON_SCHEMA, Action, ActionParseError, Observation, extract_reasoning
+from .protocol import ACTION_JSON_SCHEMA, Action, ActionParseError, Observation
 
 
 def _default_client() -> LLMClient:
@@ -96,17 +95,21 @@ KEEP THE CLEAN RUN FAST AND ROBUST:
 {ACTION_JSON_SCHEMA}
 """
 
-# Appended to the system prompt only when the run has the scratchpad/thoughts
-# mode enabled. The notes persist across turns and are shown back to you.
-NOTES_PROMPT = """
+THOUGHTS_ENABLED_PROMPT = """
 
-SCRATCHPAD / NOTES (enabled for this run):
-- EVERY turn, record your reasoning. Add a "notes" string field to your action JSON, e.g.
-  {"type": "code", "code": "...", "notes": "Target is imbalanced; will try class_weight next."}
-- Capture hypotheses, observations, plans, and why you chose this action.
-- Your notes are SAVED and shown back to you every turn under [YOUR NOTES SO FAR],
-  so use them as durable memory across steps. Keep each note short and useful.
-- Notes do not execute anything; they never replace the action itself.
+Thoughts mode is enabled.
+Every JSON action must include `thoughts`.
+Use `thoughts` for a short visible summary of what you learned, what you are doing, why you are doing it, or what you plan to do next.
+Your first action must be:
+{"type": "think", "stage": "planning", "thoughts": "..."}.
+"""
+
+THOUGHTS_DISABLED_PROMPT = """
+
+Thoughts mode is disabled.
+Do not include `thoughts`.
+Do not use type `think`.
+Do not use stage `planning`.
 """
 
 
@@ -138,7 +141,9 @@ class GymAgent:
         self.messages = [{"role": "user", "content": context["task"]}]
         max_agent_turns = max(self.env.state.max_steps * 2 + 5, 10)
         thoughts_on = bool(getattr(self.env, "enable_thoughts", False))
-        system_prompt = SYSTEM_PROMPT + (NOTES_PROMPT if thoughts_on else "")
+        system_prompt = SYSTEM_PROMPT + (
+            THOUGHTS_ENABLED_PROMPT if thoughts_on else THOUGHTS_DISABLED_PROMPT
+        )
 
         for turn in range(max_agent_turns):
             response = self.client.complete(
@@ -178,13 +183,6 @@ class GymAgent:
                     }
                 )
                 continue
-
-            # In thoughts mode, capture the model's surrounding reasoning prose
-            # as a note when it didn't fill the explicit "notes" field.
-            if thoughts_on and not getattr(action, "notes", ""):
-                prose = extract_reasoning(response.text)
-                if len(prose) >= 4:
-                    action = replace(action, notes=prose[:4000])
 
             observation = self.env.step(action)
             self._record_agent_trace(
@@ -246,9 +244,9 @@ class GymAgent:
             feedback = f"{feedback}\n\n{notebook_context}"
         digest = getattr(self.env, "scratchpad_digest", None)
         if callable(digest):
-            notes = digest()
-            if notes:
-                feedback = f"{feedback}\n\n{notes}"
+            thoughts = digest()
+            if thoughts:
+                feedback = f"{feedback}\n\n{thoughts}"
         return feedback
 
     def _messages_for_llm(self) -> list[dict]:

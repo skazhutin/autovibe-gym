@@ -148,7 +148,7 @@ def main() -> None:
         default="local",
         help="Runner budget preset passed to the underlying run_* script.",
     )
-    parser.add_argument("--model", default=None)
+    parser.add_argument("--model", required=True, help="Model id or name from the shared model registry")
     parser.add_argument("--experiment-name", default="autovibe-gym")
     parser.add_argument("--run-name", default=None)
     parser.add_argument("--seed", type=int, default=42)
@@ -185,7 +185,7 @@ def main() -> None:
     dataset_label = args.dataset_dir or args.dataset
     print(
         f"[run] requested_mode={requested_mode} dataset={dataset_label} "
-        f"model={args.model or '(env default)'} batch_id={batch_id or '-'}"
+        f"model={args.model} batch_id={batch_id or '-'}"
     )
     print(f"[run] Planned {len(commands)} run(s)")
 

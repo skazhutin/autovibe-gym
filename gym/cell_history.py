@@ -25,7 +25,7 @@ class Cell:
     def to_dict(self) -> dict[str, Any]:
         return {
             "execution_count": self.execution_count,
-            "action": self.action,
+            "type": self.action,
             "step": self.step,
             "budget_remaining": self.budget_remaining,
             "code": self.code,

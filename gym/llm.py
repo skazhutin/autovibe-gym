@@ -79,9 +79,9 @@ class LiteLLMClient:
     """
     Adapter that uses the LiteLLM Python SDK directly — no proxy server needed.
 
-    Supports any provider litellm knows about. Configure via env vars:
-      LLM_MODEL   — e.g. "groq/llama-3.3-70b-versatile"
-      GROQ_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.
+    Supports any provider litellm knows about. The shared model registry passes
+    the selected model name (e.g. "groq/llama-3.3-70b-versatile") and optional
+    per-model API key through AUTOVIBE_LITELLM_API_KEY.
 
     See: https://docs.litellm.ai/docs/providers
     """
@@ -96,11 +96,15 @@ class LiteLLMClient:
     ) -> LLMResponse:
         import litellm
 
-        response = litellm.completion(
-            model=model,
-            max_tokens=max_tokens,
-            messages=[{"role": "system", "content": system}] + messages,
-        )
+        kwargs = {
+            "model": model,
+            "max_tokens": max_tokens,
+            "messages": [{"role": "system", "content": system}] + messages,
+        }
+        api_key = os.getenv("AUTOVIBE_LITELLM_API_KEY")
+        if api_key:
+            kwargs["api_key"] = api_key
+        response = litellm.completion(**kwargs)
         usage = response.usage
         text = _message_text(response.choices[0].message)
         return LLMResponse(

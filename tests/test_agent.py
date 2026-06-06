@@ -1,6 +1,6 @@
 import pandas as pd
 
-from gym.agent import GymAgent
+from gym.agent import GymAgent, SYSTEM_PROMPT, THOUGHTS_DISABLED_PROMPT, THOUGHTS_ENABLED_PROMPT
 from gym.env import GymEnv
 from gym.llm import LLMResponse
 from gym.protocol import Action
@@ -42,7 +42,7 @@ def _make_env(max_steps=3):
 
 def _train_constant_model_action():
     return (
-        '{"type": "code", "code": "'
+        '{"type": "code", "stage": "candidate_training", "code": "'
         "from sklearn.dummy import DummyClassifier\\n"
         "X_train = train_df.drop(columns=[target_col])\\n"
         "y_train = train_df[target_col]\\n"
@@ -56,7 +56,7 @@ def test_agent_runs_code_then_submit_and_counts_tokens():
     client = ScriptedClient(
         [
             _train_constant_model_action(),
-            '{"type": "submit", "model_var": "model"}',
+            '{"type": "submit", "stage": "submission", "model_var": "model"}',
         ]
     )
     agent = GymAgent(env=_make_env(), model="fake-model", max_tokens=123, client=client)
@@ -69,6 +69,21 @@ def test_agent_runs_code_then_submit_and_counts_tokens():
     assert summary["output_tokens"] == 10
     assert client.calls[0]["model"] == "fake-model"
     assert client.calls[0]["max_tokens"] == 123
+    assert "Every JSON action must include `type`" in client.calls[0]["system"]
+    assert "Every JSON action must include `stage`" in client.calls[0]["system"]
+    assert "Thoughts mode is disabled." in client.calls[0]["system"]
+
+
+def test_agent_prompt_has_deterministic_type_stage_and_thoughts_guidance():
+    assert "Allowed type values:" in SYSTEM_PROMPT
+    assert "Allowed stage values:" in SYSTEM_PROMPT
+    assert "Do not invent type or stage values." in SYSTEM_PROMPT
+    assert "Thoughts mode is enabled." in THOUGHTS_ENABLED_PROMPT
+    assert "Every JSON action must include `thoughts`." in THOUGHTS_ENABLED_PROMPT
+    assert '{"type": "think", "stage": "planning", "thoughts": "..."}' in THOUGHTS_ENABLED_PROMPT
+    assert "Thoughts mode is disabled." in THOUGHTS_DISABLED_PROMPT
+    assert "Do not use type `think`." in THOUGHTS_DISABLED_PROMPT
+    assert "Do not use stage `planning`." in THOUGHTS_DISABLED_PROMPT
 
 
 def test_agent_reprompts_when_llm_returns_invalid_json_action():
@@ -76,7 +91,7 @@ def test_agent_reprompts_when_llm_returns_invalid_json_action():
         [
             '{"type": "dance"}',
             _train_constant_model_action(),
-            '{"type": "submit", "model_var": "model"}',
+            '{"type": "submit", "stage": "submission", "model_var": "model"}',
         ]
     )
     agent = GymAgent(env=_make_env(), client=client)
@@ -99,7 +114,9 @@ def test_agent_forces_submit_after_budget_exhaustion_when_model_exists():
 
 
 def test_agent_reports_max_agent_turns_when_client_never_submits_or_builds_model():
-    client = ScriptedClient(['{"type": "code", "code": "print(1)"}'] * 11)
+    client = ScriptedClient(
+        ['{"type": "code", "stage": "data_schema_inspection", "code": "print(1)"}'] * 11
+    )
     agent = GymAgent(env=_make_env(max_steps=3), client=client)
 
     summary = agent.run()

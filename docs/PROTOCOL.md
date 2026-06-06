@@ -32,12 +32,49 @@ only validation scores may inform that decision.
 
 ## Action Protocol
 
-Every agent action is a JSON object. Two action types are defined:
+Every environment-backed agent action is a JSON object with canonical `type`
+and deterministic `stage`. Current action-type fields such as `action`,
+`action_type`, or `kind` are rejected; `type` is the only supported field name.
+Visible agent reasoning, when enabled, uses only `thoughts`.
+
+Core legacy actions:
 
 ```json
-{"type": "code", "code": "print(train_df.shape)"}
-{"type": "submit", "model_var": "model"}
+{"type": "code", "stage": "data_schema_inspection", "code": "print(train_df.shape)"}
+{"type": "submit", "stage": "submission", "model_var": "model"}
 ```
+
+Allowed `stage` values are:
+
+```text
+planning
+data_schema_inspection
+target_metric_inspection
+data_quality_inspection
+leakage_split_inspection
+preprocessing_design
+feature_pipeline_building
+baseline_modeling
+candidate_training
+validation_analysis
+model_improvement
+reproducibility_check
+submission
+```
+
+`planning` is allowed only as the first `think` action when thoughts mode is
+enabled. When thoughts mode is disabled, `think`, `planning`, and `thoughts`
+are rejected through contract feedback.
+
+Thoughts mode starts with a non-mutating action:
+
+```json
+{"type": "think", "stage": "planning", "thoughts": "I will inspect the data, build a raw-row-ready pipeline, validate it, check reproducibility, and submit only when ready."}
+```
+
+Later `think` actions are allowed only with non-planning stages. They record
+visible thoughts in trajectory artifacts and do not mutate the notebook, kernel,
+data, validation state, submission state, or normal code-step budget.
 
 **Code action:** The code string is executed in a persistent namespace containing
 `train_df`, `val_df`, `target_col`, `pd`, `np`. Outputs (stdout/stderr) and updated
@@ -52,17 +89,17 @@ The gym has five product modes; these are actions inside the
 existing flexible/fixed gym protocol, not new modes.
 
 ```json
-{"type": "validate", "model_var": "auto"}
-{"type": "submit", "model_var": "auto"}
-{"type": "finalize", "model_var": "auto"}
-{"type": "inspect_data"}
-{"type": "profile_data", "profile": "compact"}
-{"type": "profile_data", "profile": "ydata"}
-{"type": "list_candidates"}
-{"type": "check_candidate", "model_var": "auto"}
-{"type": "quick_validate", "model_var": "auto"}
-{"type": "cleanlab_diagnose", "model_var": "auto", "source": "validation_or_cv", "max_issues": 20}
-{"type": "tune_hyperparameters", "model_var": "model", "search_space": {}, "n_trials": 10, "timeout_sec": 60}
+{"type": "validate", "stage": "validation_analysis", "model_var": "auto"}
+{"type": "submit", "stage": "submission", "model_var": "auto"}
+{"type": "finalize", "stage": "submission", "model_var": "auto"}
+{"type": "inspect_data", "stage": "data_schema_inspection"}
+{"type": "profile_data", "stage": "data_quality_inspection", "profile": "compact"}
+{"type": "profile_data", "stage": "data_quality_inspection", "profile": "ydata"}
+{"type": "list_candidates", "stage": "candidate_training"}
+{"type": "check_candidate", "stage": "validation_analysis", "model_var": "auto"}
+{"type": "quick_validate", "stage": "validation_analysis", "model_var": "auto"}
+{"type": "cleanlab_diagnose", "stage": "validation_analysis", "model_var": "auto", "source": "validation_or_cv", "max_issues": 20}
+{"type": "tune_hyperparameters", "stage": "model_improvement", "model_var": "model", "search_space": {}, "n_trials": 10, "timeout_sec": 60}
 ```
 
 `model_var="auto"` discovers live predict-capable variables in priority order
@@ -174,13 +211,14 @@ Model Selection=6, HPT=5 (total=22 + 5 buffer).
 |----------|-------|
 | Runner | `experiments/run_gym.py` |
 | LLM calls | Up to 30 local / 15 cloud |
-| Stage order | Agent decides |
+| Stage order | Agent declares the current stage on each action |
 | Feedback per step | stdout + stderr + checklist hints + notebook context |
 | Checklist hints | Yes |
 | Autonomous refinement | Yes |
 
 The agent freely decides what to do next at each step. Full checklist feedback
-after every code action. No stage structure imposed.
+after every code action. No fixed stage order is imposed, but every action
+still declares its current deterministic `stage`.
 
 ---
 

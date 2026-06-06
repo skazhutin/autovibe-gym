@@ -43,10 +43,11 @@ class EnvProtocolTests(unittest.TestCase):
 
     def test_action_json_parsing(self):
         action = Action.from_llm_response(
-            '{"type": "code", "code": "print(train_df.shape)"}'
+            '{"type": "code", "stage": "data_schema_inspection", "code": "print(train_df.shape)"}'
         )
 
         self.assertEqual(action.type, "code")
+        self.assertEqual(action.stage, "data_schema_inspection")
         self.assertEqual(action.code, "print(train_df.shape)")
 
     def test_workspace_is_initialized_and_persists_between_steps(self):
@@ -58,7 +59,7 @@ class EnvProtocolTests(unittest.TestCase):
         self.assertIn("target_col", env.state.namespace)
         self.assertNotIn("test_df", env.state.namespace)
 
-        first = env.step({"type": "code", "code": "value = 41"})
+        first = env.step({"type": "code", "stage": "feature_pipeline_building", "code": "value = 41"})
         second = env.step(Action.code_action("print(value + 1)"))
 
         self.assertEqual(first.step, 1)
@@ -81,7 +82,7 @@ best_model.fit(X_train, y_train)
 """.strip()
             )
         )
-        observation = env.step({"type": "submit", "model_var": "best_model"})
+        observation = env.step({"type": "submit", "stage": "submission", "model_var": "best_model"})
 
         self.assertTrue(observation.submitted)
         self.assertTrue(observation.done)

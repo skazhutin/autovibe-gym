@@ -4,6 +4,45 @@ from dataclasses import dataclass, field, replace
 from typing import Any, Literal
 
 
+AGENT_ACTION_TYPE_VALUES = (
+    "code",
+    "add_cell",
+    "update_cell",
+    "delete_cell",
+    "move_cell",
+    "run_cell",
+    "inspect_notebook",
+    "restart_and_run_all",
+    "validate",
+    "submit",
+    "inspect_data",
+    "profile_data",
+    "check_candidate",
+    "quick_validate",
+    "list_candidates",
+    "cleanlab_diagnose",
+    "tune_hyperparameters",
+    "finalize",
+    "think",
+)
+
+AGENT_STAGE_VALUES = (
+    "planning",
+    "data_schema_inspection",
+    "target_metric_inspection",
+    "data_quality_inspection",
+    "leakage_split_inspection",
+    "preprocessing_design",
+    "feature_pipeline_building",
+    "baseline_modeling",
+    "candidate_training",
+    "validation_analysis",
+    "model_improvement",
+    "reproducibility_check",
+    "submission",
+)
+
+
 ActionType = Literal[
     "code",
     "add_cell",
@@ -23,6 +62,23 @@ ActionType = Literal[
     "cleanlab_diagnose",
     "tune_hyperparameters",
     "finalize",
+    "think",
+]
+
+ActionStage = Literal[
+    "planning",
+    "data_schema_inspection",
+    "target_metric_inspection",
+    "data_quality_inspection",
+    "leakage_split_inspection",
+    "preprocessing_design",
+    "feature_pipeline_building",
+    "baseline_modeling",
+    "candidate_training",
+    "validation_analysis",
+    "model_improvement",
+    "reproducibility_check",
+    "submission",
 ]
 
 
@@ -30,52 +86,63 @@ class ActionParseError(ValueError):
     """Raised when an LLM response looks like an action but is invalid."""
 
 
-ACTION_JSON_SCHEMA = """
+ACTION_JSON_SCHEMA = f"""
 Respond with exactly one JSON object.
 
+Every JSON action must include `type`.
+Allowed type values:
+{", ".join(AGENT_ACTION_TYPE_VALUES)}.
+
+Every JSON action must include `stage`.
+Allowed stage values:
+{", ".join(AGENT_STAGE_VALUES)}.
+
+Use `stage` to indicate what you are currently working on.
+Do not invent type or stage values.
+
 Code action:
-{"type": "code", "code": "print(train_df.shape)"}
+{{"type": "code", "stage": "data_schema_inspection", "code": "print(train_df.shape)"}}
 
 Add code cell action:
-{"type": "add_cell", "cell_type": "code", "source": "print(train_df.shape)", "execute": true}
+{{"type": "add_cell", "stage": "feature_pipeline_building", "cell_type": "code", "source": "print(train_df.shape)", "execute": true}}
 
 Add markdown cell action:
-{"type": "add_cell", "cell_type": "markdown", "source": "## Data exploration", "execute": false}
+{{"type": "add_cell", "stage": "data_schema_inspection", "cell_type": "markdown", "source": "## Data exploration", "execute": false}}
 
 Update cell action:
-{"type": "update_cell", "cell_id": "cell_03", "source": "print(val_df.shape)", "execute": true}
+{{"type": "update_cell", "stage": "feature_pipeline_building", "cell_id": "cell_03", "source": "print(val_df.shape)", "execute": true}}
 
 Run, move, delete, or inspect:
-{"type": "run_cell", "cell_id": "cell_03"}
-{"type": "move_cell", "cell_id": "cell_03", "new_position": 1}
-{"type": "delete_cell", "cell_id": "cell_03"}
-{"type": "inspect_notebook"}
+{{"type": "run_cell", "stage": "validation_analysis", "cell_id": "cell_03"}}
+{{"type": "move_cell", "stage": "reproducibility_check", "cell_id": "cell_03", "new_position": 1}}
+{{"type": "delete_cell", "stage": "reproducibility_check", "cell_id": "cell_03"}}
+{{"type": "inspect_notebook", "stage": "reproducibility_check"}}
 
 Clean reproducibility action:
-{"type": "restart_and_run_all"}
+{{"type": "restart_and_run_all", "stage": "reproducibility_check"}}
 
 Validate action:
-{"type": "validate", "model_var": "model"}
+{{"type": "validate", "stage": "validation_analysis", "model_var": "model"}}
 
 Submit action:
-{"type": "submit", "model_var": "model"}
+{{"type": "submit", "stage": "submission", "model_var": "model"}}
 
 Auto-select a candidate variable when useful:
-{"type": "validate", "model_var": "auto"}
-{"type": "submit", "model_var": "auto"}
-{"type": "finalize", "model_var": "auto"}
+{{"type": "validate", "stage": "validation_analysis", "model_var": "auto"}}
+{{"type": "submit", "stage": "submission", "model_var": "auto"}}
+{{"type": "finalize", "stage": "submission", "model_var": "auto"}}
 
 Environment data/candidate tools:
-{"type": "inspect_data"}
-{"type": "profile_data", "profile": "compact"}
-{"type": "profile_data", "profile": "ydata"}
-{"type": "list_candidates"}
-{"type": "check_candidate", "model_var": "auto"}
-{"type": "quick_validate", "model_var": "auto"}
-{"type": "cleanlab_diagnose", "model_var": "auto", "source": "validation_or_cv", "max_issues": 20}
+{{"type": "inspect_data", "stage": "data_schema_inspection"}}
+{{"type": "profile_data", "stage": "data_quality_inspection", "profile": "compact"}}
+{{"type": "profile_data", "stage": "data_quality_inspection", "profile": "ydata"}}
+{{"type": "list_candidates", "stage": "candidate_training"}}
+{{"type": "check_candidate", "stage": "validation_analysis", "model_var": "auto"}}
+{{"type": "quick_validate", "stage": "validation_analysis", "model_var": "auto"}}
+{{"type": "cleanlab_diagnose", "stage": "validation_analysis", "model_var": "auto", "source": "validation_or_cv", "max_issues": 20}}
 
 Bounded tuning tool:
-{"type": "tune_hyperparameters", "model_var": "model", "search_space": {"classifier__n_estimators": {"type": "int", "low": 100, "high": 300}}, "n_trials": 10, "timeout_sec": 60, "scoring": "metric"}
+{{"type": "tune_hyperparameters", "stage": "model_improvement", "model_var": "model", "search_space": {{"classifier__n_estimators": {{"type": "int", "low": 100, "high": 300}}}}, "n_trials": 10, "timeout_sec": 60, "scoring": "metric"}}
 """.strip()
 
 
@@ -84,6 +151,8 @@ class Action:
     """One explicit agent action sent to the environment."""
 
     type: ActionType
+    stage: ActionStage | str = ""
+    thoughts: str = ""
     code: str = ""
     cell_type: str = "code"
     source: str = ""
@@ -98,32 +167,12 @@ class Action:
     n_trials: int = 10
     timeout_sec: int = 60
     scoring: str = "metric"
-    # Optional free-form scratchpad note the agent can attach to any action.
-    # Persisted and re-shown to the agent when the thoughts/scratchpad mode is on.
-    notes: str = ""
 
     def __post_init__(self) -> None:
-        if self.type not in {
-            "code",
-            "add_cell",
-            "update_cell",
-            "delete_cell",
-            "move_cell",
-            "run_cell",
-            "inspect_notebook",
-            "restart_and_run_all",
-            "validate",
-            "submit",
-            "inspect_data",
-            "profile_data",
-            "check_candidate",
-            "quick_validate",
-            "list_candidates",
-            "cleanlab_diagnose",
-            "tune_hyperparameters",
-            "finalize",
-        }:
+        if self.type not in AGENT_ACTION_TYPE_VALUES:
             raise ActionParseError(f"Unsupported action type: {self.type!r}")
+        if self.thoughts and not isinstance(self.thoughts, str):
+            raise ActionParseError("Action field 'thoughts' must be a string.")
         if self.type == "code" and not isinstance(self.code, str):
             raise ActionParseError("Code action requires a string 'code' field.")
         if self.type == "add_cell":
@@ -168,12 +217,24 @@ class Action:
                 raise ActionParseError("tune_hyperparameters requires timeout_sec >= 1.")
 
     @classmethod
-    def code_action(cls, code: str) -> "Action":
-        return cls(type="code", code=code)
+    def code_action(
+        cls,
+        code: str,
+        *,
+        stage: str = "feature_pipeline_building",
+        thoughts: str = "",
+    ) -> "Action":
+        return cls(type="code", stage=stage, thoughts=thoughts, code=code)
 
     @classmethod
-    def submit_action(cls, model_var: str = "model") -> "Action":
-        return cls(type="submit", model_var=model_var)
+    def submit_action(
+        cls,
+        model_var: str = "model",
+        *,
+        stage: str = "submission",
+        thoughts: str = "",
+    ) -> "Action":
+        return cls(type="submit", stage=stage, thoughts=thoughts, model_var=model_var)
 
     @classmethod
     def add_cell_action(
@@ -182,9 +243,13 @@ class Action:
         *,
         cell_type: str = "code",
         execute: bool = False,
+        stage: str = "feature_pipeline_building",
+        thoughts: str = "",
     ) -> "Action":
         return cls(
             type="add_cell",
+            stage=stage,
+            thoughts=thoughts,
             cell_type=cell_type,
             source=source,
             execute=execute,
@@ -192,16 +257,29 @@ class Action:
 
     @classmethod
     def from_payload(cls, payload: dict[str, Any]) -> "Action":
+        for field_name in ("action", "action_type", "kind"):
+            if field_name in payload:
+                raise ActionParseError(
+                    f"Action uses unsupported field '{field_name}'. Use canonical 'type'."
+                )
+        for field_name in ("notes", "note"):
+            if field_name in payload:
+                raise ActionParseError(
+                    f"Action uses unsupported field '{field_name}'. Use canonical 'thoughts'."
+                )
+        stage = str(payload.get("stage") or "").strip()
+        raw_thoughts = payload.get("thoughts", "")
+        thoughts = "" if raw_thoughts is None else str(raw_thoughts).strip()
         action = cls._from_payload_core(payload)
-        note = payload.get("notes") or payload.get("note") or payload.get("thoughts")
-        if note:
-            action = replace(action, notes=str(note).strip())
-        return action
+        return replace(action, stage=stage, thoughts=thoughts)
 
     @classmethod
     def _from_payload_core(cls, payload: dict[str, Any]) -> "Action":
-        raw_type = payload.get("type") or payload.get("action")
+        raw_type = payload.get("type")
         action_type = _normalize_action_type(raw_type)
+
+        if action_type == "think":
+            return cls(type="think")
 
         if action_type == "code":
             code = payload.get("code")
@@ -333,8 +411,10 @@ class Action:
 
     def to_dict(self) -> dict[str, Any]:
         data = self._to_dict_core()
-        if self.notes:
-            data["notes"] = self.notes
+        if self.stage:
+            data["stage"] = self.stage
+        if self.thoughts:
+            data["thoughts"] = self.thoughts
         return data
 
     def _to_dict_core(self) -> dict[str, Any]:
@@ -386,6 +466,8 @@ class Action:
                 "timeout_sec": self.timeout_sec,
                 "scoring": self.scoring,
             }
+        if self.type == "think":
+            return {"type": self.type}
         return {"type": "submit", "model_var": self.model_var}
 
 
@@ -393,9 +475,11 @@ class Action:
 class Observation:
     """Structured feedback returned after an environment action."""
 
-    action: ActionType
+    action: str
     step: int
     budget_remaining: int
+    stage: str | None = None
+    thoughts: str | None = None
     code: str = ""
     stdout: str = ""
     stderr: str = ""
@@ -416,6 +500,8 @@ class Observation:
     def to_feedback_message(self) -> str:
         parts = [f"[ACTION] {self.action}", f"[STEP] {self.step}"]
 
+        if self.stage:
+            parts.append(f"[STAGE] {self.stage}")
         if self.cell_id:
             parts.append(f"[CELL] {self.cell_id}")
         if self.stdout.strip():
@@ -454,9 +540,11 @@ class Observation:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "action": self.action,
+            "type": self.action,
             "step": self.step,
             "budget_remaining": self.budget_remaining,
+            "stage": self.stage,
+            "thoughts": self.thoughts,
             "code": self.code,
             "stdout": self.stdout,
             "stderr": self.stderr,
@@ -496,26 +584,7 @@ def coerce_action(action: Action | dict[str, Any] | str) -> Action:
 def _normalize_action_type(raw_type: Any) -> str:
     if raw_type is None:
         raise ActionParseError("Action is missing the 'type' field.")
-    normalized = str(raw_type).strip().lower().replace("-", "_")
-    aliases = {
-        "write_code": "code",
-        "run_code": "code",
-        "python": "code",
-        "add-code-cell": "add_cell",
-        "add_code_cell": "add_cell",
-        "add-markdown-cell": "add_cell",
-        "run-cell": "run_cell",
-        "run_all": "restart_and_run_all",
-        "restart-run-all": "restart_and_run_all",
-        "submit_model": "submit",
-        "check-model": "check_candidate",
-        "check_model": "check_candidate",
-        "quick-validate": "quick_validate",
-        "quickvalidate": "quick_validate",
-        "inspect-data": "inspect_data",
-        "profile-data": "profile_data",
-    }
-    return aliases.get(normalized, normalized)
+    return str(raw_type).strip()
 
 
 # Chat-template / tool-call scaffolding some models emit around their JSON,
@@ -587,9 +656,9 @@ def _extract_json_block(text: str) -> str | None:
 def extract_reasoning(text: str) -> str:
     """Return the model's free-form reasoning that surrounds its JSON action.
 
-    Reasoning models usually narrate before/after the action JSON; in thoughts
-    mode we capture that prose as a note even when the model didn't fill the
-    explicit ``notes`` field. The JSON object and code-fence markers are removed.
+    Kept as a low-level parser utility for diagnostics. The environment no
+    longer treats this prose as action-level thoughts; visible thoughts must be
+    supplied explicitly in the canonical ``thoughts`` field.
     """
     cleaned = _strip_wrapper_tokens(text)
     block = _first_json_object(cleaned)
