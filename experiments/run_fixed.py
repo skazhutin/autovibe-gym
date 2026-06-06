@@ -518,17 +518,19 @@ def main():
         summary.update(mode_metadata_params(args, "fixed_transitions"))
         episode_workspace = summary.get("episode_workspace")
 
-        # Best-effort post-run self-summary, persisted as run_summary.json so the
-        # dashboard «Мысли» tab shows it above the step-by-step thoughts.
-        from gym.run_summary import generate_and_write
+        # Best-effort post-run self-summary, only after a valid final submit,
+        # persisted as run_summary.json so the dashboard «Мысли» tab shows it
+        # above the step-by-step thoughts.
+        if summary.get("valid_submit"):
+            from gym.run_summary import generate_and_write
 
-        generate_and_write(
-            agent.client,
-            agent.model,
-            episode_workspace or args.workspace_dir,
-            conversation=agent.messages,
-            max_tokens=min(max_tokens, 700),
-        )
+            generate_and_write(
+                agent.client,
+                agent.model,
+                episode_workspace or args.workspace_dir,
+                conversation=agent.messages,
+                max_tokens=min(max_tokens, 700),
+            )
 
         if episode_workspace and os.path.isdir(episode_workspace):
             mlflow.log_artifacts(episode_workspace, artifact_path="episode")

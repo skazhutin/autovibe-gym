@@ -360,7 +360,8 @@ def main():
                                    metric_name=metric_name)
         # Best-effort self-summary of the best attempt (validation metric is not
         # hidden), persisted as run_summary.json for the dashboard «Мысли» tab.
-        if args.workspace_dir and best_code:
+        # Only after a valid final submission (a model was produced and scored).
+        if args.workspace_dir and best_code and test_metric is not None:
             from gym.run_summary import generate_and_write
 
             convo = [

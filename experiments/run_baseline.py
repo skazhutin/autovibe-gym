@@ -240,19 +240,21 @@ def main():
                                     stderr=stderr, error_name=err_name,
                                     target_col=target_col, coverage=coverage, steps=1)
             # Best-effort self-summary from the single-shot exchange (no hidden
-            # score in scope), persisted for the dashboard «Мысли» tab.
-            from gym.run_summary import generate_and_write
+            # score in scope), persisted for the dashboard «Мысли» tab. Only when
+            # the produced model was validly submitted/scored.
+            if test_metric is not None:
+                from gym.run_summary import generate_and_write
 
-            generate_and_write(
-                client,
-                model_name,
-                args.workspace_dir,
-                conversation=[
-                    {"role": "user", "content": task_prompt},
-                    {"role": "assistant", "content": response.text},
-                ],
-                max_tokens=min(max_tokens, 700),
-            )
+                generate_and_write(
+                    client,
+                    model_name,
+                    args.workspace_dir,
+                    conversation=[
+                        {"role": "user", "content": task_prompt},
+                        {"role": "assistant", "content": response.text},
+                    ],
+                    max_tokens=min(max_tokens, 700),
+                )
 
         metrics = {
             "has_test_metric": int(test_metric is not None),
