@@ -518,10 +518,11 @@ def main():
         summary.update(mode_metadata_params(args, "fixed_transitions"))
         episode_workspace = summary.get("episode_workspace")
 
-        # Best-effort post-run self-summary, only after a valid final submit,
+        # Best-effort post-run self-summary, once the agent has solved the task
+        # (reached a final submit — even if the hidden test later rejected it),
         # persisted as run_summary.json so the dashboard «Мысли» tab shows it
         # above the step-by-step thoughts.
-        if summary.get("valid_submit"):
+        if summary.get("submitted"):
             from gym.run_summary import generate_and_write
 
             generate_and_write(

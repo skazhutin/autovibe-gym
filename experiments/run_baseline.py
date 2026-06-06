@@ -240,9 +240,10 @@ def main():
                                     stderr=stderr, error_name=err_name,
                                     target_col=target_col, coverage=coverage, steps=1)
             # Best-effort self-summary from the single-shot exchange (no hidden
-            # score in scope), persisted for the dashboard «Мысли» tab. Only when
-            # the produced model was validly submitted/scored.
-            if test_metric is not None:
+            # score in scope), persisted for the dashboard «Мысли» tab. Generated
+            # once the model produced a usable solution (a predict-capable
+            # candidate), even if the hidden test later rejected it.
+            if model_obj is not None:
                 from gym.run_summary import generate_and_write
 
                 generate_and_write(

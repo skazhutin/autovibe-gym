@@ -175,10 +175,11 @@ def main():
             env.close()
         summary.update(mode_metadata_params(args, args.episode_mode))
 
-        # Best-effort: only after a valid final submit, ask the model to
+        # Best-effort: once the agent has solved the task (reached a final
+        # submit — even if the hidden test later rejected it), ask the model to
         # summarize its own solution and persist it as run_summary.json so the
         # dashboard «Мысли» tab can show it on top.
-        if summary.get("valid_submit"):
+        if summary.get("submitted"):
             from gym.run_summary import generate_and_write
 
             generate_and_write(
