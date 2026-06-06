@@ -27,7 +27,9 @@ Available kernel variables:
   pd, np     - pandas and numpy
 
 Installed ML libraries you may use:
-  scikit-learn, xgboost, lightgbm, pandas, numpy, matplotlib, seaborn.
+  scikit-learn, xgboost, lightgbm, catboost, pandas, numpy, matplotlib,
+  seaborn, plotly, optuna, shap, imbalanced-learn (imblearn), category_encoders,
+  statsmodels, tabulate.
 
 CRITICAL RULES:
 - Do not access test data; it is hidden until final submit.

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import copy
 import csv
 import hashlib
@@ -1025,6 +1026,36 @@ class NotebookGymEnv:
                 )],
             )
             return self._record_observation(observation)
+        # Pre-validate Python syntax before adding/executing code cells so weak
+        # models get an immediate, actionable error instead of a kernel SyntaxError
+        # after the cell has already been added.  Also catches the common failure
+        # mode where a model puts explanatory prose into 'source' instead of code.
+        if action.cell_type != "markdown":
+            try:
+                ast.parse((action.source or "").strip())
+            except SyntaxError as _e:
+                _is_prose = not any(
+                    kw in (action.source or "")
+                    for kw in ("import ", "def ", "class ", " = ", "(", "[",
+                               "print(", "return ", "for ", "if ", "while ")
+                )
+                _hint = (
+                    " Your 'source' looks like explanatory text, not Python code."
+                    " Move explanations to a markdown cell (cell_type='markdown')"
+                    " or include them in the 'notes' field — code cells must"
+                    " contain executable Python only."
+                    if _is_prose else ""
+                )
+                self._record_event(action="add_cell", blocked="syntax_error_pre_check")
+                observation = self._observation(
+                    action="add_cell",
+                    feedback_items=[self._contract_feedback(
+                        "syntax_error_pre_check",
+                        f"SyntaxError: {_e} — cell was NOT added.{_hint}",
+                        severity="blocker",
+                    )],
+                )
+                return self._record_observation(observation)
         if action.cell_type == "markdown":
             cell_id = self.notebook.add_markdown_cell(action.source)
             result = None
