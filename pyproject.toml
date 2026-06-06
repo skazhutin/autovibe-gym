@@ -24,6 +24,16 @@ dependencies = [
   "scikit-learn==1.7.2",
   "xgboost>=2.0.0",
   "lightgbm>=4.0.0",
+  # LLM-agent ML toolbox — libraries agents commonly reach for; missing imports crash the executor.
+  "catboost>=1.2.0",
+  "seaborn>=0.13.0",
+  "plotly>=5.0.0",
+  "optuna>=3.0.0",
+  "shap>=0.41.0",
+  "imbalanced-learn>=0.10.0",
+  "category_encoders>=2.6.0",
+  "statsmodels>=0.14.0",
+  "tabulate>=0.9.0",
   "mlflow>=2.14.0",
   "openpyxl>=3.1.0",
   "nbformat>=5.10.0",
@@ -43,7 +53,6 @@ server = [
 diagnostics = [
   "ydata-profiling>=4.8",
   "cleanlab>=2.7",
-  "optuna>=3.0",
 ]
 
 [tool.setuptools.packages.find]
