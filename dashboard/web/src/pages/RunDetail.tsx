@@ -130,23 +130,30 @@ function ThoughtsTab({ id, live }: { id: string; live: boolean }) {
       />
     );
   return (
-    <div className="thoughts">
+    <div className="thoughts-tab">
       {summaryText && <SummaryCard text={summaryText} model={summary?.model} />}
-      {thoughtItems.map((n, i) => (
-        <div key={i} className="thought">
-          <div className="thought-rail">
-            <span className="thought-dot" />
+      {thoughtItems.length > 0 && (
+        <>
+          {summaryText && <div className="thoughts-steps-head">Ход рассуждений по шагам</div>}
+          <div className="thoughts">
+            {thoughtItems.map((n, i) => (
+              <div key={i} className="thought">
+                <div className="thought-rail">
+                  <span className="thought-dot" />
+                </div>
+                <div className="thought-body">
+                  <div className="thought-head">
+                    <span className="st mono">шаг {n.step}</span>
+                    <span className="tag">{ACTION_TYPE_LABEL[n.type] ?? n.type}</span>
+                    <span className="tag">{stageLabel(n.stage)}</span>
+                  </div>
+                  <div className="thought-text">{n.thoughts}</div>
+                </div>
+              </div>
+            ))}
           </div>
-          <div className="thought-body">
-            <div className="thought-head">
-              <span className="st mono">шаг {n.step}</span>
-              <span className="tag">{ACTION_TYPE_LABEL[n.type] ?? n.type}</span>
-              <span className="tag">{stageLabel(n.stage)}</span>
-            </div>
-            <div className="thought-text">{n.thoughts}</div>
-          </div>
-        </div>
-      ))}
+        </>
+      )}
     </div>
   );
 }
