@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-06 (model registry is source of truth for LLM config; ML toolbox deps added; dashboard table polish)
+**Last updated:** 2026-06-06 (model registry updates, dashboard polish, and GitHub issue/PR/project automation)
 **Phase:** Hardening after first full H200 recon + building the local control-panel dashboard for configuring/launching/inspecting runs.
 
 ---
@@ -329,6 +329,7 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 2. [x] TZ.md, PROTOCOL.md, EXPERIMENT_REPORT.md синхронизированы
 3. [ ] Запустить `python -m experiments.run_matrix --mode local` на H200 → получить notebook-era experiment results и подтвердить fixed single-shot/repeated multishot сабмиты
 4. [ ] Обновить EXPERIMENT_REPORT.md с новыми результатами после п.3
+5. [ ] In repository settings, set `PROJECT_V2_NUMBER` (and optional `PROJECT_V2_*` status names) so the new workflow can sync issues into the intended GitHub Project v2
 
 ---
 
@@ -343,6 +344,7 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 | 2026-06-06 | Dashboard runs table: added `.truncate` CSS (max-width 220px, ellipsis) on model and dataset columns to eliminate horizontal micro-scroll caused by long model names after chevron removal (PR #50) |
 | 2026-06-06 | Dashboard runs table: removed the chevron `›` column at row end — rows are visibly clickable without it (PR #49) |
 | 2026-06-05 | Found "sweet-spot" weak model for gym-vs-single-shot gap experiments: `llama-3.1-8b-instant` on Groq (val≈0.661 single-shot); added to models.json (gitignored). OpenRouter free limit (50 req/day) inadequate for gym runs. Groq TPM cap (~6000) handled by PR #47 max-tokens clamp |
+| 2026-06-06 | Added GitHub automation workflows: PRs now fail without a linked issue via closing keyword, new issues can be auto-added to a configured GitHub Project v2, linked issues move to `In Progress` even for draft PRs, and closed issues move to `Done` |
 | 2026-06-05 | Failed runs now expose all available info across every mode: repeated single-shot writes a full multi-attempt episode (every attempt's code + error visible in Notebook/Trajectory/Errors/Logs, not just the best), the run record carries `failReason`/`finalStatus` from the runner's `null_reason`/`final_status`, and the detail page always shows the fail banner with the status label |
 | 2026-06-05 | Dashboard launcher clamps `--max-tokens` to the selected model's `maxTokens` cap, so providers with tight per-minute token limits (e.g. Groq free ~6000 TPM) don't 413 when the New Run form leaves the default high |
 | 2026-06-05 | Dashboard tabs visual fix: removed the 1px vertical overflow in tab menus by moving the divider into the tab strip and dropping the negative tab margin |

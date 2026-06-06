@@ -1,0 +1,344 @@
+name: Project automation
+
+on:
+  issues:
+    types:
+      - opened
+      - reopened
+      - closed
+  pull_request:
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+      - ready_for_review
+      - converted_to_draft
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+  repository-projects: write
+
+jobs:
+  enforce-pr-issue:
+    name: PR must reference an issue
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require at least one linked issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const number = context.payload.pull_request.number;
+
+            const query = `
+              query($owner: String!, $repo: String!, $number: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  pullRequest(number: $number) {
+                    title
+                    number
+                    closingIssuesReferences(first: 20) {
+                      nodes {
+                        number
+                        title
+                        url
+                      }
+                    }
+                  }
+                }
+              }
+            `;
+
+            const result = await github.graphql(query, { owner, repo, number });
+            const linked = result.repository.pullRequest.closingIssuesReferences.nodes;
+
+            if (linked.length === 0) {
+              core.setFailed(
+                "Pull request must be linked to at least one issue. Use a closing keyword like 'Closes #123' or link the issue in the Development sidebar."
+              );
+              return;
+            }
+
+            core.info(
+              `Linked issues: ${linked.map((issue) => `#${issue.number}`).join(", ")}`
+            );
+
+  sync-project:
+    name: Sync linked issues with Project v2
+    if: vars.PROJECT_V2_NUMBER != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add new issue to project / update status
+        uses: actions/github-script@v7
+        env:
+          PROJECT_V2_OWNER: ${{ vars.PROJECT_V2_OWNER }}
+          PROJECT_V2_NUMBER: ${{ vars.PROJECT_V2_NUMBER }}
+          PROJECT_V2_STATUS_FIELD_NAME: ${{ vars.PROJECT_V2_STATUS_FIELD_NAME }}
+          PROJECT_V2_TODO_OPTION_NAME: ${{ vars.PROJECT_V2_TODO_OPTION_NAME }}
+          PROJECT_V2_IN_PROGRESS_OPTION_NAME: ${{ vars.PROJECT_V2_IN_PROGRESS_OPTION_NAME }}
+          PROJECT_V2_DONE_OPTION_NAME: ${{ vars.PROJECT_V2_DONE_OPTION_NAME }}
+        with:
+          github-token: ${{ secrets.PROJECT_AUTOMATION_TOKEN || github.token }}
+          script: |
+            const projectOwner = process.env.PROJECT_V2_OWNER || context.repo.owner;
+            const projectNumber = Number(process.env.PROJECT_V2_NUMBER);
+            const statusFieldName = process.env.PROJECT_V2_STATUS_FIELD_NAME || "Status";
+            const todoName = process.env.PROJECT_V2_TODO_OPTION_NAME || "Todo";
+            const inProgressName = process.env.PROJECT_V2_IN_PROGRESS_OPTION_NAME || "In Progress";
+            const doneName = process.env.PROJECT_V2_DONE_OPTION_NAME || "Done";
+
+            if (!projectNumber) {
+              core.info("PROJECT_V2_NUMBER is not set; skipping project sync.");
+              return;
+            }
+
+            async function getProjectConfig() {
+              const query = `
+                query($login: String!, $number: Int!) {
+                  user(login: $login) {
+                    projectV2(number: $number) {
+                      id
+                      title
+                      fields(first: 50) {
+                        nodes {
+                          ... on ProjectV2FieldCommon {
+                            id
+                            name
+                          }
+                          ... on ProjectV2SingleSelectField {
+                            id
+                            name
+                            options {
+                              id
+                              name
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                  organization(login: $login) {
+                    projectV2(number: $number) {
+                      id
+                      title
+                      fields(first: 50) {
+                        nodes {
+                          ... on ProjectV2FieldCommon {
+                            id
+                            name
+                          }
+                          ... on ProjectV2SingleSelectField {
+                            id
+                            name
+                            options {
+                              id
+                              name
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              `;
+
+              const result = await github.graphql(query, {
+                login: projectOwner,
+                number: projectNumber,
+              });
+
+              const project = result.user?.projectV2 || result.organization?.projectV2;
+              if (!project) {
+                throw new Error(
+                  `Project v2 not found for owner '${projectOwner}' and number '${projectNumber}'.`
+                );
+              }
+
+              const statusField = project.fields.nodes.find(
+                (field) => field.name === statusFieldName && Array.isArray(field.options)
+              );
+              if (!statusField) {
+                throw new Error(`Field '${statusFieldName}' not found in project '${project.title}'.`);
+              }
+
+              const optionByName = Object.fromEntries(
+                statusField.options.map((option) => [option.name, option.id])
+              );
+
+              for (const required of [todoName, inProgressName, doneName]) {
+                if (!optionByName[required]) {
+                  throw new Error(
+                    `Status option '${required}' not found in field '${statusFieldName}'.`
+                  );
+                }
+              }
+
+              return {
+                projectId: project.id,
+                projectTitle: project.title,
+                statusFieldId: statusField.id,
+                optionByName,
+              };
+            }
+
+            async function ensureProjectItem(projectId, contentId) {
+              const addMutation = `
+                mutation($projectId: ID!, $contentId: ID!) {
+                  addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) {
+                    item {
+                      id
+                    }
+                  }
+                }
+              `;
+
+              try {
+                const result = await github.graphql(addMutation, { projectId, contentId });
+                return result.addProjectV2ItemById.item.id;
+              } catch (error) {
+                if (!String(error.message || "").includes("already exists")) {
+                  throw error;
+                }
+              }
+
+              const lookupQuery = `
+                query($projectId: ID!, $contentId: ID!) {
+                  node(id: $projectId) {
+                    ... on ProjectV2 {
+                      items(first: 100) {
+                        nodes {
+                          id
+                          content {
+                            __typename
+                            ... on Issue {
+                              id
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              `;
+
+              const lookup = await github.graphql(lookupQuery, { projectId, contentId });
+              const match = lookup.node.items.nodes.find((item) => item.content?.id === contentId);
+              if (!match) {
+                throw new Error("Issue exists in project but item lookup failed.");
+              }
+              return match.id;
+            }
+
+            async function setStatus(projectId, itemId, fieldId, optionId) {
+              const mutation = `
+                mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+                  updateProjectV2ItemFieldValue(
+                    input: {
+                      projectId: $projectId
+                      itemId: $itemId
+                      fieldId: $fieldId
+                      value: { singleSelectOptionId: $optionId }
+                    }
+                  ) {
+                    projectV2Item {
+                      id
+                    }
+                  }
+                }
+              `;
+
+              await github.graphql(mutation, {
+                projectId,
+                itemId,
+                fieldId,
+                optionId,
+              });
+            }
+
+            async function getIssueNodeId(issueNumber) {
+              const issue = await github.rest.issues.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+              });
+              return issue.data.node_id;
+            }
+
+            async function getLinkedIssueNumbersFromPr(prNumber) {
+              const query = `
+                query($owner: String!, $repo: String!, $number: Int!) {
+                  repository(owner: $owner, name: $repo) {
+                    pullRequest(number: $number) {
+                      closingIssuesReferences(first: 20) {
+                        nodes {
+                          number
+                        }
+                      }
+                    }
+                  }
+                }
+              `;
+
+              const result = await github.graphql(query, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                number: prNumber,
+              });
+
+              return result.repository.pullRequest.closingIssuesReferences.nodes.map(
+                (issue) => issue.number
+              );
+            }
+
+            const config = await getProjectConfig();
+            core.info(
+              `Using project '${config.projectTitle}' (${projectOwner} #${projectNumber}).`
+            );
+
+            if (context.eventName === "issues") {
+              const issueNumber = context.payload.issue.number;
+              const issueNodeId = context.payload.issue.node_id || await getIssueNodeId(issueNumber);
+              const itemId = await ensureProjectItem(config.projectId, issueNodeId);
+
+              let statusName = todoName;
+              if (context.payload.action === "closed") {
+                statusName = doneName;
+              }
+
+              await setStatus(
+                config.projectId,
+                itemId,
+                config.statusFieldId,
+                config.optionByName[statusName]
+              );
+              core.info(`Issue #${issueNumber} synced to status '${statusName}'.`);
+              return;
+            }
+
+            if (context.eventName === "pull_request") {
+              const prNumber = context.payload.pull_request.number;
+              const linkedIssueNumbers = await getLinkedIssueNumbersFromPr(prNumber);
+
+              if (linkedIssueNumbers.length === 0) {
+                core.info(`PR #${prNumber} has no linked issues; nothing to sync.`);
+                return;
+              }
+
+              for (const issueNumber of linkedIssueNumbers) {
+                const issueNodeId = await getIssueNodeId(issueNumber);
+                const itemId = await ensureProjectItem(config.projectId, issueNodeId);
+                await setStatus(
+                  config.projectId,
+                  itemId,
+                  config.statusFieldId,
+                  config.optionByName[inProgressName]
+                );
+                core.info(
+                  `Linked issue #${issueNumber} moved to '${inProgressName}' from PR #${prNumber}.`
+                );
+              }
+            }

@@ -202,6 +202,13 @@ git rebase --abort
 
 PR обязателен для попадания в `main`.
 
+Дополнительные правила автоматизации GitHub:
+
+- каждый PR должен ссылаться хотя бы на один issue через closing keyword в описании, например `Closes #123`, `Fixes #123`, `Resolves #123`;
+- новые issue автоматически добавляются в GitHub Project v2, если в репозитории настроены переменные `PROJECT_V2_*`; для user/org project рекомендуется secret `PROJECT_AUTOMATION_TOKEN` с доступом к Projects;
+- issue со связанным PR (включая draft PR) автоматически переводится в статус `In Progress`;
+- закрытый issue автоматически переводится в статус `Done`.
+
 Рекомендуемый flow:
 
 1. Push ветки.

@@ -1,0 +1,21 @@
+name: Project automation setup
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  explain-config:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Show required repository variables
+        run: |
+          echo "Set these repository variables before relying on Project automation:"
+          echo "  PROJECT_V2_NUMBER                 (required)"
+          echo "  PROJECT_V2_OWNER                  (optional; defaults to repo owner)"
+          echo "  PROJECT_V2_STATUS_FIELD_NAME      (optional; defaults to Status)"
+          echo "  PROJECT_V2_TODO_OPTION_NAME       (optional; defaults to Todo)"
+          echo "  PROJECT_V2_IN_PROGRESS_OPTION_NAME(optional; defaults to In Progress)"
+          echo "  PROJECT_V2_DONE_OPTION_NAME       (optional; defaults to Done)"
