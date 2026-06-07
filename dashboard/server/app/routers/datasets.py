@@ -6,9 +6,13 @@ from typing import Any
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
-from ..services import dataset_store
+from ..services import dataset_archive_store, dataset_store
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
+
+
+class BulkPayload(BaseModel):
+    ids: list[str]
 
 
 class DatasetMetaUpdate(BaseModel):
@@ -44,7 +48,26 @@ class DatasetConfigPayload(BaseModel):
 
 @router.get("")
 def list_datasets(deep: bool = True) -> list[dict]:
-    return dataset_store.list_datasets(deep=deep)
+    archived = dataset_archive_store.list_archived()
+    return [d for d in dataset_store.list_datasets(deep=deep) if d.get("id") not in archived]
+
+
+@router.get("/archived")
+def list_archived_datasets(deep: bool = True) -> list[dict]:
+    archived = dataset_archive_store.list_archived()
+    return [d for d in dataset_store.list_datasets(deep=deep) if d.get("id") in archived]
+
+
+@router.post("/archive")
+def bulk_archive_datasets(payload: BulkPayload) -> dict:
+    dataset_archive_store.archive(payload.ids)
+    return {"archived": payload.ids}
+
+
+@router.post("/unarchive")
+def bulk_unarchive_datasets(payload: BulkPayload) -> dict:
+    dataset_archive_store.unarchive(payload.ids)
+    return {"unarchived": payload.ids}
 
 
 @router.post("/uploads")

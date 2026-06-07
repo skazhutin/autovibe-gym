@@ -4,7 +4,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from ..services import model_store
+from ..services import model_archive_store, model_store
 
 router = APIRouter(prefix="/models", tags=["models"])
 
@@ -20,6 +20,10 @@ class ModelPayload(BaseModel):
     maxTokens: int | None = None
 
 
+class BulkPayload(BaseModel):
+    ids: list[str]
+
+
 def _public(model: dict) -> dict:
     """Never leak the raw API key to the frontend."""
     out = dict(model)
@@ -33,7 +37,26 @@ def _public(model: dict) -> dict:
 
 @router.get("")
 def list_models() -> list[dict]:
-    return [_public(m) for m in model_store.list_models()]
+    archived = model_archive_store.list_archived()
+    return [_public(m) for m in model_store.list_models() if m["id"] not in archived]
+
+
+@router.get("/archived")
+def list_archived_models() -> list[dict]:
+    archived = model_archive_store.list_archived()
+    return [_public(m) for m in model_store.list_models() if m["id"] in archived]
+
+
+@router.post("/archive")
+def bulk_archive(payload: BulkPayload) -> dict:
+    model_archive_store.archive(payload.ids)
+    return {"archived": payload.ids}
+
+
+@router.post("/unarchive")
+def bulk_unarchive(payload: BulkPayload) -> dict:
+    model_archive_store.unarchive(payload.ids)
+    return {"unarchived": payload.ids}
 
 
 @router.get("/providers")
