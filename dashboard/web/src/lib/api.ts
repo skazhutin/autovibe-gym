@@ -38,6 +38,7 @@ export interface Run {
   source?: "mlflow" | "live";
   mlflowId?: string | null;
   thoughtsEnabled?: boolean;
+  hasSummary?: boolean;
   currentStage?: string | null;
   failReason?: string;
   finalStatus?: string | null;
@@ -288,6 +289,12 @@ export interface LogsData {
   processLog?: string;
 }
 
+export interface RunSummary {
+  summary?: string;
+  model?: string | null;
+  generatedAt?: string | null;
+}
+
 export interface Health {
   status: string;
   mlflow_store_present: boolean;
@@ -393,6 +400,8 @@ export const api = {
     req<{ step: number; type: string; stage?: string; thoughts: string; timestamp?: string }[]>(
       `/runs/${id}/thoughts`
     ),
+  runSummary: (id: string) =>
+    req<RunSummary>(`/runs/${id}/summary`),
   checklist: (id: string) => req<ChecklistData>(`/runs/${id}/checklist`),
   errors: (id: string) => req<RunError[]>(`/runs/${id}/errors`),
   logs: (id: string) => req<LogsData>(`/runs/${id}/logs`),

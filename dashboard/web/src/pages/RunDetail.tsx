@@ -57,35 +57,103 @@ function actionTone(type: string) {
   return "neutral";
 }
 
+/** Render a small subset of markdown (**bold** + "- " bullet lists) used by the
+ *  model's self-summary. We don't pull in a markdown dependency for this. */
+function renderInline(text: string, keyBase: string): React.ReactNode[] {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
+    part.startsWith("**") && part.endsWith("**") ? (
+      <strong key={`${keyBase}-${i}`}>{part.slice(2, -2)}</strong>
+    ) : (
+      <span key={`${keyBase}-${i}`}>{part}</span>
+    )
+  );
+}
+
+function MarkdownLite({ text }: { text: string }) {
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  const blocks: React.ReactNode[] = [];
+  let bullets: string[] = [];
+  const flush = () => {
+    if (bullets.length) {
+      blocks.push(
+        <ul key={`ul-${blocks.length}`}>
+          {bullets.map((b, i) => (
+            <li key={i}>{renderInline(b, `li-${blocks.length}-${i}`)}</li>
+          ))}
+        </ul>
+      );
+      bullets = [];
+    }
+  };
+  lines.forEach((raw, i) => {
+    const line = raw.trim();
+    if (/^[-*]\s+/.test(line)) {
+      bullets.push(line.replace(/^[-*]\s+/, ""));
+    } else if (line) {
+      flush();
+      blocks.push(<p key={`p-${i}`}>{renderInline(line, `p-${i}`)}</p>);
+    } else {
+      flush();
+    }
+  });
+  flush();
+  return <>{blocks}</>;
+}
+
+function SummaryCard({ text, model }: { text: string; model?: string | null }) {
+  return (
+    <div className="run-summary">
+      <div className="run-summary-head">
+        <Icon name="sparkles" size={15} />
+        <span className="run-summary-title">Саммари решения</span>
+        {model && <span className="run-summary-model mono">{model}</span>}
+      </div>
+      <div className="run-summary-body">
+        <MarkdownLite text={text} />
+      </div>
+    </div>
+  );
+}
+
 function ThoughtsTab({ id, live }: { id: string; live: boolean }) {
   const { data, loading } = useAsync(() => api.thoughts(id), [id], live ? 2500 : 0);
-  if (loading && !data) return <Skeleton h={200} />;
+  const { data: summary } = useAsync(() => api.runSummary(id), [id], live ? 2500 : 0);
   const thoughtItems = data ?? [];
-  if (!thoughtItems.length)
+  const summaryText = summary?.summary?.trim();
+  if (loading && !data && !summaryText) return <Skeleton h={200} />;
+  if (!thoughtItems.length && !summaryText)
     return (
       <EmptyState
         icon="sparkles"
         title="Мыслей нет"
-        text="Этот режим сохраняет заметки агента только если прогон запущен с включённым флагом «Мысли LLM» (доступно для Gym и Iterative)."
+        text="Саммари решения появится здесь после завершения прогона. Пошаговые мысли сохраняются только при включённом флаге «Мысли LLM» (Gym и Iterative)."
       />
     );
   return (
-    <div className="thoughts">
-      {thoughtItems.map((n, i) => (
-        <div key={i} className="thought">
-          <div className="thought-rail">
-            <span className="thought-dot" />
+    <div className="thoughts-tab">
+      {summaryText && <SummaryCard text={summaryText} model={summary?.model} />}
+      {thoughtItems.length > 0 && (
+        <>
+          {summaryText && <div className="thoughts-steps-head">Ход рассуждений по шагам</div>}
+          <div className="thoughts">
+            {thoughtItems.map((n, i) => (
+              <div key={i} className="thought">
+                <div className="thought-rail">
+                  <span className="thought-dot" />
+                </div>
+                <div className="thought-body">
+                  <div className="thought-head">
+                    <span className="st mono">шаг {n.step}</span>
+                    <span className="tag">{ACTION_TYPE_LABEL[n.type] ?? n.type}</span>
+                    <span className="tag">{stageLabel(n.stage)}</span>
+                  </div>
+                  <div className="thought-text">{n.thoughts}</div>
+                </div>
+              </div>
+            ))}
           </div>
-          <div className="thought-body">
-            <div className="thought-head">
-              <span className="st mono">шаг {n.step}</span>
-              <span className="tag">{ACTION_TYPE_LABEL[n.type] ?? n.type}</span>
-              <span className="tag">{stageLabel(n.stage)}</span>
-            </div>
-            <div className="thought-text">{n.thoughts}</div>
-          </div>
-        </div>
-      ))}
+        </>
+      )}
     </div>
   );
 }
@@ -267,9 +335,11 @@ export default function RunDetail() {
 
   const live = run.status === "running";
   const pct = run.steps ? (run.step / run.steps) * 100 : 6;
-  // Hide the «Мысли» tab for runs that didn't enable the scratchpad.
-  const visibleTabs = TABS.filter((t) => t.id !== "thoughts" || run.thoughtsEnabled);
-  const activeTab = tab === "thoughts" && !run.thoughtsEnabled ? "notebook" : tab;
+  // Show the «Мысли» tab when the run kept a scratchpad OR produced a post-run
+  // self-summary. New runs always have a summary; old runs with neither stay hidden.
+  const showThoughts = !!run.thoughtsEnabled || !!run.hasSummary;
+  const visibleTabs = TABS.filter((t) => t.id !== "thoughts" || showThoughts);
+  const activeTab = tab === "thoughts" && !showThoughts ? "notebook" : tab;
   const imp = improvementPct(run);
 
   async function stop() {

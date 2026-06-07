@@ -272,6 +272,31 @@ def thoughts(episode_dir: Path | None) -> list[dict]:
     return out
 
 
+def run_summary(episode_dir: Path | None) -> dict[str, Any]:
+    """The model's post-run self-summary (run_summary.json), or {} if absent.
+
+    Present for runs produced after the summary feature shipped; older runs have
+    no run_summary.json and return {}, so the dashboard hides the summary card.
+    """
+    if not episode_dir:
+        return {}
+    data = _read_json(episode_dir / "run_summary.json")
+    if not isinstance(data, dict):
+        return {}
+    text = data.get("summary")
+    if not isinstance(text, str) or not text.strip():
+        return {}
+    return {
+        "summary": text.strip(),
+        "model": data.get("model"),
+        "generatedAt": data.get("generated_at"),
+    }
+
+
+def has_run_summary(episode_dir: Path | None) -> bool:
+    return bool(run_summary(episode_dir))
+
+
 def current_stage(episode_dir: Path | None) -> str | None:
     summary = _episode_summary(episode_dir)
     if summary.get("current_stage"):
