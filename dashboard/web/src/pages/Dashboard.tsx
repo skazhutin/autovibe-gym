@@ -71,21 +71,18 @@ export default function Dashboard() {
   const active = all.filter((r) => r.status === "running");
   const finished = all.filter((r) => r.status !== "running");
   const scored = finished.filter((r) => r.score !== null).sort((a, b) => b.startedMs - a.startedMs);
-  const best = scored.reduce<Run | null>((acc, r) => (acc && acc.score! >= r.score! ? acc : r), null);
   const avgTokens = finished.length
     ? Math.round(finished.reduce((s, r) => s + r.tokIn + r.tokOut, 0) / finished.length)
     : 0;
 
-  const byMode = new Map<string, number[]>();
-  scored.forEach((r) => {
-    if (r.score === null) return;
-    byMode.set(r.mode, [...(byMode.get(r.mode) ?? []), r.score]);
-  });
-  const modeBars = [...byMode.entries()].map(([mode, vals]) => ({
-    label: MODE_SHORT[mode as Run["mode"]],
-    value: vals.reduce((a, b) => a + b, 0) / vals.length,
-    best: best?.mode === mode,
-  }));
+  const lastScored = scored[0] ?? null;
+
+  const FIVE_MODES: Run["mode"][] = ["single", "repeated", "iterative", "gym", "fixed"];
+  const modeBars = FIVE_MODES.map((m) => {
+    const last = scored.find((r) => r.mode === m);
+    return last ? { label: MODE_SHORT[m], value: last.score!, best: false } : null;
+  }).filter((x): x is { label: string; value: number; best: boolean } => x !== null);
+
   const scoreSpark = scored.slice(0, 8).map((r) => r.score!).reverse();
 
   return (
@@ -93,7 +90,7 @@ export default function Dashboard() {
       <div className="grid-4">
         <MetricCard label="Всего прогонов" value={String(all.length)} icon="runs" spark={scoreSpark} delta={`${finished.length} завершено`} />
         <MetricCard dark label="Активных сейчас" value={String(active.length)} icon="play" delta={active.length ? "идут прямо сейчас" : "нет активных"} />
-        <MetricCard label="Лучший test-скор" value={best ? formatScore(best.score, best.metric) : "—"} icon="check2" spark={scoreSpark} delta={best ? `${MODE_SHORT[best.mode]} · ${best.dataset}` : "нет данных"} />
+        <MetricCard label="Последний test-скор" value={lastScored ? formatScore(lastScored.score, lastScored.metric) : "—"} icon="check2" spark={scoreSpark} delta={lastScored ? `${MODE_SHORT[lastScored.mode]} · ${lastScored.dataset}` : "нет данных"} />
         <MetricCard label="Средний расход токенов" value={formatTokens(avgTokens)} icon="coins" delta="на прогон" />
       </div>
 
@@ -141,7 +138,7 @@ export default function Dashboard() {
         </Card>
 
         <Card style={{ minWidth: 0 }}>
-          <h2 className="section-title">Скоры по режимам</h2>
+          <h2 className="section-title">Последние скоры по режимам</h2>
           {modeBars.length ? (
             <BarChart data={modeBars} fmt={(v) => v.toFixed(3)} />
           ) : (

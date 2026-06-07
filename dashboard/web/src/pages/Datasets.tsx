@@ -1,12 +1,14 @@
-import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useOutletContext } from "react-router-dom";
+import type { SetHeaderAction } from "../components/Layout";
 import { api, type Dataset, type DatasetStatus } from "../lib/api";
 import { useAsync } from "../lib/hooks";
 import { Button, Card, EmptyState, Field, Modal, SelectDropdown, Skeleton, Spinner, Tag } from "../components/ui";
 import { Icon } from "../components/Icon";
 import { DatasetWizard } from "../components/datasets/DatasetWizard";
 
-type SortKey = "az" | "za" | "createdDesc" | "createdAsc" | "updatedDesc" | "updatedAsc" | "rowsDesc" | "rowsAsc" | "colsDesc" | "colsAsc";
+type SortField = "updated" | "created" | "az";
+type SortDir = "asc" | "desc";
 
 const STATUS_TONE: Record<DatasetStatus, "green" | "blue" | "red"> = {
   prepared: "green",
@@ -59,16 +61,21 @@ function textBlob(d: Dataset) {
     .toLowerCase();
 }
 
-function DatasetCard({ d, onOpen, onDelete }: { d: Dataset; onOpen: () => void; onDelete: () => void }) {
+function DatasetCard({ d, onOpen, onArchive }: { d: Dataset; onOpen: () => void; onArchive: () => void }) {
   const status = statusOf(d);
   const taskLabel = TASK_LABEL[d.taskType ?? d.task] ?? d.task;
   return (
-    <Card className="ds-card dataset-card-rich">
+    <Card className="ds-card dataset-card-rich" hover onClick={onOpen}>
       <div className="spread">
         <div style={{ minWidth: 0 }}>
           <div className="ds-title">{d.name}</div>
         </div>
-        <Tag tone={STATUS_TONE[status]}>{STATUS_LABEL[status]}</Tag>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Tag tone={STATUS_TONE[status]}>{STATUS_LABEL[status]}</Tag>
+          <button className="icon-btn ds-delete-btn" title="Архивировать" onClick={(e) => { e.stopPropagation(); onArchive(); }}>
+            <Icon name="archive" size={15} />
+          </button>
+        </div>
       </div>
       {d.desc && <div className="muted clamp-2">{d.desc}</div>}
       <div className="run-meta-line" style={{ margin: 0 }}>
@@ -94,26 +101,29 @@ function DatasetCard({ d, onOpen, onDelete }: { d: Dataset; onOpen: () => void; 
         {d.createdAt && <span>создан {new Date(d.createdAt).toLocaleString()}</span>}
         {d.updatedAt && <span>обновлен {new Date(d.updatedAt).toLocaleString()}</span>}
       </div>
-      <div className="ds-actions">
-        <Button size="sm" icon="external" onClick={onOpen}>Открыть</Button>
-        <Button size="sm" variant="ghost" icon="trash" onClick={onDelete}>Удалить</Button>
-      </div>
     </Card>
   );
 }
 
 export default function Datasets() {
+  const setHeaderAction = useOutletContext<SetHeaderAction>();
   const nav = useNavigate();
   const { data, loading, reload } = useAsync(() => api.listDatasets(), []);
   const [wizardOpen, setWizardOpen] = useState(false);
-  const [toDelete, setToDelete] = useState<Dataset | null>(null);
-  const [busyDel, setBusyDel] = useState(false);
+
+  useEffect(() => {
+    setHeaderAction({ label: "Новая проблема", icon: "plus", onClick: () => setWizardOpen(true) });
+    return () => setHeaderAction(null);
+  }, [setHeaderAction]);
+  const [toArchive, setToArchive] = useState<Dataset | null>(null);
+  const [busyArchive, setBusyArchive] = useState(false);
   const [query, setQuery] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [taskFilter, setTaskFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [metricFilter, setMetricFilter] = useState("all");
-  const [sort, setSort] = useState<SortKey>("updatedDesc");
+  const [sortField, setSortField] = useState<SortField>("updated");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [notice, setNotice] = useState<string | null>(null);
 
   const metrics = useMemo(() => Array.from(new Set((data ?? []).map((d) => d.metric).filter(Boolean))).sort(), [data]);
@@ -128,30 +138,24 @@ export default function Datasets() {
       return true;
     });
     const time = (v?: string | null) => (v ? new Date(v).getTime() : 0);
+    const asc = sortDir === "asc";
     return [...rows].sort((a, b) => {
-      if (sort === "az") return a.name.localeCompare(b.name);
-      if (sort === "za") return b.name.localeCompare(a.name);
-      if (sort === "createdDesc") return time(b.createdAt) - time(a.createdAt);
-      if (sort === "createdAsc") return time(a.createdAt) - time(b.createdAt);
-      if (sort === "updatedDesc") return time(b.updatedAt) - time(a.updatedAt);
-      if (sort === "updatedAsc") return time(a.updatedAt) - time(b.updatedAt);
-      if (sort === "rowsDesc") return (b.rows ?? 0) - (a.rows ?? 0);
-      if (sort === "rowsAsc") return (a.rows ?? 0) - (b.rows ?? 0);
-      if (sort === "colsDesc") return (b.cols ?? 0) - (a.cols ?? 0);
-      return (a.cols ?? 0) - (b.cols ?? 0);
+      if (sortField === "az") return asc ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name);
+      if (sortField === "created") return asc ? time(a.createdAt) - time(b.createdAt) : time(b.createdAt) - time(a.createdAt);
+      return asc ? time(a.updatedAt) - time(b.updatedAt) : time(b.updatedAt) - time(a.updatedAt);
     });
-  }, [data, metricFilter, query, sort, statusFilter, taskFilter]);
+  }, [data, metricFilter, query, sortField, sortDir, statusFilter, taskFilter]);
 
-  async function del() {
-    if (!toDelete) return;
-    setBusyDel(true);
+  async function doArchive() {
+    if (!toArchive) return;
+    setBusyArchive(true);
     try {
-      await api.deleteDataset(toDelete.id);
-      setNotice(`Датасет ${toDelete.name} удален.`);
-      setToDelete(null);
+      await api.archiveDatasets([toArchive.id]);
+      setNotice(`Проблема ${toArchive.name} перемещена в архив.`);
+      setToArchive(null);
       reload();
     } finally {
-      setBusyDel(false);
+      setBusyArchive(false);
     }
   }
 
@@ -168,11 +172,6 @@ export default function Datasets() {
 
   return (
     <div className="stack" style={{ gap: 18 }}>
-      <div className="spread dataset-center-head">
-        <div />
-        <Button variant="primary" icon="plus" onClick={() => setWizardOpen(true)}>Новая проблема</Button>
-      </div>
-
       {notice && <div className="success-line"><Icon name="check" size={15} /> {notice}</div>}
 
       <Card className="dataset-toolbar">
@@ -181,47 +180,52 @@ export default function Datasets() {
             <Icon name="search" size={16} />
             <input className="input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Поиск по проблемам..." />
           </div>
-          <SelectDropdown
-            value={sort}
-            onChange={setSort}
-            options={[
-              { value: "updatedDesc", label: "Сначала обновлённые" },
-              { value: "updatedAsc",  label: "Давно не обновлялись" },
-              { value: "createdDesc", label: "Сначала новые" },
-              { value: "createdAsc",  label: "Сначала старые" },
-              { value: "az",          label: "А → Я" },
-              { value: "za",          label: "Я → А" },
-              { value: "rowsDesc",    label: "Больше строк" },
-              { value: "rowsAsc",     label: "Меньше строк" },
-              { value: "colsDesc",    label: "Больше признаков" },
-              { value: "colsAsc",     label: "Меньше признаков" },
-            ]}
-          />
+          <div className="sort-tabs">
+            {(["updated", "created", "az"] as SortField[]).map((f) => (
+              <button
+                key={f}
+                className={`sort-tab${sortField === f ? " active" : ""}`}
+                onClick={() => { if (sortField === f) setSortDir((d) => d === "asc" ? "desc" : "asc"); else { setSortField(f); setSortDir("desc"); } }}
+              >
+                {f === "updated" ? "Обновление" : f === "created" ? "Создание" : "Алфавит"}
+                {sortField === f && <Icon name={sortDir === "desc" ? "arrowDown" : "arrowUp"} size={13} />}
+              </button>
+            ))}
+          </div>
           <Button variant="ghost" icon="sliders" onClick={() => setFiltersOpen((v) => !v)}>Фильтры</Button>
         </div>
         {filtersOpen && (
           <div className="dataset-filters-grid">
             <Field label="Задача">
-              <select className="input" value={taskFilter} onChange={(e) => setTaskFilter(e.target.value)}>
-                <option value="all">все</option>
-                <option value="classification">classification</option>
-                <option value="regression">regression</option>
-                <option value="unknown">unknown</option>
-              </select>
+              <SelectDropdown
+                value={taskFilter}
+                options={[
+                  { value: "all", label: "все" },
+                  { value: "classification", label: "classification" },
+                  { value: "regression", label: "regression" },
+                  { value: "unknown", label: "unknown" },
+                ]}
+                onChange={setTaskFilter}
+              />
             </Field>
             <Field label="Статус">
-              <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-                <option value="all">все</option>
-                <option value="prepared">подготовлен</option>
-                <option value="partial">частичный</option>
-                <option value="unprepared">не подготовлен</option>
-              </select>
+              <SelectDropdown
+                value={statusFilter}
+                options={[
+                  { value: "all", label: "все" },
+                  { value: "prepared", label: "подготовлен" },
+                  { value: "partial", label: "частичный" },
+                  { value: "unprepared", label: "не подготовлен" },
+                ]}
+                onChange={setStatusFilter}
+              />
             </Field>
             <Field label="Метрика">
-              <select className="input" value={metricFilter} onChange={(e) => setMetricFilter(e.target.value)}>
-                <option value="all">все</option>
-                {metrics.map((m) => <option key={m} value={m}>{m}</option>)}
-              </select>
+              <SelectDropdown
+                value={metricFilter}
+                options={[{ value: "all", label: "все" }, ...metrics.map((m) => ({ value: m, label: m }))]}
+                onChange={setMetricFilter}
+              />
             </Field>
           </div>
         )}
@@ -237,26 +241,32 @@ export default function Datasets() {
       ) : (
         <div className="dataset-grid">
           {filtered.map((d) => (
-            <DatasetCard key={d.id} d={d} onOpen={() => nav(`/problems/${d.id}`)} onDelete={() => setToDelete(d)} />
+            <DatasetCard key={d.id} d={d} onOpen={() => nav(`/problems/${d.id}`)} onArchive={() => setToArchive(d)} />
           ))}
         </div>
       )}
 
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <button className="archive-link" onClick={() => nav("/problems/archive")}>
+          <Icon name="archive" size={15} /> Архив
+        </button>
+      </div>
+
       {wizardOpen && <DatasetWizard onClose={() => setWizardOpen(false)} onCreated={created} />}
-      {toDelete && (
+      {toArchive && (
         <Modal
-          title="Удалить датасет"
+          title="Архивировать проблему?"
           width={420}
-          onClose={() => setToDelete(null)}
+          onClose={() => setToArchive(null)}
           footer={
             <>
-              <Button variant="ghost" onClick={() => setToDelete(null)}>Отмена</Button>
-              <Button variant="danger" onClick={del} disabled={busyDel}>{busyDel ? <Spinner /> : "Удалить"}</Button>
+              <Button variant="ghost" onClick={() => setToArchive(null)}>Отмена</Button>
+              <Button variant="primary" onClick={doArchive} disabled={busyArchive}>{busyArchive ? <Spinner /> : "Архивировать"}</Button>
             </>
           }
         >
-          <p style={{ margin: 0 }}>
-            Удалить <strong>{toDelete.name}</strong> и все исходные/подготовленные файлы? Это действие нельзя отменить.
+          <p className="modal-desc">
+            <strong>{toArchive.name}</strong> будет перемещена в архив. Вернуть можно из раздела «Архив».
           </p>
         </Modal>
       )}

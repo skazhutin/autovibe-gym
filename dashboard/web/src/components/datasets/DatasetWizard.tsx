@@ -10,7 +10,7 @@ import {
   type DatasetTaskConfig,
   type UploadedFileNode,
 } from "../../lib/api";
-import { Button, Card, Field, Modal, Spinner, Tag } from "../ui";
+import { Button, Card, Field, Modal, SelectDropdown, Spinner, Tag } from "../ui";
 import { Icon } from "../Icon";
 
 const STEPS = [
@@ -572,11 +572,7 @@ export function DatasetWizard({ onClose, onCreated }: { onClose: () => void; onC
 
               <div className="grid-3">
                 <FieldInfo label="Тип задачи" info="classification — предсказание категорий (классов). regression — предсказание числа. auto — тип определится автоматически по данным.">
-                  <select className="input" value={taskType} onChange={(e) => setTaskType(e.target.value as TaskType)}>
-                    <option value="auto">auto</option>
-                    <option value="classification">classification</option>
-                    <option value="regression">regression</option>
-                  </select>
+                  <SelectDropdown value={taskType} options={[{ value: "auto", label: "auto" }, { value: "classification", label: "classification" }, { value: "regression", label: "regression" }]} onChange={(v) => setTaskType(v as TaskType)} />
                 </FieldInfo>
                 <FieldInfo label="Target column" info="Название колонки с целевой переменной — то, что агент должен научиться предсказывать. Эта колонка никогда не включается в признаки." required>
                   <input className="input mono" value={target} onChange={(e) => setTarget(e.target.value)} placeholder="target" />
@@ -603,10 +599,7 @@ export function DatasetWizard({ onClose, onCreated }: { onClose: () => void; onC
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "var(--gap, 16px)" }}>
                 <FieldInfo label="Metric goal" info="Направление оптимизации: maximize — чем больше, тем лучше (accuracy, f1); minimize — чем меньше, тем лучше (rmse, mae). Выводится автоматически из имени метрики.">
-                  <select className="input" value={metricGoal} onChange={(e) => setMetricGoal(e.target.value as MetricGoal)}>
-                    <option value="max">maximize</option>
-                    <option value="min">minimize</option>
-                  </select>
+                  <SelectDropdown value={metricGoal} options={[{ value: "max", label: "maximize" }, { value: "min", label: "minimize" }]} onChange={(v) => setMetricGoal(v as MetricGoal)} />
                 </FieldInfo>
                 <FieldInfo label="Теги" info="Ключевые слова через запятую — используются для поиска и фильтрации на странице Проблем. Пример: tabular, benchmark, uci">
                   <input className="input" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="tabular, benchmark" />
@@ -735,17 +728,10 @@ export function DatasetWizard({ onClose, onCreated }: { onClose: () => void; onC
 
               <div className="grid-3">
                 <FieldInfo label="Shuffle" info="Перемешать строки перед разбиением. Рекомендуется для большинства задач, кроме временных рядов.">
-                  <select className="input" value={shuffle ? "true" : "false"} onChange={(e) => setShuffle(e.target.value === "true")}>
-                    <option value="true">да</option>
-                    <option value="false">нет</option>
-                  </select>
+                  <SelectDropdown value={shuffle ? "true" : "false"} options={[{ value: "true", label: "да" }, { value: "false", label: "нет" }]} onChange={(v) => setShuffle(v === "true")} />
                 </FieldInfo>
                 <FieldInfo label="Stratify" info="Стратифицированный сплит: каждая часть содержит одинаковое распределение классов target. Auto — включается автоматически для классификации.">
-                  <select className="input" value={stratify} onChange={(e) => setStratify(e.target.value as StratifyMode)}>
-                    <option value="auto">auto</option>
-                    <option value="on">on</option>
-                    <option value="off">off</option>
-                  </select>
+                  <SelectDropdown value={stratify} options={[{ value: "auto", label: "auto" }, { value: "on", label: "on" }, { value: "off", label: "off" }]} onChange={(v) => setStratify(v as StratifyMode)} />
                 </FieldInfo>
                 <FieldInfo label="Seed" info="Фиксирует случайность — одинаковый seed всегда даёт воспроизводимые train/val/test сплиты.">
                   <input className="input mono" type="number" value={seed} onChange={(e) => setSeed(Number(e.target.value || 42))} />
@@ -769,11 +755,7 @@ export function DatasetWizard({ onClose, onCreated }: { onClose: () => void; onC
             <div className="stack" style={{ gap: 16 }}>
               <div className="grid-3">
                 <FieldInfo label="Тип задачи" info="Тип ML-задачи. Влияет на стратификацию и доступные метрики.">
-                  <select className="input" value={taskType} onChange={(e) => setTaskType(e.target.value as TaskType)}>
-                    <option value="auto">auto</option>
-                    <option value="classification">classification</option>
-                    <option value="regression">regression</option>
-                  </select>
+                  <SelectDropdown value={taskType} options={[{ value: "auto", label: "auto" }, { value: "classification", label: "classification" }, { value: "regression", label: "regression" }]} onChange={(v) => setTaskType(v as TaskType)} />
                 </FieldInfo>
                 <FieldInfo label="Target" info="Колонка с целевой переменной. Совпадает с шагом Основное.">
                   <input className="input mono" value={target} onChange={(e) => setTarget(e.target.value)} />
