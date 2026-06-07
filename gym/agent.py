@@ -124,6 +124,10 @@ Do not use stage `planning`.
 """
 
 
+class TokenLimitError(RuntimeError):
+    """Raised when a response exceeds the model's configured token limit."""
+
+
 class GymAgent:
     """
     LLM agent that interacts with Gym environments through explicit JSON actions.
@@ -146,6 +150,14 @@ class GymAgent:
         self.messages: list[dict] = []
         self.total_input_tokens = 0
         self.total_output_tokens = 0
+        try:
+            self._ctx_limit: int | None = int(os.getenv("AUTOVIBE_CTX_LIMIT", "0")) or None
+        except ValueError:
+            self._ctx_limit = None
+        try:
+            self._max_tokens_limit: int | None = int(os.getenv("AUTOVIBE_MAX_TOKENS_LIMIT", "0")) or None
+        except ValueError:
+            self._max_tokens_limit = None
 
     def run(self) -> dict:
         context = self.env.reset()
@@ -165,6 +177,18 @@ class GymAgent:
             )
             self.total_input_tokens += response.input_tokens
             self.total_output_tokens += response.output_tokens
+            if self._ctx_limit and response.input_tokens > self._ctx_limit:
+                raise TokenLimitError(
+                    f"[TOKEN LIMIT] Input tokens ({response.input_tokens}) exceeded "
+                    f"the model's context limit ({self._ctx_limit}). "
+                    "Reduce message history or lower the number of steps."
+                )
+            if self._max_tokens_limit and response.output_tokens >= self._max_tokens_limit:
+                raise TokenLimitError(
+                    f"[TOKEN LIMIT] Output tokens ({response.output_tokens}) reached "
+                    f"the model's output limit ({self._max_tokens_limit}). "
+                    "The response was truncated — increase Output limit or reduce max_tokens."
+                )
             self.messages.append({"role": "assistant", "content": response.text})
 
             try:

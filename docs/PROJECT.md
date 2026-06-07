@@ -267,3 +267,70 @@ Security boundary:
   to the kernel or agent-facing context.
 - `KernelExecutionBackend` has a local implementation now and a
   `ContainerJupyterKernelBackend` placeholder for future container isolation.
+
+---
+
+## Dashboard UI conventions
+
+### Всплывающие подсказки (tooltips / info-dots)
+
+Для подсказок к полям формы используется паттерн `Info` + `tooltip-portal`.
+
+**Где реализовано:** `dashboard/web/src/pages/Settings.tsx` (компонент `Info` + `Row`),
+`dashboard/web/src/pages/DatasetDetail.tsx` (компонент `Info` + `FieldInfo`).
+
+**Как добавить подсказку к полю:**
+
+1. Используй `<Field label="..." hint="...">` из `ui.tsx` — это статичный серый текст под полем.
+2. Для **всплывающей** подсказки (кружок «?» с тултипом при hover) — добавь компонент `Info` рядом с лейблом:
+
+```tsx
+// Локальный компонент в файле (скопировать из Settings.tsx):
+function Info({ text }: { text: string }) {
+  const [visible, setVisible] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const dotRef = useRef<HTMLSpanElement>(null);
+  function show() {
+    const rect = dotRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setPos({ top: rect.top, left: rect.left + rect.width / 2 });
+    setVisible(true);
+  }
+  return (
+    <>
+      <span ref={dotRef} className="info-dot" aria-label={text}
+            onMouseEnter={show} onMouseLeave={() => setVisible(false)}>?</span>
+      {visible && createPortal(
+        <div className="tooltip-portal" style={{ top: pos.top, left: pos.left }}>{text}</div>,
+        document.body
+      )}
+    </>
+  );
+}
+```
+
+3. Используй через `<Field label={<span className="field-info-label">Лейбл<Info text="подсказка" /></span>}>` — или через `info` prop в `Row` (Settings).
+
+**CSS-классы:**
+- `.info-dot` — кружок «?», стиль в `app.css`
+- `.tooltip-portal` — сам тултип, `position: fixed`, рендерится через `createPortal` в `document.body` (чтобы не обрезался overflow родителей)
+- `.field-info-label` — `inline-flex` обёртка для лейбла + иконки
+
+**Важно:** всегда рендерить тултип через `createPortal(…, document.body)` — иначе обрежется в контейнерах с `overflow: hidden`.
+
+### Правила написания подсказок (hint / info)
+
+Подсказки пишутся для **пользователя дашборда**, а не для разработчика.
+Пользователь может не знать ни CLI-флагов, ни внутренних терминов проекта.
+
+**Правила:**
+- Объясняй **что за поле** и **что конкретно вводить** — не пересказывай название поля.
+- Давай живой пример значения: `напр. anthropic/claude-opus-4-5, gemini-2.5-flash`.
+- Не упоминай CLI-флаги (`--model`, `--max-tokens` и т.п.) — пользователь их не видит.
+- Если поле влияет на поведение прогона (лимит, таймаут, температура) — скажи, что произойдёт при превышении или крайнем значении.
+- Краткость: 1–2 предложения максимум.
+
+**Плохо:** `"как в --model (напр. Qwen/Qwen3-32B)"`
+**Хорошо:** `"Название модели как у провайдера, напр. anthropic/claude-opus-4-5, gemini-2.5-flash"` (только реалистичные примеры — без моделей с других платформ)
+
+Текст подсказки всегда начинается с **заглавной буквы**.
