@@ -305,7 +305,6 @@ export interface Health {
 export interface Settings {
   mlflow_tracking_uri: string;
   datasets_dir: string;
-  default_mode: string;
   default_episode: string;
   theme: string;
   accent: string;
@@ -326,7 +325,7 @@ export interface LaunchPayload {
   mode: LaunchRunMode | "batch";
   modes?: LaunchRunMode[];
   datasetId: string;
-  budgetMode: "local" | "cloud";
+
   maxSteps?: number;
   maxTokens?: number;
   shots?: number;
@@ -390,6 +389,9 @@ export const api = {
     ),
 
   listRuns: () => req<Run[]>("/runs"),
+  listArchivedRuns: () => req<Run[]>("/runs/archived"),
+  archiveRuns: (ids: string[]) => req<{ archived: string[] }>("/runs/archive", { method: "POST", body: JSON.stringify({ ids }) }),
+  unarchiveRuns: (ids: string[]) => req<{ unarchived: string[] }>("/runs/unarchive", { method: "POST", body: JSON.stringify({ ids }) }),
   getRun: (id: string) => req<Run>(`/runs/${id}`),
   launchRun: (p: LaunchPayload) =>
     req<Run>("/runs", { method: "POST", body: JSON.stringify(p) }),
@@ -407,6 +409,9 @@ export const api = {
   logs: (id: string) => req<LogsData>(`/runs/${id}/logs`),
 
   listDatasets: () => req<Dataset[]>("/datasets"),
+  listArchivedDatasets: () => req<Dataset[]>("/datasets/archived"),
+  archiveDatasets: (ids: string[]) => req<{ archived: string[] }>("/datasets/archive", { method: "POST", body: JSON.stringify({ ids }) }),
+  unarchiveDatasets: (ids: string[]) => req<{ unarchived: string[] }>("/datasets/unarchive", { method: "POST", body: JSON.stringify({ ids }) }),
   getDataset: (id: string) => req<Dataset>(`/datasets/${id}`),
   getDatasetConfig: (id: string) => req<DatasetConfig>(`/datasets/${id}/config`),
   updateDatasetConfig: (id: string, body: Partial<DatasetConfig>) =>
@@ -450,6 +455,9 @@ export const api = {
     reqForm<Dataset>("/datasets", form),
 
   listModels: () => req<ModelRec[]>("/models"),
+  listArchivedModels: () => req<ModelRec[]>("/models/archived"),
+  archiveModels: (ids: string[]) => req<{ archived: string[] }>("/models/archive", { method: "POST", body: JSON.stringify({ ids }) }),
+  unarchiveModels: (ids: string[]) => req<{ unarchived: string[] }>("/models/unarchive", { method: "POST", body: JSON.stringify({ ids }) }),
   providers: () => req<string[]>("/models/providers"),
   createModel: (m: Partial<ModelRec> & { apiKey?: string }) =>
     req<ModelRec>("/models", { method: "POST", body: JSON.stringify(m) }),

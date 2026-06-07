@@ -2,18 +2,18 @@ import type { Run, RunMode, RunStatus } from "./api";
 
 export const MODE_LABELS: Record<RunMode, string> = {
   single: "Single-shot",
-  repeated: "Repeated single-shot",
+  repeated: "Multi-shot",
   iterative: "Iterative",
-  gym: "Flexible gym",
+  gym: "Free gym",
   fixed: "Fixed gym",
   batch: "Набор режимов",
 };
 
 export const MODE_SHORT: Record<RunMode, string> = {
   single: "Single-shot",
-  repeated: "Repeated",
+  repeated: "Multi-shot",
   iterative: "Iterative",
-  gym: "Flexible gym",
+  gym: "Free gym",
   fixed: "Fixed gym",
   batch: "Batch",
 };

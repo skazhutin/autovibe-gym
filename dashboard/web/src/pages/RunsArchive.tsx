@@ -9,22 +9,20 @@ import { Icon } from "../components/Icon";
 import { ModeTag, ScoreCell } from "../components/runbits";
 
 type ModeFilter = RunMode | "any";
-const RUN_MODE_OPTIONS = (Object.keys(MODE_LABELS) as RunMode[]).filter((m) => m !== "batch");
-const RUN_STATUS_OPTIONS = (Object.keys(STATUS_LABELS) as RunStatus[]).filter((s) => s !== "null");
+const RUN_MODE_OPTIONS = Object.keys(MODE_LABELS) as RunMode[];
 
 function ConfirmModal({ count, onConfirm, onCancel, busy }: { count: number; onConfirm: () => void; onCancel: () => void; busy: boolean }) {
   return createPortal(
     <div className="modal-backdrop" onClick={onCancel}>
       <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-        <h3 className="modal-title">Архивировать прогоны?</h3>
+        <h3 className="modal-title">Вернуть прогоны?</h3>
         <p className="modal-desc">
-          {count === 1 ? "1 прогон будет перемещён в архив." : `${count} прогонов будут перемещены в архив.`}
-          {" "}Вернуть их можно из раздела «Архив» — он находится внизу страницы прогонов.
+          {count === 1 ? "1 прогон будет возвращён из архива." : `${count} прогонов будут возвращены из архива.`}
         </p>
         <div className="modal-actions">
           <Button variant="secondary" onClick={onCancel} disabled={busy}>Отменить</Button>
           <Button variant="primary" onClick={onConfirm} disabled={busy}>
-            {busy ? "Архивирование…" : "Архивировать"}
+            {busy ? "Возвращение…" : "Вернуть"}
           </Button>
         </div>
       </div>
@@ -33,9 +31,9 @@ function ConfirmModal({ count, onConfirm, onCancel, busy }: { count: number; onC
   );
 }
 
-export default function Runs() {
+export default function RunsArchive() {
   const nav = useNavigate();
-  const { data: runs, loading, reload } = useAsync(() => api.listRuns(), [], 5000);
+  const { data: runs, loading, reload } = useAsync(() => api.listArchivedRuns(), [], 10000);
   const [q, setQ] = useState("");
   const [mode, setMode] = useState<ModeFilter>("any");
   const [status, setStatus] = useState<RunStatus | "all">("all");
@@ -43,7 +41,7 @@ export default function Runs() {
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirm, setConfirm] = useState(false);
-  const [archiving, setArchiving] = useState(false);
+  const [restoring, setRestoring] = useState(false);
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -82,48 +80,52 @@ export default function Runs() {
     setSelected(new Set());
   }
 
-  async function doArchive() {
-    setArchiving(true);
+  async function doRestore() {
+    setRestoring(true);
     try {
-      await api.archiveRuns([...selected]);
+      await api.unarchiveRuns([...selected]);
       setConfirm(false);
       cancelSelect();
       reload();
     } finally {
-      setArchiving(false);
+      setRestoring(false);
     }
   }
 
   return (
-    <div className="stack" style={{ gap: 18 }}>
-      <Card className="dataset-toolbar">
-        <div className="filters" style={{ marginBottom: 0 }}>
-          <div className="search">
-            <Icon name="search" size={17} />
-            <input className="input" placeholder="Поиск по ID, модели, датасету…" value={q} onChange={(e) => setQ(e.target.value)} />
-          </div>
-          <SelectDropdown
-            value={mode}
-            options={[{ value: "any", label: "Все режимы" }, ...RUN_MODE_OPTIONS.map((m) => ({ value: m, label: MODE_LABELS[m] }))]}
-            onChange={(v) => setMode(v as ModeFilter)}
-          />
-          <SelectDropdown
-            value={status}
-            options={[{ value: "all", label: "Все статусы" }, ...RUN_STATUS_OPTIONS.map((s) => ({ value: s, label: STATUS_LABELS[s] }))]}
-            onChange={(v) => setStatus(v as RunStatus | "all")}
-          />
-          {selecting ? (
-            <>
-              <Button variant="secondary" onClick={toggleSelectAll}>
-                {allFilteredSelected ? "Снять выделение" : "Выбрать все"}
-              </Button>
-              <Button variant="secondary" onClick={cancelSelect}>Отмена</Button>
-            </>
-          ) : (
-            <Button variant="secondary" onClick={() => setSelecting(true)}>Выбрать</Button>
-          )}
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+        <button className="archive-link" onClick={() => nav("/runs")}>
+          <Icon name="chevronLeft" size={15} /> Назад к прогонам
+        </button>
+      </div>
+
+      <div className="filters">
+        <div className="search">
+          <Icon name="search" size={17} />
+          <input className="input" placeholder="Поиск по ID, модели, датасету…" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
-      </Card>
+        <SelectDropdown
+          value={mode}
+          options={[{ value: "any", label: "Все режимы" }, ...RUN_MODE_OPTIONS.map((m) => ({ value: m, label: MODE_LABELS[m] }))]}
+          onChange={(v) => setMode(v as ModeFilter)}
+        />
+        <SelectDropdown
+          value={status}
+          options={[{ value: "all", label: "Все статусы" }, ...(Object.keys(STATUS_LABELS) as RunStatus[]).map((s) => ({ value: s, label: STATUS_LABELS[s] }))]}
+          onChange={(v) => setStatus(v as RunStatus | "all")}
+        />
+        {selecting ? (
+          <>
+            <Button variant="secondary" onClick={toggleSelectAll}>
+              {allFilteredSelected ? "Снять выделение" : "Выбрать все"}
+            </Button>
+            <Button variant="secondary" onClick={cancelSelect}>Отмена</Button>
+          </>
+        ) : (
+          <Button variant="secondary" onClick={() => setSelecting(true)}>Выбрать</Button>
+        )}
+      </div>
 
       <Card style={{ padding: 0 }}>
         {loading && !runs ? (
@@ -166,24 +168,17 @@ export default function Runs() {
         ) : (
           <EmptyState
             icon="runs"
-            title={runs && runs.length ? "Ничего не найдено" : "Прогонов пока нет"}
-            text={runs && runs.length ? "Измените фильтры или поисковый запрос." : "Запустите первый прогон, чтобы он появился в истории."}
-            action={<Button variant="primary" icon="plus" onClick={() => nav("/new")}>Новый прогон</Button>}
+            title="Архив пуст"
+            text="Архивированные прогоны появятся здесь."
           />
         )}
       </Card>
-
-      <div style={{ display: "flex", justifyContent: "flex-end" }}>
-        <button className="archive-link" onClick={() => nav("/runs/archive")}>
-          <Icon name="archive" size={15} /> Архив
-        </button>
-      </div>
 
       {selecting && selected.size > 0 && createPortal(
         <div className="selection-bar">
           <span className="selection-bar-label">Выбрано {selected.size} прогон{selected.size === 1 ? "" : selected.size < 5 ? "а" : "ов"}</span>
           <Button variant="primary" onClick={() => setConfirm(true)}>
-            <Icon name="archive" size={15} /> Архивировать
+            <Icon name="undo" size={15} /> Вернуть
           </Button>
           <Button variant="secondary" onClick={cancelSelect}>Отменить</Button>
         </div>,
@@ -191,7 +186,7 @@ export default function Runs() {
       )}
 
       {confirm && (
-        <ConfirmModal count={selected.size} onConfirm={doArchive} onCancel={() => setConfirm(false)} busy={archiving} />
+        <ConfirmModal count={selected.size} onConfirm={doRestore} onCancel={() => setConfirm(false)} busy={restoring} />
       )}
     </div>
   );

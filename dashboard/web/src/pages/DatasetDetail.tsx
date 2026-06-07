@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, type AgentNotes, type Dataset, type DatasetConfig, type DatasetSource } from "../lib/api";
 import { useAsync } from "../lib/hooks";
-import { Button, Card, EmptyState, Field, Skeleton, Spinner, Tabs, Tag } from "../components/ui";
+import { Button, Card, EmptyState, Field, Modal, SelectDropdown, Skeleton, Spinner, Tabs, Tag } from "../components/ui";
 import { Icon } from "../components/Icon";
 import { MiniHist } from "../components/charts";
 
@@ -246,11 +246,24 @@ function SplitsTab({ config }: { config: DatasetConfig | null }) {
 }
 
 function ConfigTab({ id, config, onSaved }: { id: string; config: DatasetConfig | null; onSaved: () => void }) {
+  const nav = useNavigate();
   const [form, setForm] = useState<DatasetConfig | null>(config);
   const [tagsStr, setTagsStr] = useState((config?.tags ?? []).join(", "));
   const [busy, setBusy] = useState(false);
   const [ok, setOk] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  async function doDelete() {
+    setDeleting(true);
+    try {
+      await api.deleteDataset(id);
+      nav("/problems");
+    } finally {
+      setDeleting(false);
+    }
+  }
   useEffect(() => {
     setForm(config);
     setTagsStr((config?.tags ?? []).join(", "));
@@ -287,20 +300,13 @@ function ConfigTab({ id, config, onSaved }: { id: string; config: DatasetConfig 
       <div className="stack" style={{ gap: 16 }}>
         <div className="grid-3">
           <FieldInfo label="Тип задачи" info="classification — предсказание категорий (классов). regression — предсказание числа. auto — тип определится автоматически по данным.">
-            <select className="input" value={task.task_type} onChange={(e) => setTask({ task_type: e.target.value as typeof task.task_type })}>
-              <option value="auto">auto</option>
-              <option value="classification">classification</option>
-              <option value="regression">regression</option>
-            </select>
+            <SelectDropdown value={task.task_type} options={[{ value: "auto", label: "auto" }, { value: "classification", label: "classification" }, { value: "regression", label: "regression" }]} onChange={(v) => setTask({ task_type: v as typeof task.task_type })} />
           </FieldInfo>
           <FieldInfo label="Target column" info="Название колонки с целевой переменной — то, что агент должен научиться предсказывать. Эта колонка никогда не включается в признаки." required>
             <input className="input mono" value={task.target_col} onChange={(e) => setTask({ target_col: e.target.value })} placeholder="target" />
           </FieldInfo>
           <FieldInfo label="Metric goal" info="Направление оптимизации: maximize — чем больше, тем лучше (accuracy, f1); minimize — чем меньше, тем лучше (rmse, mae). Выводится автоматически из имени метрики.">
-            <select className="input" value={task.metric_goal} onChange={(e) => setTask({ metric_goal: e.target.value as typeof task.metric_goal })}>
-              <option value="max">maximize</option>
-              <option value="min">minimize</option>
-            </select>
+            <SelectDropdown value={task.metric_goal} options={[{ value: "max", label: "maximize" }, { value: "min", label: "minimize" }]} onChange={(v) => setTask({ metric_goal: v as typeof task.metric_goal })} />
           </FieldInfo>
           <FieldInfo
             label={<>Метрика <a className="docs-link" href="https://scikit-learn.org/stable/modules/model_evaluation.html" target="_blank" rel="noopener noreferrer">все метрики sklearn ↗</a></>}
@@ -332,12 +338,33 @@ function ConfigTab({ id, config, onSaved }: { id: string; config: DatasetConfig 
             </FieldInfo>
           </div>
         </details>
-        <div className="row">
-          <Button variant="primary" onClick={save} disabled={busy}>{busy ? <Spinner /> : "Сохранить конфиг"}</Button>
-          {ok && <span className="success-inline"><Icon name="check" size={14} /> сохранено</span>}
-          {err && <span className="error-inline">{err}</span>}
+        <div className="spread" style={{ alignItems: "center" }}>
+          <div className="row">
+            <Button variant="primary" onClick={save} disabled={busy}>{busy ? <Spinner /> : "Сохранить конфиг"}</Button>
+            {ok && <span className="success-inline"><Icon name="check" size={14} /> сохранено</span>}
+            {err && <span className="error-inline">{err}</span>}
+          </div>
+          <Button variant="ghost" icon="trash" onClick={() => setConfirmDelete(true)}>Удалить датасет</Button>
         </div>
       </div>
+
+      {confirmDelete && (
+        <Modal
+          title="Удалить датасет?"
+          width={420}
+          onClose={() => setConfirmDelete(false)}
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setConfirmDelete(false)} disabled={deleting}>Отменить</Button>
+              <Button variant="danger" onClick={doDelete} disabled={deleting}>{deleting ? <Spinner /> : "Удалить"}</Button>
+            </>
+          }
+        >
+          <p style={{ margin: 0, fontSize: 13, color: "var(--text-dim)", lineHeight: 1.55 }}>
+            Все исходные и подготовленные файлы будут удалены без возможности восстановления.
+          </p>
+        </Modal>
+      )}
     </Card>
   );
 }

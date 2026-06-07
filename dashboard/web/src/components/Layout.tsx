@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Icon } from "./Icon";
 import { Button, Dot } from "./ui";
@@ -19,6 +19,7 @@ const NAV = [
 const META: { match: (p: string) => boolean; title: string; sub: string }[] = [
   { match: (p) => p === "/", title: "Дашборд", sub: "Обзор активности спортзала" },
   { match: (p) => p.startsWith("/new"), title: "Новый прогон", sub: "Настройте и запустите LLM-агента" },
+  { match: (p) => p === "/runs/archive", title: "Архив прогонов", sub: "Архивированные прогоны" },
   { match: (p) => p.startsWith("/runs/"), title: "Прогон", sub: "Решение агента, метрики и диагностика" },
   { match: (p) => p.startsWith("/runs"), title: "Прогоны", sub: "История всех запусков" },
   { match: (p) => p.startsWith("/compare"), title: "Сравнение", sub: "Сопоставление прогонов по метрикам" },
@@ -45,11 +46,20 @@ function HeaderStatus() {
   );
 }
 
+export interface HeaderAction { label: string; icon?: string; onClick: () => void }
+export type SetHeaderAction = (a: HeaderAction | null) => void;
+
 export default function Layout() {
   const loc = useLocation();
   const nav = useNavigate();
   const meta = META.find((m) => m.match(loc.pathname)) ?? META[0];
   const [collapsed, setCollapsed] = useState(false);
+  const [headerAction, setHeaderActionRaw] = useState<HeaderAction | null>(null);
+  const setHeaderAction: SetHeaderAction = useCallback((a) => setHeaderActionRaw(a), []);
+
+  const isRuns = loc.pathname === "/runs" || loc.pathname.startsWith("/runs") && !loc.pathname.startsWith("/runs/");
+  const isCompare = loc.pathname.startsWith("/compare");
+  const showNewRun = (isRuns || isCompare) && loc.pathname !== "/new";
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -94,15 +104,18 @@ export default function Layout() {
           </div>
           <div className="header-right">
             <HeaderStatus />
-            {loc.pathname !== "/new" && (
-              <Button variant="primary" icon="plus" onClick={() => nav("/new")}>
-                Новый прогон
+            {showNewRun && (
+              <Button variant="primary" icon="plus" onClick={() => nav("/new")}>Новый прогон</Button>
+            )}
+            {!showNewRun && headerAction && (
+              <Button variant="primary" icon={headerAction.icon ?? "plus"} onClick={headerAction.onClick}>
+                {headerAction.label}
               </Button>
             )}
           </div>
         </header>
         <main className="content">
-          <Outlet />
+          <Outlet context={setHeaderAction} />
         </main>
       </div>
     </div>

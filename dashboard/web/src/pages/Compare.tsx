@@ -1,79 +1,122 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, type Run } from "../lib/api";
+import { api, type Run, type RunMode } from "../lib/api";
 import { useAsync } from "../lib/hooks";
-import { MODE_SHORT, formatDuration, formatScore, formatTokens } from "../lib/format";
-import { Card, EmptyState, Skeleton } from "../components/ui";
-import { BarChart, Scatter } from "../components/charts";
+import { MODE_LABELS, formatDuration, formatScore, formatTokens, timeAgo } from "../lib/format";
+import { Button, Card, EmptyState, SelectDropdown, Skeleton, StatusBadge } from "../components/ui";
+import { Icon } from "../components/Icon";
+import { BarChart } from "../components/charts";
 import { ModeTag } from "../components/runbits";
 
 type GroupBy = "none" | "mode" | "model" | "dataset";
+type ModeFilter = RunMode | "any";
+const MAX_PICK = 10;
+const RUN_MODE_OPTIONS = (Object.keys(MODE_LABELS) as RunMode[]).filter((m) => m !== "batch");
+
+function RunPickerModal({ successful, selected, onDone }: {
+  successful: Run[];
+  selected: Set<string>;
+  onDone: (next: Set<string>) => void;
+}) {
+  const [local, setLocal] = useState(new Set(selected));
+  const [q, setQ] = useState("");
+  const [mode, setMode] = useState<ModeFilter>("any");
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    return successful.filter((r) => {
+      if (mode !== "any" && r.mode !== mode) return false;
+      if (term && !`${r.shortId} ${r.model} ${r.dataset}`.toLowerCase().includes(term)) return false;
+      return true;
+    });
+  }, [successful, q, mode]);
+
+  function toggle(id: string) {
+    setLocal((s) => {
+      const n = new Set(s);
+      if (n.has(id)) { n.delete(id); return n; }
+      if (n.size >= MAX_PICK) return s;
+      n.add(id);
+      return n;
+    });
+  }
+
+  function pickTop10() {
+    setLocal(new Set(filtered.slice(0, MAX_PICK).map((r) => r.id)));
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={() => onDone(selected)}>
+      <div className="cmp-picker-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="cmp-picker-head">
+          <span style={{ fontWeight: 600, fontSize: 15 }}>Выбрать прогоны</span>
+          <span className="faint" style={{ fontSize: 13 }}>{local.size} / {MAX_PICK}</span>
+        </div>
+        <div className="filters" style={{ margin: "12px 0 0", padding: "0 16px" }}>
+          <div className="search">
+            <Icon name="search" size={16} />
+            <input className="input" placeholder="Поиск по ID, модели, датасету…" value={q} onChange={(e) => setQ(e.target.value)} />
+          </div>
+          <SelectDropdown
+            value={mode}
+            options={[{ value: "any", label: "Все режимы" }, ...RUN_MODE_OPTIONS.map((m) => ({ value: m, label: MODE_LABELS[m] }))]}
+            onChange={(v) => setMode(v as ModeFilter)}
+          />
+          <Button variant="secondary" onClick={pickTop10}>Топ {MAX_PICK}</Button>
+        </div>
+        <div className="cmp-picker-list">
+          {filtered.length === 0 && <div className="muted" style={{ padding: "24px 16px", fontSize: 13 }}>Ничего не найдено.</div>}
+          {filtered.map((r) => {
+            const checked = local.has(r.id);
+            const disabled = !checked && local.size >= MAX_PICK;
+            return (
+              <label key={r.id} className={`cmp-picker-row${checked ? " selected" : ""}${disabled ? " disabled" : ""}`}>
+                <input type="checkbox" checked={checked} disabled={disabled} onChange={() => toggle(r.id)} />
+                <span className="mono faint" style={{ fontSize: 12, width: 80, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.shortId}</span>
+                <span className="mono" style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.model}</span>
+                <ModeTag mode={r.mode} />
+                <span className="faint" style={{ fontSize: 12 }}>{r.dataset}</span>
+                <StatusBadge status={r.status} />
+                <span className="mono faint" style={{ fontSize: 12 }}>{formatScore(r.score, r.metric)}</span>
+                <span className="faint" style={{ fontSize: 12 }}>{timeAgo(r.startedMs)}</span>
+              </label>
+            );
+          })}
+        </div>
+        <div className="cmp-picker-foot">
+          <Button variant="ghost" onClick={() => onDone(selected)}>Отмена</Button>
+          <Button variant="primary" onClick={() => onDone(local)}>Применить ({local.size})</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Compare() {
   const nav = useNavigate();
   const { data: runs, loading } = useAsync(() => api.listRuns(), []);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [groupBy, setGroupBy] = useState<GroupBy>("none");
+  const [pickerOpen, setPickerOpen] = useState(false);
 
-  const successful = useMemo(() => (runs ?? []).filter((r) => r.status === "success" && r.score !== null), [runs]);
-
-  useEffect(() => {
-    if (selected.size === 0 && successful.length) {
-      setSelected(new Set(successful.slice(0, Math.min(5, successful.length)).map((r) => r.id)));
-    }
-  }, [successful, selected.size]);
+  const successful = useMemo(() => (runs ?? []).filter((r) => r.score !== null), [runs]);
 
   const picked = successful.filter((r) => selected.has(r.id));
 
-  // best per column (higher score = better assuming neg/normalized metrics)
   const bestScore = Math.max(...picked.map((r) => r.score ?? -Infinity));
   const bestChecklist = Math.max(...picked.map((r) => r.checklist));
   const fewestErrors = Math.min(...picked.map((r) => r.errors));
   const fewestTokens = Math.min(...picked.map((r) => r.tokIn + r.tokOut));
 
-  // bar chart only meaningful for one dataset (comparable metric)
   const datasets = new Set(picked.map((r) => r.dataset));
-  const barData = datasets.size === 1
-    ? picked.map((r) => ({ label: `${MODE_SHORT[r.mode]}`, value: r.score!, best: r.score === bestScore, sub: r.model }))
-    : [];
-
-  // Cost-per-point: tokens vs improvement over a per-dataset baseline (the
-  // single-shot score if present, else the weakest run on that dataset).
   const scoredPicked = picked.filter((r) => r.score !== null && r.score !== undefined);
   const goalMin = (m?: string | null) =>
     !!(m && /rmse|rmsle|mae|mse|logloss/.test(m.toLowerCase()) && !m.toLowerCase().startsWith("neg_"));
-  const baselineByDs = new Map<string, number>();
-  for (const ds of new Set(scoredPicked.map((r) => r.dataset))) {
-    const dsRuns = scoredPicked.filter((r) => r.dataset === ds);
-    const single = dsRuns.find((r) => r.mode === "single");
-    baselineByDs.set(ds, single ? single.score! : Math.min(...dsRuns.map((r) => r.score!)));
-  }
-  const scatterPts = scoredPicked.map((r) => {
-    const base = baselineByDs.get(r.dataset) ?? 0;
-    const imp = base
-      ? ((goalMin(r.metric) ? base - r.score! : r.score! - base) / Math.abs(base)) * 100
-      : 0;
-    return {
-      x: r.tokIn + r.tokOut,
-      y: imp,
-      label: `${MODE_SHORT[r.mode]} · ${r.dataset}`,
-      highlight: r.mode === "gym" || r.mode === "iterative",
-    };
-  });
 
   const sortedPicked = [...picked].sort((a, b) => {
     if (groupBy === "none") return 0;
     const key = (r: Run) => (groupBy === "mode" ? r.mode : groupBy === "model" ? r.model : r.dataset);
     return key(a).localeCompare(key(b));
   });
-
-  function toggle(idr: string) {
-    setSelected((s) => {
-      const n = new Set(s);
-      n.has(idr) ? n.delete(idr) : n.add(idr);
-      return n;
-    });
-  }
 
   if (loading && !runs) return <Skeleton h={400} />;
 
@@ -82,37 +125,48 @@ export default function Compare() {
       <Card className="cmp-list">
         <div className="spread" style={{ marginBottom: 8 }}>
           <strong style={{ fontSize: 14 }}>Прогоны</strong>
-          <span className="faint" style={{ fontSize: 12 }}>{selected.size} выбр.</span>
+          <span className="faint" style={{ fontSize: 12 }}>{selected.size} / {MAX_PICK}</span>
         </div>
-        {successful.length === 0 && <div className="muted" style={{ fontSize: 13 }}>Нет успешных прогонов для сравнения.</div>}
-        {successful.map((r) => (
-          <label key={r.id} className="cmp-pick">
-            <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggle(r.id)} />
-            <div>
+        {picked.length === 0 && (
+          <div className="muted" style={{ fontSize: 13, marginBottom: 8 }}>Добавьте прогоны для сравнения.</div>
+        )}
+        {picked.map((r) => (
+          <div key={r.id} className="cmp-pick">
+            <div style={{ flex: 1, minWidth: 0 }}>
               <div className="nm">{r.model}</div>
               <div className="row" style={{ gap: 6, marginTop: 4 }}>
                 <ModeTag mode={r.mode} />
                 <span className="faint" style={{ fontSize: 11 }}>{r.dataset}</span>
               </div>
             </div>
-          </label>
+            <button className="icon-btn" style={{ flexShrink: 0 }} onClick={() => setSelected((s) => { const n = new Set(s); n.delete(r.id); return n; })}>
+              <Icon name="x" size={14} />
+            </button>
+          </div>
         ))}
+        <button className="cmp-add-btn" onClick={() => setPickerOpen(true)}>
+          <Icon name="plus" size={15} /> Выбрать прогоны
+        </button>
       </Card>
 
       <div className="cmp-right">
         {picked.length === 0 ? (
-          <Card><EmptyState icon="compare" title="Выберите прогоны" text="Отметьте слева успешные прогоны, чтобы сравнить их." /></Card>
+          <Card><EmptyState icon="compare" title="Выберите прогоны" text="Нажмите «Выбрать прогоны» слева, чтобы добавить до 10 прогонов для сравнения." /></Card>
         ) : (
           <>
             <Card style={{ minWidth: 0 }}>
               <div className="spread" style={{ marginBottom: 12 }}>
                 <strong>Сводная таблица</strong>
-                <select className="select-sm" value={groupBy} onChange={(e) => setGroupBy(e.target.value as GroupBy)}>
-                  <option value="none">Без группировки</option>
-                  <option value="mode">По режиму</option>
-                  <option value="model">По модели</option>
-                  <option value="dataset">По датасету</option>
-                </select>
+                <SelectDropdown
+                  value={groupBy}
+                  options={[
+                    { value: "none", label: "Без группировки" },
+                    { value: "mode", label: "По режиму" },
+                    { value: "model", label: "По модели" },
+                    { value: "dataset", label: "По датасету" },
+                  ]}
+                  onChange={(v) => setGroupBy(v as GroupBy)}
+                />
               </div>
               <div className="table-wrap">
                 <table className="data">
@@ -137,21 +191,58 @@ export default function Compare() {
               </div>
             </Card>
 
-            <div className="grid-2">
-              <Card style={{ minWidth: 0 }}>
-                <strong>Test-метрика</strong>
-                <div className="faint" style={{ fontSize: 12, marginBottom: 8 }}>{datasets.size === 1 ? `датасет: ${[...datasets][0]}` : "выберите прогоны одного датасета для сопоставимой метрики"}</div>
-                {barData.length ? <BarChart data={barData} fmt={(v) => formatScore(v, picked[0]?.metric)} /> : <EmptyState icon="compare" title="Разные датасеты" text="Метрики несопоставимы между датасетами." />}
-              </Card>
-              <Card style={{ minWidth: 0 }}>
-                <strong>Цена за очко метрики</strong>
-                <div className="faint" style={{ fontSize: 12, marginBottom: 8 }}>токены против улучшения над baseline (single-shot или слабейший на датасете)</div>
-                {scatterPts.length ? <Scatter points={scatterPts} xLabel="токены" yLabel="улучшение %" /> : <EmptyState icon="coins" title="Недостаточно данных" text="Нужны успешные прогоны со скором." />}
-              </Card>
-            </div>
+            <Card>
+              <strong>Test-метрика</strong>
+              <div className="faint" style={{ fontSize: 12, marginBottom: 12 }}>{datasets.size === 1 ? `датасет: ${[...datasets][0]}` : "выберите прогоны одного датасета для сопоставимой метрики"}</div>
+              {scoredPicked.length ? (
+                <div className="table-wrap">
+                  <table className="data">
+                    <thead><tr><th>Прогон</th><th>Модель</th><th>Режим</th><th>Датасет</th><th>Test-скор</th><th>Метрика</th></tr></thead>
+                    <tbody>
+                      {[...scoredPicked].sort((a, b) => (goalMin(a.metric) ? a.score! - b.score! : b.score! - a.score!)).map((r) => (
+                        <tr key={r.id} className="clickable" onClick={() => nav(`/runs/${r.id}`)}>
+                          <td className="mono faint">{r.shortId}</td>
+                          <td className="mono">{r.model}</td>
+                          <td><ModeTag mode={r.mode} /></td>
+                          <td>{r.dataset}</td>
+                          <td>{r.score === bestScore ? <span className="best-pill">{formatScore(r.score, r.metric)}</span> : <span className="mono">{formatScore(r.score, r.metric)}</span>}</td>
+                          <td className="mono faint">{r.metric ?? "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : <EmptyState icon="compare" title="Нет данных" text="Нужны прогоны со скором." />}
+            </Card>
+
+            <Card>
+              <strong>Токены</strong>
+              <div className="faint" style={{ fontSize: 12, marginBottom: 8 }}>суммарный расход токенов на прогон</div>
+              <BarChart
+                data={[...picked].sort((a, b) => a.tokIn + a.tokOut - (b.tokIn + b.tokOut)).map((r) => ({ label: r.shortId, sub: r.model, value: r.tokIn + r.tokOut, best: (r.tokIn + r.tokOut) === fewestTokens }))}
+                fmt={formatTokens}
+              />
+            </Card>
+
+            <Card>
+              <strong>Время</strong>
+              <div className="faint" style={{ fontSize: 12, marginBottom: 8 }}>длительность прогона</div>
+              <BarChart
+                data={[...picked].filter((r) => r.dur).sort((a, b) => a.dur - b.dur).map((r) => ({ label: r.shortId, sub: r.model, value: r.dur, best: r.dur === Math.min(...picked.map((x) => x.dur)) }))}
+                fmt={formatDuration}
+              />
+            </Card>
           </>
         )}
       </div>
+
+      {pickerOpen && (
+        <RunPickerModal
+          successful={successful}
+          selected={selected}
+          onDone={(next) => { setSelected(next); setPickerOpen(false); }}
+        />
+      )}
     </div>
   );
 }
