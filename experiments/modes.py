@@ -43,8 +43,8 @@ REPEATED_SINGLE_SHOT = ProductMode(
 
 GYM_WITH_CHECKLIST = ProductMode(
     key="gym_with_checklist",
-    display_name="Flexible gym",
-    matrix_label="flexible gym",
+    display_name="Free gym",
+    matrix_label="free gym",
     dashboard_mode="gym",
     module="experiments.run_gym",
     experiment_type="gym_with_checklist",
@@ -54,8 +54,8 @@ GYM_WITH_CHECKLIST = ProductMode(
 
 FIXED_TRANSITIONS = ProductMode(
     key="fixed_transitions",
-    display_name="Fixed gym",
-    matrix_label="fixed gym",
+    display_name="Directive gym",
+    matrix_label="directive gym",
     dashboard_mode="fixed",
     module="experiments.run_fixed",
     experiment_type="fixed_transitions",
