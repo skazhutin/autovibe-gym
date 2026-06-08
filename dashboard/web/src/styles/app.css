@@ -414,9 +414,9 @@
   box-shadow: var(--shadow-sm);
 }
 .btn-primary:hover:not(:disabled) {
-  filter: brightness(1.05);
+  background: color-mix(in srgb, var(--accent) 85%, #000);
   transform: translateY(-1px);
-  box-shadow: 0 8px 24px color-mix(in srgb, var(--accent) 24%, transparent);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--accent) 36%, transparent);
 }
 .btn-secondary {
   background: var(--surface);
