@@ -37,7 +37,7 @@ function statusOf(d: Task): TaskStatus {
 }
 
 function splitTag(ok?: boolean, label?: string) {
-  return <Tag tone={ok ? "green" : "neutral"} mono>{label}</Tag>;
+  return <Tag tone={ok ? "green" : "neutral"}>{label}</Tag>;
 }
 
 function sourceText(d: Task) {
