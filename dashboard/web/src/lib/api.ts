@@ -111,7 +111,7 @@ export interface AgentNotes {
   visible_to_agent: boolean;
 }
 
-export interface TaskConfig {
+export interface TaskTypeConfig {
   task_type: "auto" | "classification" | "regression";
   target_col: string;
   metric_name: string;
@@ -174,7 +174,7 @@ export interface TaskConfig {
   updated_at?: string | null;
   version: number;
   status: TaskStatus;
-  task: TaskConfig;
+  task: TaskTypeConfig;
   splits: TaskSplitConfig;
   raw_files: UploadedFileNode[];
   agent_notes: AgentNotes;
@@ -187,7 +187,7 @@ export interface TaskCreatePayload {
   id: string;
   name: string;
   uploadId?: string | null;
-  task: TaskConfig;
+  task: TaskTypeConfig;
   splits: TaskSplitConfig;
   agentNotes: AgentNotes;
   sources: TaskSource[];
@@ -299,13 +299,13 @@ export interface RunSummary {
 export interface Health {
   status: string;
   mlflow_store_present: boolean;
-  tasks_dir_present: boolean;
+  datasets_dir_present: boolean;
   python_bin_present: boolean;
 }
 
 export interface Settings {
   mlflow_tracking_uri: string;
-  tasks_dir: string;
+  datasets_dir: string;
   default_episode: string;
   theme: string;
   accent: string;
