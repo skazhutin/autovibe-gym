@@ -432,6 +432,7 @@ export default function NewRun() {
                           </FI>
                         </div>
                       )}
+                      {!mi.hasSteps && !mi.hasShots && !mi.hasHint && <div className="mode-param-spacer" aria-hidden="true" />}
                       {mi.hasThoughts && mi.hasSteps && !mi.hasHint && !mi.hasShots && <div className="mode-param-spacer" aria-hidden="true" />}
                       <div className="mode-param">
                         <FI label={`Температура: ${p.temp.toFixed(2)}`} info="Случайность ответов: 0 — всегда одинаково, 1 — очень вариативно. Рекомендуется 0.3–0.6 для кода.">
