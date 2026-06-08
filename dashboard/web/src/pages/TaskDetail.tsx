@@ -12,9 +12,9 @@ const TABS = [
   { id: "preview", label: "Превью", icon: "table" },
   { id: "columns", label: "Колонки", icon: "sliders" },
   { id: "splits", label: "Сплиты", icon: "layers" },
-  { id: "config", label: "Конфиг", icon: "settings" },
-  { id: "sources", label: "Источники", icon: "external" },
   { id: "notes", label: "Заметки агенту", icon: "notebook" },
+  { id: "sources", label: "Источники", icon: "external" },
+  { id: "config", label: "Параметры", icon: "settings" },
 ];
 
 type Split = "train" | "val" | "test";
