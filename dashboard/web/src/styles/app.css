@@ -175,7 +175,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 16px 32px;
-  background: color-mix(in srgb, var(--bg) 78%, transparent);
+  background: color-mix(in srgb, var(--bg) var(--overlay-pct, 78%), transparent);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--border);
 }
@@ -1059,7 +1059,7 @@ table.data tbody tr.clickable:hover {
 }
 #toolbar-portal:not(:empty) {
   padding: 28px 32px 0;
-  background: color-mix(in srgb, var(--bg) 78%, transparent);
+  background: color-mix(in srgb, var(--bg) var(--overlay-pct, 78%), transparent);
   backdrop-filter: blur(10px);
 }
 .main:has(#toolbar-portal:not(:empty)) .content {

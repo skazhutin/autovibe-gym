@@ -87,6 +87,8 @@ const RU: Dict = {
   "settings.info.accent": "Основной цвет интерфейса — кнопки, ссылки и активные элементы.",
   "settings.info.animations": "Если выключено, весь motion в интерфейсе отключается. Если включено, используются мягкие переходы и аккуратные интеракции.",
   "settings.info.rounding": "Радиус скругления углов карточек и кнопок. От 8px до 24px.",
+  "settings.overlay": "Прозрачность наложения",
+  "settings.info.overlay": "Прозрачность фона хедера и панели поиска при скролле над содержимым. 0% — полностью прозрачный, 100% — непрозрачный.",
 };
 
 const EN: Dict = {
@@ -172,6 +174,8 @@ const EN: Dict = {
   "settings.info.accent": "Primary interface color for buttons, links, and active elements.",
   "settings.info.animations": "If disabled, all interface motion is turned off. If enabled, the dashboard uses soft transitions and polished interaction motion.",
   "settings.info.rounding": "Corner radius for cards and buttons. From 8px to 24px.",
+  "settings.overlay": "Overlay opacity",
+  "settings.info.overlay": "Background opacity of the header and search bar when scrolling over content. 0% — fully transparent, 100% — opaque.",
 };
 
 const I18N = { ru: RU, en: EN };

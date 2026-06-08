@@ -34,6 +34,7 @@ export default function App() {
       accent: data.accent,
       radius: data.radius,
       animations: data.animations ?? "on",
+      overlayOpacity: (data as unknown as Record<string, unknown>).overlay_opacity as number ?? 78,
     });
   }, [data]);
 
