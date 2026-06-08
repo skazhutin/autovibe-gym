@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-08 (return action icon refreshed across archive screens)
+**Last updated:** 2026-06-08 (prepared task rebuild now accepts existing prepared split paths)
 **Phase:** Hardening after first full H200 recon + building the local control-panel dashboard for configuring/launching/inspecting runs.
 
 ---
@@ -177,6 +177,11 @@ Current archive return-icon cycle:
 
 - The shared `undo` icon used by archive restore actions now uses a cleaner
   return-arrow shape across tasks, runs, and models archive screens.
+Current prepared-task rebuild cycle:
+
+- Dataset prepare now accepts existing `prepared/*.csv` split paths when older
+  task configs do not retain raw `source_path` entries, so previously prepared
+  tasks can be rebuilt from their saved prepared files.
 Current dashboard logo cycle:
 
 - Replaced the old H-like sidebar logo mark with a diagonal dumbbell mark

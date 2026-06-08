@@ -829,6 +829,9 @@ def _read_source_table(upload_id: str | None, dataset_root: Path, source_path: s
     if rel.startswith("raw/"):
         path = _safe_child(dataset_root, rel)
         config_path = rel
+    elif rel.startswith("prepared/"):
+        path = _safe_child(dataset_root, rel)
+        config_path = rel
     elif upload_id:
         path = _stage_file(upload_id, rel)
         config_path = f"raw/{rel}"
@@ -1289,9 +1292,12 @@ def prepare_task(task_id: str) -> dict[str, Any] | None:
     elif mode == "prepared_files":
         for split in ("train", "val", "test"):
             split_cfg = splits.get(split)
-            if not isinstance(split_cfg, dict) or not split_cfg.get("source_path"):
+            if not isinstance(split_cfg, dict):
                 continue
-            df, config_source = _read_source_table(None, root, str(split_cfg["source_path"]))
+            split_source = _source_path(split_cfg, "source_path", "path")
+            if not split_source:
+                continue
+            df, config_source = _read_source_table(None, root, str(split_source))
             _validate_target(df, target, split)
             frames[split] = df.reset_index(drop=True)
             source_paths[split] = config_source
@@ -1332,3 +1338,12 @@ def delete_task(task_id: str) -> bool:
     shutil.rmtree(root)
     _invalidate_task_cache(task_id)
     return True
+
+
+# Backward-compatible dataset_* aliases retained for older tests and callers.
+sanitize_dataset_id = sanitize_task_id
+list_datasets = list_tasks
+get_dataset = get_task
+get_dataset_config = get_task_config
+describe_dataset = describe_task
+_invalidate_dataset_cache = _invalidate_task_cache
