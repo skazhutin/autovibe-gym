@@ -259,6 +259,7 @@ class NotebookGymEnv:
         self.feedback_trace = []
         self.validation_trajectory = []
         self.candidate_diagnostics = []
+        self._first_validation_metric = None
         self.scratchpad = []
         self.private_summary = {}
         self.dirty_since_clean_run = True
@@ -436,6 +437,19 @@ class NotebookGymEnv:
                 "unknown_stage",
                 f"Unknown stage '{action.stage}'. Use one of the allowed stage values.",
             )
+        # Robustness: targeting a non-existent cell used to raise KeyError and
+        # crash the whole episode (→ no submit). Turn it into a recoverable
+        # blocker so the agent can pick a real cell id and keep going.
+        if action.type in {"update_cell", "delete_cell", "move_cell", "run_cell"}:
+            existing = [c["cell_id"] for c in self.notebook.list_cells()]
+            if (action.cell_id or "") not in existing:
+                ids = ", ".join(existing) if existing else "(no cells yet)"
+                return (
+                    "unknown_cell_id",
+                    f"Action '{action.type}' targets cell '{action.cell_id or '(missing)'}', "
+                    f"which does not exist. Current cell ids: {ids}. Use inspect_notebook to "
+                    "see the notebook, then target an existing cell id or add_cell to create one.",
+                )
         has_thoughts = bool((action.thoughts or "").strip())
         if not self.enable_thoughts:
             if action.type == "think":
@@ -709,9 +723,12 @@ class NotebookGymEnv:
 
         record = self._register_validated_candidate(diagnostic, model_var)
         self._record_event(action="validate", model_var=model_var, candidate=record.to_dict())
+        progress = self._validation_progress_feedback(diagnostic.validation_metric)
         observation = self._observation(
             action="validate",
             stdout=f"validation_{self.state.metric_name}={diagnostic.validation_metric:.6f}",
+            feedback_items=progress,
+            hints=[item.message for item in progress],
             model_var=model_var,
             validation_metric=diagnostic.validation_metric,
         )
@@ -2464,6 +2481,61 @@ with open(_AutovibePath({self.kernel.kernel_visible_path(tmp_path)!r}), "rb") as
         if not metrics:
             return None
         return max(metrics)
+
+    def _validation_progress_feedback(self, current: float | None):
+        """Turn validation into an improvement driver: report best-so-far and
+        remaining budget, and explicitly push the agent to beat its own baseline
+        while it still has steps. This is the gym's unique lever over single-shot
+        (which cannot iterate on a validation signal at all).
+
+        Honest: uses only the validation split the agent is allowed to see; the
+        hidden test score is never referenced. Gated to feedback-enabled modes.
+        """
+        if current is None or not self.mode.runtime_feedback_enabled:
+            return []
+        n_validated = sum(
+            1 for r in self.candidates.all() if r.validation_metric is not None
+        )
+        metric = self.state.metric_name
+        steps_left = self.budget_remaining()
+        if self._first_validation_metric is None:
+            self._first_validation_metric = current
+
+        prior = sorted(
+            (r.validation_metric for r in self.candidates.all() if r.validation_metric is not None),
+            reverse=True,
+        )
+        prev_best = prior[1] if len(prior) > 1 else None
+
+        if n_validated <= 1:
+            msg = (
+                f"Baseline validated: {metric}={current:.4f}. You have {steps_left} steps left. "
+                "Single-shot can't iterate — you can. Spend remaining budget on at least one "
+                "improvement (try a stronger/different model family, address class balance, or "
+                "tune key hyper-parameters), then restart_and_run_all and validate again. Keep "
+                "whichever candidate has the best validation score; submit that one."
+            )
+        elif prev_best is not None and current > prev_best + 1e-9:
+            msg = (
+                f"Improved: {metric}={current:.4f} — new best (was {prev_best:.4f}). "
+                f"{steps_left} steps left: you may try one more improvement or finalize this best candidate."
+            )
+        else:
+            best = self._best_validation_metric()
+            msg = (
+                f"No improvement: {metric}={current:.4f} did not beat your best ({best:.4f}). "
+                f"{steps_left} steps left: try a different direction (model family / features / "
+                "class weights) or finalize and submit your best candidate so far."
+            )
+        return [
+            FeedbackItem(
+                channel="checklist",
+                key="validation_progress",
+                message=msg,
+                severity="info",
+                visible_to_agent=True,
+            )
+        ]
 
 
 def _write_json(path: Path, data: Any) -> None:

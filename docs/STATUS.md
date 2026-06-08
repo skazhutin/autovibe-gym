@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-06 (run summary stays English, summary card renders structured sections, verbose outputs normalized on read, no per-section over-truncation; retrospective run summary grounded in submitted solution; thoughts toggle limited to gym/iterative; model registry is source of truth for LLM config; ML toolbox deps added; dashboard table polish)
+**Last updated:** 2026-06-08 (gym now beats single-shot: validation-improvement nudge + unknown-cell-id robustness guard, both experiment-validated; run summary polish; model registry is source of truth for LLM config; ML toolbox deps added)
 **Phase:** Hardening after first full H200 recon + building the local control-panel dashboard for configuring/launching/inspecting runs.
 
 ---
@@ -336,6 +336,7 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 
 | Date | Change |
 |------|--------|
+| 2026-06-08 | Gym now beats single-shot (experiment-validated, gemma-4-26b): (1) validation-improvement nudge — after `validate`, NotebookGymEnv reports best-so-far + remaining budget and pushes the agent to beat its own baseline (honest, val-split only, feedback modes only); flips student_dropout from −0.004 (gym lost) to +0.013 over single-shot. (1b) unknown-cell-id guard — targeting a non-existent cell is now a recoverable blocker instead of a KeyError that crashed the whole episode, restoring valid-submit rate to 1.0. Measured-but-rejected: per-class-recall diagnostic and candidate-list nudge both hurt (extra feedback verbosity inflates the trajectory → more clean-run failures) |
 | 2026-06-06 | Tightened run-summary UX: the prompt remains English-only, normalization no longer chops already-short section bodies mid-sentence, and the Run Detail «Саммари решения» card now renders parsed summary sections (plus inline code) as a structured two-column report instead of raw markdown paragraphs |
 | 2026-06-06 | Post-run self-summary: once the model solved the task (reached a final submit for gym/fixed — even if the hidden test rejected it — or produced a usable candidate for single/repeated) one extra best-effort LLM call asks the model to summarize its own solution; saved as `run_summary.json` (`gym/run_summary.py`), served via `GET /runs/{id}/summary` + `hasSummary` on `get_run`, and rendered as a standalone report card (accent side-stripe, neutral surface — deliberately not styled like a step thought) above a «Ход рассуждений по шагам» section on the «Мысли» tab, which now shows for any run with a summary even when thoughts mode is off (old/unsolved runs without either stay hidden). Privacy preserved: the summarizer only sees the conversation it already had, never the hidden test score |
 | 2026-06-06 | Dashboard launcher now passes explicit `LLM_PROVIDER` from the selected model provider, preventing OpenAI-compatible models from inheriting a Gemini `.env` default |
