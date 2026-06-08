@@ -344,6 +344,10 @@ export default function NewRun() {
                       <Dot tone={model.online === false ? "red" : model.online ? "green" : "gray"} />
                       {model.online === false ? "офлайн" : model.online ? "онлайн" : "не проверено"}
                     </Tag>
+                    <button className={`icon-btn${modelSettingsOpen ? " icon-btn-active" : ""}`}
+                      title="Настройки модели" onClick={() => setModelSettingsOpen(v => !v)}>
+                      <Icon name="settings" size={16} />
+                    </button>
                   </div>
                 </div>
                 <div className="run-meta-line" style={{ margin: "0 0 8px" }}>
@@ -357,12 +361,8 @@ export default function NewRun() {
                   {model.createdAt && <div className="ds-stat span-full"><span className="k">Создана</span><span className="v">{new Date(model.createdAt).toLocaleString()}</span></div>}
                 </div>
               </div>
-              <div style={{ display: "flex", justifyContent: "center", gap: 8, marginTop: 10 }}>
+              <div style={{ display: "flex", justifyContent: "center", marginTop: 10 }}>
                 <Button variant="ghost" onClick={() => setModelPickerOpen(true)}>Изменить</Button>
-                <button className={`icon-btn${modelSettingsOpen ? " icon-btn-active" : ""}`}
-                  title="Настройки модели" onClick={() => setModelSettingsOpen(v => !v)}>
-                  <Icon name="settings" size={16} />
-                </button>
               </div>
               {modelSettingsOpen && (
                 <ModelModal initial={model} onClose={() => setModelSettingsOpen(false)} onDone={() => { setModelSettingsOpen(false); reloadModels(); }} />
