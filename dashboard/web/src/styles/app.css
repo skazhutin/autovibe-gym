@@ -459,9 +459,9 @@
   cursor: pointer;
 }
 .icon-btn:hover {
-  background: var(--surface-2);
-  color: var(--text);
-  border-color: var(--border);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
   transform: translateY(-1px);
 }
 
