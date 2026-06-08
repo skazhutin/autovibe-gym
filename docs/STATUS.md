@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-08 (dashboard now supports animation preference)
+**Last updated:** 2026-06-08 (dashboard checklist accuracy fix)
 **Phase:** Hardening after first full H200 recon + building the local control-panel dashboard for configuring/launching/inspecting runs.
 
 ---
@@ -197,6 +197,16 @@ Current dashboard motion cycle:
   existing inline motion styles.
 - When enabled, buttons, cards, toggles, and a few core interactive surfaces
   use a more consistent motion curve and timing set.
+Current dashboard checklist accuracy cycle:
+
+- Checklist APIs now prefer finished-run private checklist artifacts for exact
+  item identity instead of filling green checks from coverage count alone.
+- Source-only successful executions now count behavioral checklist evidence, so
+  single-shot / legacy generated-solution artifacts are not stuck at `0/12`
+  when stdout is empty.
+- Verified the two latest local runs through `http://127.0.0.1:5173/api`:
+  fixed gym `live_ea854e50` shows exact `9/12`; single-shot `live_2c5d0475`
+  shows `4/12` from generated code replay.
 Current dashboard logo cycle:
 
 - Replaced the old H-like sidebar logo mark with a diagonal dumbbell mark
@@ -372,6 +382,7 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 
 | Date | Change |
 |------|--------|
+| 2026-06-08 | Dashboard checklist accuracy: finished MLflow runs use `private_episode/checklist_private.json` for exact closed-item identity; public replay/source-only generated solutions are used before stale fallback metrics, fixing the latest fixed-gym `9/12` item mismatch and single-shot `0/12` undercount |
 | 2026-06-06 | Post-run self-summary: once the model solved the task (reached a final submit for gym/fixed — even if the hidden test rejected it — or produced a usable candidate for single/repeated) one extra best-effort LLM call asks the model to summarize its own solution; saved as `run_summary.json` (`gym/run_summary.py`), served via `GET /runs/{id}/summary` + `hasSummary` on `get_run`, and rendered as a standalone report card (accent side-stripe, neutral surface — deliberately not styled like a step thought) above a «Ход рассуждений по шагам» section on the «Мысли» tab, which now shows for any run with a summary even when thoughts mode is off (old/unsolved runs without either stay hidden). Privacy preserved: the summarizer only sees the conversation it already had, never the hidden test score |
 | 2026-06-08 | Remapped user-facing product-mode labels: free gym is `Free gym`, checklist gym is `Directive gym`, and fixed gym remains `Fixed gym`; added matching CLI aliases for the new labels |
 | 2026-06-06 | Dashboard launcher now passes explicit `LLM_PROVIDER` from the selected model provider, preventing OpenAI-compatible models from inheriting a Gemini `.env` default |

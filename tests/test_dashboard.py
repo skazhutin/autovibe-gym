@@ -156,6 +156,121 @@ def test_checklist_uses_authoritative_fallback_when_episode_artifacts_missing():
     assert data["closed"] == round(0.88 * data["total"])
 
 
+def test_checklist_prefers_private_artifact_item_identity(tmp_path):
+    episode = tmp_path / "artifacts" / "episode"
+    episode.mkdir(parents=True)
+    private = tmp_path / "artifacts" / "private_episode"
+    private.mkdir()
+    (episode / "notebook_events.json").write_text(
+        json.dumps(
+            [
+                {
+                    "step": 1,
+                    "cell_id": "cell_01",
+                    "source_after": "train_df.isna().sum()",
+                    "execution_result": {
+                        "success": True,
+                        "stdout": "missing values: 0",
+                    },
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (private / "checklist_private.json").write_text(
+        json.dumps(
+            {
+                "covered": ["task_understanding", "target_exclusion", "validation_evaluated"],
+                "coverage": 0.25,
+                "evidence": [
+                    {"key": "task_understanding", "step": 1},
+                    {"key": "target_exclusion", "step": 2},
+                    {"key": "validation_evaluated", "step": 3},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    data = mlflow_store.checklist(episode, target_col="target", fallback_coverage=0.75)
+    closed = {item["id"] for item in data["items"] if item["closed"]}
+
+    assert data["coverage"] == 0.25
+    assert data["closed"] == 3
+    assert data["knownClosed"] == 3
+    assert closed == {"task_understanding", "target_exclusion", "validation_evaluated"}
+    assert "missing_values_audit" not in closed
+
+
+def test_checklist_replay_beats_stale_zero_fallback(tmp_path):
+    (tmp_path / "notebook_events.json").write_text(
+        json.dumps(
+            [
+                {
+                    "step": 1,
+                    "cell_id": "cell_01",
+                    "source_after": """
+target_col = "target"
+print(train_df.columns)
+cat_cols = train_df.select_dtypes(include=["object", "category"]).columns
+X_train = train_df.drop(columns=[target_col])
+from sklearn.preprocessing import OneHotEncoder
+""",
+                    "execution_result": {"success": True, "stdout": ""},
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    data = mlflow_store.checklist(tmp_path, target_col="target", fallback_coverage=0.0)
+    closed = {item["id"] for item in data["items"] if item["closed"]}
+
+    assert data["coverage"] > 0.0
+    assert data["closed"] == round(data["coverage"] * data["total"])
+    assert closed == {
+        "task_understanding",
+        "schema_review",
+        "categorical_features_audit",
+        "target_exclusion",
+    }
+
+
+def test_checklist_reads_legacy_generated_solution_artifact(tmp_path):
+    (tmp_path / "generated_solution.py").write_text(
+        """
+target_col = "target"
+numeric_cols = train_df.select_dtypes(include=["int64", "float64"]).columns.tolist()
+categorical_cols = train_df.select_dtypes(include=["object"]).columns.tolist()
+X_train = train_df.drop(columns=[target_col])
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import GridSearchCV
+model = GridSearchCV(Pipeline([]), param_grid={"classifier__n_estimators": [100]})
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "stdout.txt").write_text("", encoding="utf-8")
+
+    data = mlflow_store.checklist(
+        None,
+        target_col="target",
+        fallback_coverage=0.0,
+        artifact_dir=tmp_path,
+    )
+    closed = {item["id"] for item in data["items"] if item["closed"]}
+
+    assert data["coverage"] > 0.0
+    assert closed == {
+        "task_understanding",
+        "schema_review",
+        "categorical_features_audit",
+        "target_exclusion",
+    }
+
+
 def test_episode_artifacts_expose_current_stage_type_and_thoughts(tmp_path):
     (tmp_path / "episode_summary.json").write_text(
         json.dumps({"current_stage": "validation_analysis"}),

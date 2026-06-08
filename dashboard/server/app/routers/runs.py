@@ -53,10 +53,12 @@ def _target_for_run(run: dict) -> str:
 def _episode_dir(run_id: str) -> Path | None:
     """Where this run's episode artifacts live (workspace for live, else MLflow)."""
     if run_id.startswith("live_"):
+        meta = run_launcher.get_live(run_id)
+        if meta and meta.get("mlflowId") and meta.get("status") != "running":
+            return mlflow_store.mlflow_episode_dir(meta["mlflowId"])
         wd = run_launcher.workspace_dir(run_id)
         if wd:
             return wd
-        meta = run_launcher.get_live(run_id)
         if meta and meta.get("mlflowId"):
             return mlflow_store.mlflow_episode_dir(meta["mlflowId"])
         return None
@@ -231,13 +233,22 @@ def logs(run_id: str) -> dict:
 @router.get("/{run_id}/checklist")
 def checklist(run_id: str) -> dict:
     target = ""
+    artifact_dir = None
     if run_id.startswith("live_"):
         meta = run_launcher.get_live(run_id) or {}
         target = _target_for_run(meta)
         fallback = meta.get("checklistCoverage")
+        if meta.get("mlflowId"):
+            artifact_dir = mlflow_store.mlflow_artifacts_dir(meta["mlflowId"])
     else:
         rec = mlflow_store.get_run(run_id) or {}
         target = _target_col(rec.get("dataset"))
         fallback = rec.get("checklistCoverage")
-    return mlflow_store.checklist(_episode_dir(run_id), target_col=target, fallback_coverage=fallback)
+        artifact_dir = mlflow_store.mlflow_artifacts_dir(run_id)
+    return mlflow_store.checklist(
+        _episode_dir(run_id),
+        target_col=target,
+        fallback_coverage=fallback,
+        artifact_dir=artifact_dir,
+    )
 

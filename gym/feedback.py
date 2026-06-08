@@ -188,7 +188,7 @@ class NotebookChecklist:
     ) -> list[FeedbackItem]:
         self.executions_since_hint += 1
 
-        if execution_success and stdout.strip():
+        if execution_success and (source.strip() or stdout.strip()):
             self._record_behavioral_evidence(source, stdout, cell_id, step)
 
         if (

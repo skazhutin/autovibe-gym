@@ -8,8 +8,9 @@ That dir is `mlruns/<exp>/<run>/artifacts/episode` for a finished MLflow run, or
 the live `data/runs/<id>/workspace` dir for a run that is still in progress — so
 the same parsing powers both live and historical views.
 
-Per-item checklist closure is reconstructed by replaying public notebook events
-through the gym's own NotebookChecklist (keeps this faithful to env logic).
+Per-item checklist closure uses private checklist artifacts for finished MLflow
+runs when available, then falls back to replaying public notebook events through
+the gym's own NotebookChecklist (keeps this faithful to env logic).
 No caching: live runs rewrite these files after every step.
 """
 from __future__ import annotations
@@ -211,11 +212,20 @@ def get_run(run_id: str) -> dict[str, Any] | None:
 
 def mlflow_episode_dir(run_id: str) -> Path | None:
     """Resolve the local `.../artifacts/episode` dir for a finished MLflow run."""
+    artifacts = mlflow_artifacts_dir(run_id)
+    if not artifacts:
+        return None
+    cand = artifacts / "episode"
+    return cand if cand.exists() else None
+
+
+def mlflow_artifacts_dir(run_id: str) -> Path | None:
+    """Resolve the local `.../artifacts` dir for a finished MLflow run."""
     base = get_settings().mlruns_dir
     if not base.exists():
         return None
     for exp_dir in base.iterdir():
-        cand = exp_dir / run_id / "artifacts" / "episode"
+        cand = exp_dir / run_id / "artifacts"
         if cand.exists():
             return cand
     return None
@@ -460,12 +470,79 @@ def _replay_checklist(episode_dir: Path | None, target_col: str = "") -> tuple[d
     return closed_step, coverage
 
 
-def checklist(episode_dir: Path | None, target_col: str = "", fallback_coverage: float | None = None) -> dict[str, Any]:
-    closed_step, replay_coverage = _replay_checklist(episode_dir, target_col)
-    replay_closed = sum(1 for step in closed_step.values() if step is not None)
-    # Single source of truth: the run's recorded coverage (same metric the banner
-    # uses). Heuristic replay is only a fallback when no recorded coverage exists.
-    coverage = fallback_coverage if fallback_coverage is not None else replay_coverage
+def _private_checklist(
+    episode_dir: Path | None,
+) -> tuple[set[str], dict[str, int | None], float | None] | None:
+    if not episode_dir:
+        return None
+    candidates = [
+        episode_dir.parent / "private_episode" / "checklist_private.json",
+        episode_dir / "private_episode" / "checklist_private.json",
+    ]
+    for path in candidates:
+        data = _read_json(path)
+        if not isinstance(data, dict):
+            continue
+        covered = {str(k) for k in data.get("covered") or [] if str(k) in _CHECK_LABELS}
+        if not covered:
+            continue
+        closed_step: dict[str, int | None] = {k: None for k in _CHECK_LABELS}
+        for item in data.get("evidence") or []:
+            if not isinstance(item, dict):
+                continue
+            key = str(item.get("key") or "")
+            if key not in covered or key not in closed_step or closed_step[key] is not None:
+                continue
+            try:
+                closed_step[key] = int(item.get("step"))
+            except (TypeError, ValueError):
+                closed_step[key] = None
+        try:
+            coverage = float(data["coverage"]) if data.get("coverage") is not None else None
+        except (TypeError, ValueError):
+            coverage = None
+        return covered, closed_step, coverage
+    return None
+
+
+def _generated_solution_checklist(
+    artifact_dir: Path | None,
+    target_col: str = "",
+) -> tuple[set[str], dict[str, int | None], float | None] | None:
+    if not artifact_dir:
+        return None
+    code_path = artifact_dir / "generated_solution.py"
+    if not code_path.exists():
+        return None
+    try:
+        from gym.feedback import NotebookChecklist
+
+        code = code_path.read_text("utf-8")
+        stdout_path = artifact_dir / "stdout.txt"
+        stdout = stdout_path.read_text("utf-8") if stdout_path.exists() else ""
+        cl = NotebookChecklist(target_col=target_col or "target")
+        cl.record_execution(
+            source=code,
+            stdout=stdout,
+            cell_id="generated_solution.py",
+            step=1,
+            execution_success=True,
+        )
+        closed_step: dict[str, int | None] = {k: None for k in _CHECK_LABELS}
+        for key in cl.covered:
+            if key in closed_step:
+                closed_step[key] = 1
+        return set(cl.covered), closed_step, cl.coverage()
+    except Exception:
+        return None
+
+
+def checklist(
+    episode_dir: Path | None,
+    target_col: str = "",
+    fallback_coverage: float | None = None,
+    artifact_dir: Path | None = None,
+) -> dict[str, Any]:
     items_meta = [{"id": k, "label": _CHECK_LABELS[k], "desc": ""} for k in _CHECK_LABELS]
     try:
         from gym.feedback import GENERIC_CHECKLIST_HINTS
@@ -474,23 +551,39 @@ def checklist(episode_dir: Path | None, target_col: str = "", fallback_coverage:
             it["desc"] = GENERIC_CHECKLIST_HINTS.get(it["id"], "")
     except Exception:
         pass
-    # Authoritative count (matches the run banner).
+
     total = len(items_meta)
-    closed = round(coverage * total) if coverage is not None else replay_closed
-    closed = max(0, min(closed, total))
-    # Mark exactly `closed` items green so the ticks add up to the headline number:
-    # prefer the items replay actually detected (earliest first), then fill the
-    # rest in canonical order.
-    detected = sorted((m["id"] for m in items_meta if closed_step[m["id"]] is not None),
-                      key=lambda i: closed_step[i])
-    remaining = [m["id"] for m in items_meta if closed_step[m["id"]] is None]
-    marked = set((detected + remaining)[:closed])
+
+    private = _private_checklist(episode_dir)
+    if private is not None:
+        marked, closed_step, private_coverage = private
+        closed = len(marked)
+        coverage = private_coverage if private_coverage is not None else round(closed / total, 2)
+    else:
+        closed_step, replay_coverage = _replay_checklist(episode_dir, target_col)
+        generated = None if replay_coverage is not None else _generated_solution_checklist(artifact_dir, target_col)
+        if generated is not None:
+            marked, closed_step, coverage = generated
+        else:
+            marked = {m["id"] for m in items_meta if closed_step[m["id"]] is not None}
+            # Prefer concrete replay evidence when public artifacts exist. The
+            # recorded metric is still useful for legacy runs with no episode files.
+            coverage = replay_coverage if replay_coverage is not None else fallback_coverage
+        closed = round(coverage * total) if coverage is not None else len(marked)
+        closed = max(0, min(closed, total))
+
     items = [
         {**m, "closed": m["id"] in marked,
          "closedStep": closed_step[m["id"]] if m["id"] in marked else None}
         for m in items_meta
     ]
-    return {"items": items, "coverage": coverage, "closed": closed, "total": total}
+    return {
+        "items": items,
+        "coverage": coverage,
+        "closed": closed,
+        "knownClosed": len(marked),
+        "total": total,
+    }
 
 
 def episode_progress(episode_dir: Path | None, target_col: str = "") -> dict[str, Any]:
