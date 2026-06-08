@@ -214,22 +214,8 @@ export default function Settings() {
         <Row label={`${t("settings.rounding")}: ${appearance.radius}px`} info={t("settings.info.rounding")}>
           <input className="range" type="range" min={8} max={24} value={appearance.radius} onChange={(e) => setAppr({ radius: Number(e.target.value) })} />
         </Row>
-        <Row label={t("settings.overlay")} info={t("settings.info.overlay")}>
-          <div className="swatch-row" style={{ justifyContent: "flex-end", gap: 6 }}>
-            {[0, 25, 50, 75, 90, 100].map((v) => (
-              <button
-                key={v}
-                onClick={() => setAppr({ overlayOpacity: v })}
-                style={{
-                  padding: "4px 9px", fontSize: 12, fontWeight: 600, borderRadius: "var(--r-sm)",
-                  border: "1px solid var(--border)",
-                  background: appearance.overlayOpacity === v ? "var(--accent)" : "var(--surface-2)",
-                  color: appearance.overlayOpacity === v ? "#1a1a1a" : "var(--text-dim)",
-                  cursor: "pointer",
-                }}
-              >{v}%</button>
-            ))}
-          </div>
+        <Row label={`${t("settings.overlay")}: ${appearance.overlayOpacity}%`} info={t("settings.info.overlay")}>
+          <input className="range" type="range" min={0} max={100} step={5} value={appearance.overlayOpacity} onChange={(e) => setAppr({ overlayOpacity: Number(e.target.value) })} />
         </Row>
       </Card>
 
