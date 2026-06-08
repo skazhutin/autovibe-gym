@@ -15,6 +15,7 @@ No caching: live runs rewrite these files after every step.
 from __future__ import annotations
 
 import json
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -29,12 +30,12 @@ from gym.run_summary import (
 _MODE_MAP = {
     "baseline": "single",
     "baseline_single_shot": "single",
-    "gym_with_checklist": "gym",
-    "iterative_no_checklist": "iterative",
+    "directive_gym": "directive",
+    "free_gym": "free",
     "multishot": "repeated",
     "single_shot": "single",
     "repeated_single_shot": "repeated",
-    "fixed_transitions": "fixed",
+    "fixed_gym": "fixed",
 }
 
 _CHECK_LABELS: dict[str, str] = {
@@ -54,10 +55,36 @@ _CHECK_LABELS: dict[str, str] = {
 CHECK_TOTAL = len(_CHECK_LABELS)
 
 
+@lru_cache(maxsize=1)
 def _client():
     from mlflow.tracking import MlflowClient
 
     return MlflowClient(tracking_uri=get_settings().mlflow_tracking_uri)
+
+
+def run_id_by_name(run_name: str) -> str | None:
+    """Find a run by its MLflow runName tag without materializing every record."""
+    if not run_name:
+        return None
+    client = _client()
+    try:
+        experiments = client.search_experiments()
+    except Exception:
+        return None
+    escaped = run_name.replace("\\", "\\\\").replace("'", "\\'")
+    filter_string = f"tags.`mlflow.runName` = '{escaped}'"
+    for exp in experiments:
+        try:
+            runs = client.search_runs(
+                [exp.experiment_id],
+                filter_string=filter_string,
+                max_results=1,
+            )
+        except Exception:
+            continue
+        if runs:
+            return runs[0].info.run_id
+    return None
 
 
 def _f(metrics: dict, *keys: str) -> float | None:
@@ -125,7 +152,7 @@ def _run_record(run) -> dict[str, Any]:
     tags = run.data.tags or {}
     info = run.info
     mode_param = params.get("experiment_type") or params.get("episode_mode") or ""
-    ui_mode = _MODE_MAP.get(mode_param, "gym")
+    ui_mode = _MODE_MAP.get(mode_param, "directive")
     product_mode = params.get("product_mode") or mode_param
     requested_mode = params.get("requested_mode") or product_mode
     batch_id = params.get("batch_id") or None

@@ -12,17 +12,17 @@ class EpisodeMode:
     checklist_feedback_enabled: bool = True
 
 
-ITERATIVE_NO_CHECKLIST = EpisodeMode(
-    name="iterative_no_checklist",
+FREE_GYM = EpisodeMode(
+    name="free_gym",
     checklist_feedback_enabled=False,
 )
 
-GYM_WITH_CHECKLIST = EpisodeMode(name="gym_with_checklist")
+DIRECTIVE_GYM = EpisodeMode(name="directive_gym")
 
 
 EPISODE_MODES: dict[str, EpisodeMode] = {
-    ITERATIVE_NO_CHECKLIST.name: ITERATIVE_NO_CHECKLIST,
-    GYM_WITH_CHECKLIST.name: GYM_WITH_CHECKLIST,
+    FREE_GYM.name: FREE_GYM,
+    DIRECTIVE_GYM.name: DIRECTIVE_GYM,
 }
 
 
@@ -30,7 +30,7 @@ def resolve_episode_mode(mode: str | EpisodeMode | None) -> EpisodeMode:
     if isinstance(mode, EpisodeMode):
         return mode
     if mode is None:
-        return GYM_WITH_CHECKLIST
+        return DIRECTIVE_GYM
     try:
         return EPISODE_MODES[mode]
     except KeyError as exc:

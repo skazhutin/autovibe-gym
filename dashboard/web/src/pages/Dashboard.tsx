@@ -77,7 +77,7 @@ export default function Dashboard() {
 
   const lastScored = scored[0] ?? null;
 
-  const FIVE_MODES: Run["mode"][] = ["single", "repeated", "iterative", "gym", "fixed"];
+  const FIVE_MODES: Run["mode"][] = ["single", "repeated", "free", "directive", "fixed"];
   const modeBars = FIVE_MODES.map((m) => {
     const last = scored.find((r) => r.mode === m);
     return last ? { label: MODE_SHORT[m], value: last.score!, best: false } : null;

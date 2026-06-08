@@ -1,5 +1,5 @@
 """
-Gym experiment runner: iterative LLM agent with checklist feedback.
+Gym experiment runner: multi-step LLM agent with checklist feedback.
 
 Usage:
     python3 -m experiments.run_gym --dataset-dir datasets/wine_quality --mode local
@@ -90,14 +90,14 @@ def main():
     parser.add_argument("--sandbox-image", default=None, help="Legacy GymEnv option; ignored by the Jupyter backend.")
     parser.add_argument(
         "--episode-mode",
-        choices=["gym_with_checklist", "iterative_no_checklist"],
-        default="gym_with_checklist",
+        choices=["directive_gym", "free_gym"],
+        default="directive_gym",
     )
     parser.add_argument("--workspace-dir", default=None)
     parser.add_argument("--enable-thoughts", action="store_true",
                         help="Let the agent keep a persistent scratchpad of visible thoughts.")
     parser.add_argument("--hint-cooldown", type=int, default=2,
-                        help="Steps between consecutive checklist hints (gym mode).")
+                        help="Steps between consecutive checklist hints (directive mode).")
     parser.add_argument("--experiment-name", default="autovibe-gym")
     parser.add_argument("--run-name", default=None)
     add_mode_metadata_args(parser)

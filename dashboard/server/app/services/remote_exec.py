@@ -101,7 +101,7 @@ def check(rc: dict | None = None) -> dict[str, Any]:
     script = (
         f'echo HOST=$(hostname); '
         f'test -d {shlex.quote(rc["repo"])} && echo REPO_OK || echo REPO_MISSING; '
-        f'{shlex.quote(rc["python"])} -c "import gym, experiments.run_gym; print(\'GYM_OK\')" 2>&1 | tail -1'
+        f'{shlex.quote(rc["python"])} -c "import gym, experiments.run_gym; print(\'RUNTIME_OK\')" 2>&1 | tail -1'
     )
     try:
         res = ssh_exec(rc, script, timeout=25)
@@ -112,7 +112,7 @@ def check(rc: dict | None = None) -> dict[str, Any]:
         "ok": res.returncode == 0 and "REPO_OK" in out,
         "returncode": res.returncode,
         "repo": "REPO_OK" in out,
-        "gym": "GYM_OK" in out,
+        "runtime": "RUNTIME_OK" in out,
         "output": out.strip()[-800:],
     }
 

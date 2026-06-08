@@ -23,15 +23,15 @@ yellow `#FFDD2D` + dark `#333333`.
   `run_multishot.py` (repeated_single_shot), `run_fixed.py`, `run_matrix.py`.
 - `run_gym.py` args: `--dataset-dir <dir>` OR `--dataset <csv> --target <col>`, `--mode {local,cloud}`,
   `--model`, `--max-steps`, `--max-tokens`, `--sandbox-timeout`,
-  `--episode-mode {gym_with_checklist,iterative_no_checklist}`, `--experiment-name`, `--run-name`,
+  `--episode-mode {directive_gym,free_gym}`, `--experiment-name`, `--run-name`,
   `--workspace-dir`, `--seed`.
 - MODE_DEFAULTS: local={max_steps30,max_tokens8192,timeout120}, cloud={20,4096,120}.
 - Episode modes (gym/modes.py): only 2 notebook modes. single_shot + repeated_single_shot
   come from baseline/multishot runners. So **4 UI modes → 3 runner scripts**:
   - single → run_baseline.py
   - repeated → run_multishot.py (logged as `repeated_single_shot`)
-  - iterative → run_gym.py --episode-mode iterative_no_checklist
-  - gym → run_gym.py --episode-mode gym_with_checklist
+  - free → run_gym.py --episode-mode free_gym
+  - directive → run_gym.py --episode-mode directive_gym
 - MLflow run params logged (run_gym): mode, episode_mode/experiment_type, model, dataset,
   protocol_version, max_steps, max_tokens, sandbox_timeout, split/role/sampled...
 - MLflow metrics: checklist_coverage, private_checklist_coverage, steps_used, error_count,
@@ -77,7 +77,7 @@ Reference jsx files at ~/Desktop/design/reference/: data.jsx (entity shapes), ui
 primitives), charts.jsx (CodeBlock + SVG charts), screens-*.jsx, app.jsx (shell+routing+live sim).
 
 ## Entity shapes (data.jsx) — API mirrors these
-- Run: id, model, mode(single|repeated|iterative|gym), dataset, status(success|failed|null|running),
+- Run: id, model, mode(single|repeated|free|directive), dataset, status(success|failed|null|running),
   score(nullable), baseline, checklist(0-8), errors, step, steps, tokIn, tokOut, startedMin,
   dur(sec), seed, temp, failReason?
 - Model: id, name, provider(vLLM|OpenAI-совместимый|Gemini|LiteLLM), baseUrl, online, ctx
@@ -129,7 +129,7 @@ GET  /runs/{id}/events (SSE/poll for live)
   parses run_gym's stdout "=== Run Summary ===" JSON (final_test_metric/valid_submit/...) for the result
   (no server MLflow needed). dataset passed as relative datasets/<id>. Config in Settings screen
   (remote_* keys in settings.json, password masked in GET, never wiped by masked PUT). POST
-  /api/settings/remote-check probes ssh+repo+gym. NOTE: couldn't test against real server — 10.8.52.11
+  /api/settings/remote-check probes ssh+repo+runtime. NOTE: couldn't test against real server — 10.8.52.11
   unreachable from agent sandbox (only user's Mac has VPN). Needs user testing + ssh key.
   EXECUTION SELECTOR (done): New Run has «на сервере (SSH) / на компьютере»; LaunchPayload.execution
   overrides global toggle; run_launcher.launch computes want_remote; remote_exec.is_configured() gates it.

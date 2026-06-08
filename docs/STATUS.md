@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-08 (gym now beats single-shot: validation-improvement nudge + unknown-cell-id robustness guard, both experiment-validated; run summary polish; model registry is source of truth for LLM config; ML toolbox deps added; dashboard/product-mode labels remapped: iterative=Free gym, gym=Directive gym, fixed=Fixed gym)
+**Last updated:** 2026-06-08 (gym now beats single-shot: validation-improvement nudge + unknown-cell-id robustness guard, both experiment-validated; run summary polish; model registry is source of truth for LLM config; ML toolbox deps added; dashboard/product-mode keys remapped: free=Free gym, directive=Directive gym, fixed=Fixed gym)
 **Phase:** Hardening after first full H200 recon + building the local control-panel dashboard for configuring/launching/inspecting runs.
 
 ---
@@ -24,7 +24,7 @@ test, sandbox, and logging gaps.
 | `notebook_env.py` | Done | real notebook action loop, clean restart-and-run-all, validate, submit, deterministic `type`/`stage`/`thoughts` contract, non-mutating `think`, public/private artifacts |
 | `feedback.py` | Done | runtime/contract/checklist/terminal feedback items and generic hidden checklist policy |
 | `candidates.py` | Done | candidate records and validation registry |
-| `modes.py` | Done | `gym_with_checklist` and `iterative_no_checklist` share the same backend |
+| `modes.py` | Done | `directive_gym` and `free_gym` share the same backend |
 | `protocol.py` | Done | canonical action enum, required stage enum, canonical `thoughts`, and `think`; legacy `code` action remains compatible |
 | `agent.py` | Done | minimal prompt requires `type`/`stage`; thoughts mode requires `thoughts` and initial `think`/`planning` |
 | `llm.py` | Done | OpenAI-compatible, Google/Gemini, and LiteLLM client selection |
@@ -38,7 +38,7 @@ test, sandbox, and logging gaps.
 | `run_gym.py` | Done | uses `NotebookGymEnv`, logs notebook/process/private metrics, artifacts to MLflow |
 | `run_baseline.py` | Done | single-shot control preserved; prompts require raw-DataFrame pipelines; missing score is not logged as zero |
 | `run_multishot.py` | Done | logged as `repeated_single_shot`; prompts require raw-DataFrame pipelines; not the fair checklist control |
-| `run_fixed.py` | Done | fixed-transition control preserved; failed submit is not logged as real score 0.0 |
+| `run_fixed.py` | Done | fixed control preserved; failed submit is not logged as real score 0.0 |
 | `run.py` | Done | common single-dataset entrypoint; `--mode all` expands to five separate product runs with shared `batch_id`; `--modes ...` runs a selected batch of up to five modes |
 | `compare.py` | Done | handles missing metrics without zero substitution |
 
@@ -150,8 +150,8 @@ Current dashboard run-detail tabs cycle:
 - Dashboard tab menus no longer have a 1px vertical overflow: the divider line is drawn inside the tab strip and tab buttons no longer use a negative bottom margin.
 Current dashboard/product-mode label cycle:
 
-- Dashboard and shared experiment mode labels now map `iterative` to `Free gym`,
-  `gym` to `Directive gym`, and `fixed` to `Fixed gym`.
+- Dashboard and shared experiment mode labels now map `free` to `Free gym`,
+  `directive` to `Directive gym`, and `fixed` to `Fixed gym`.
 - CLI mode aliases include `free-gym`, `directive-gym`, and `fixed-gym` while
   preserving the older internal mode keys.
 - `dashboard/web`: TypeScript build + Vite production build passed.
@@ -194,7 +194,7 @@ Fixed in this PR:
   `thread_limit_env()` in `executor.py`, `_minimal_kernel_env()`, and the Docker
   kernel `--env` block (overridable with `AUTOVIBE_SANDBOX_THREADS`).
 - **`run_fixed.py` CLI parity.** It rejected `--max-steps` (used by every other
-  runner and the matrix), crashing the fixed-transition runs with exit 2. Added.
+  runner and the matrix), crashing the fixed runs with exit 2. Added.
 - **scikit-learn replay skew.** Candidate pickles were written in the sandbox image
   (sklearn 1.7.2) and read on the host venv (1.8.0) → `InconsistentVersionWarning`.
   Pinned `scikit-learn==1.7.2` so the image and host resolve identically.
@@ -315,7 +315,7 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 - Local Docker CLI is available in this Windows workspace as of 2026-06-02; the
   Docker-backed notebook integration test passed locally. GitHub Actions still
   verifies the Linux sandbox image path.
-- Existing `GymEnv` remains for compatibility, but new iterative experiments
+- Existing `GymEnv` remains for compatibility, but new notebook experiments
   should use `NotebookGymEnv`.
 - Repository owner still needs to confirm the `main` ruleset requires the
   `Python tests` status check before merge if connector/API access cannot verify
@@ -339,7 +339,7 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 | 2026-06-08 | Gym now beats single-shot (experiment-validated, gemma-4-26b): (1) validation-improvement nudge — after `validate`, NotebookGymEnv reports best-so-far + remaining budget and pushes the agent to beat its own baseline (honest, val-split only, feedback modes only); flips student_dropout from −0.004 (gym lost) to +0.013 over single-shot. (1b) unknown-cell-id guard — targeting a non-existent cell is now a recoverable blocker instead of a KeyError that crashed the whole episode, restoring valid-submit rate to 1.0. Measured-but-rejected: per-class-recall diagnostic and candidate-list nudge both hurt (extra feedback verbosity inflates the trajectory → more clean-run failures) |
 | 2026-06-06 | Tightened run-summary UX: the prompt remains English-only, normalization no longer chops already-short section bodies mid-sentence, and the Run Detail «Саммари решения» card now renders parsed summary sections (plus inline code) as a structured two-column report instead of raw markdown paragraphs |
 | 2026-06-06 | Post-run self-summary: once the model solved the task (reached a final submit for gym/fixed — even if the hidden test rejected it — or produced a usable candidate for single/repeated) one extra best-effort LLM call asks the model to summarize its own solution; saved as `run_summary.json` (`gym/run_summary.py`), served via `GET /runs/{id}/summary` + `hasSummary` on `get_run`, and rendered as a standalone report card (accent side-stripe, neutral surface — deliberately not styled like a step thought) above a «Ход рассуждений по шагам» section on the «Мысли» tab, which now shows for any run with a summary even when thoughts mode is off (old/unsolved runs without either stay hidden). Privacy preserved: the summarizer only sees the conversation it already had, never the hidden test score |
-| 2026-06-08 | Remapped user-facing product-mode labels: iterative/no-checklist is `Free gym`, checklist gym is `Directive gym`, and fixed transitions remains `Fixed gym`; added matching CLI aliases for the new labels |
+| 2026-06-08 | Remapped user-facing product-mode labels: free gym is `Free gym`, checklist gym is `Directive gym`, and fixed gym remains `Fixed gym`; added matching CLI aliases for the new labels |
 | 2026-06-06 | Dashboard launcher now passes explicit `LLM_PROVIDER` from the selected model provider, preventing OpenAI-compatible models from inheriting a Gemini `.env` default |
 | 2026-06-06 | LLM model configuration moved out of `.env` into the shared model registry with CLI management, required `--model` registry resolution, provider-specific Gemini/LiteLLM runtime env, and no LLM keys in `.env` |
 | 2026-06-06 | Hardened post-submit run-summary generation: stricter four-section retrospective prompt in English, lower token cap, and normalization that strips reasoning/draft/checklist scaffolding both when generating new summaries and when reading already-saved `run_summary.json` artifacts |
@@ -354,16 +354,16 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 | 2026-06-05 | Dashboard tabs visual fix: removed the 1px vertical overflow in tab menus by moving the divider into the tab strip and dropping the negative tab margin |
 | 2026-06-04 | Dashboard logo refresh: replaced the H-like yellow-square mark with a diagonal dumbbell AutoVibe mark |
 | 2026-06-04 | Dashboard sidebar cleanup: removed the bottom `Команда / локальный режим` block and its unused styles |
-| 2026-06-04 | Normalized product-mode display labels: dashboard short labels now show `Flexible gym`, and fixed transitions display as `Fixed gym` in dashboard and shared matrix metadata |
+| 2026-06-04 | Normalized product-mode display labels: dashboard short labels now show `Directive gym`, and fixed gym display as `Fixed gym` in dashboard and shared matrix metadata |
 | 2026-06-02 | Dashboard trajectory visual fix: aligned the live "агент выполняет шаг…" spinner with the timeline marker column and adjusted the connector so the grey line meets the spinner's top center |
-| 2026-06-02 | Agent thoughts/scratchpad: initial visible-thoughts support for gym/iterative runs with `--enable-thoughts`, persistent `scratchpad.json`, context reinjection, dashboard New Run toggle, and a «Мысли» tab. |
+| 2026-06-02 | Agent thoughts/scratchpad: initial visible-thoughts support for directive/free runs with `--enable-thoughts`, persistent `scratchpad.json`, context reinjection, dashboard New Run toggle, and a «Мысли» tab. |
 | 2026-06-03 | Propagated child runner failures from `experiments.run`: batch summaries still print, but the wrapper exits non-zero when any selected product mode fails |
 | 2026-06-03 | Cleaned up New Run budget controls: removed the budget-preset subhint and added Problems-style tooltip hints to budget parameter fields |
 | 2026-06-03 | Added two-state environment badges to New Run mode cards: `Среда` for the three environment-backed modes and `Без среды` for the two non-environment modes |
-| 2026-06-03 | Restored Iterative as a selectable product run type, raised dashboard/common-run batch selection to 5 modes, renamed Gym to Flexible gym and Fixed transitions to Fixed transitions gym, and removed the New Run recommendation badge |
+| 2026-06-03 | Restored Free gym as a selectable product run type, raised dashboard/common-run batch selection to 5 modes, renamed Gym to Directive gym and Fixed gym to Fixed gym, and removed the New Run recommendation badge |
 | 2026-06-03 | Hardened dashboard responsive layout across core routes: mobile hides the desktop sidebar toggle, New Run stacks earlier, grids/cards/settings/filters/dataset actions can shrink or wrap safely, compare labels and preview values wrap, and chart bars no longer force overflow |
 | 2026-06-03 | Replaced the dashboard `All modes` launch card with multi-select run types; multi-run launches use `batch` + `--modes ...` while preserving the CLI `--mode all` path |
-| 2026-06-03 | Added first-class `all` run orchestration: shared product-mode metadata, `experiments.run --mode all`, matrix batch metadata, compare columns/sort for `requested_mode`/`batch_id`/`mode_label`, dashboard `All modes` and `Fixed transitions` launch options, and responsive New Run grid fix |
+| 2026-06-03 | Added first-class `all` run orchestration: shared product-mode metadata, `experiments.run --mode all`, matrix batch metadata, compare columns/sort for `requested_mode`/`batch_id`/`mode_label`, dashboard `All modes` and `Fixed gym` launch options, and responsive New Run grid fix |
 | 2026-06-03 | PR #34 Dataset Center hardening: fixed CI dataset preparation, restored finite upload limits, blocked localhost/private URL downloads and unsafe redirects, enforced gzip decompressed-size limits, made dataset creation atomic, preserved legacy root `meta.json` edits, added JSONL/SSRF/cleanup regressions, and kept `/datasets` route compatibility after the `/problems` UI rename |
 | 2026-06-02 | Dataset Center polish: one-column dataset cards, Russian UI with common ML terms preserved, dataset suite/group metadata removed from project flows, example configs now include repository-created timestamp and UCI sources, and empty sources display `-` |
 | 2026-06-02 | Dataset Center full workflow: backend staged uploads/URL downloads/safe archive extraction/table preview/create-from-config/config editing, React Dataset Center search/filter/sort, full creation wizard, seven-tab detail page, docs and backend tests |
@@ -389,5 +389,5 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 | 2026-05-29 | Added clean `restart_and_run_all`, host-controlled `validate`, candidate registry, and submit gate |
 | 2026-05-29 | Split feedback channels and replaced dataset-specific checklist hints with generic selective hints |
 | 2026-05-29 | Hid hidden test metric from agent-facing messages, feedback traces, and notebook outputs |
-| 2026-05-29 | Added `iterative_no_checklist` as fair Jupyter control and renamed multishot logging to `repeated_single_shot` |
+| 2026-05-29 | Added `free_gym` as fair Jupyter control and renamed multishot logging to `repeated_single_shot` |
 | 2026-05-29 | Added Jupyter dependencies and tests for kernel, notebook edits, clean replay, validation, privacy, and fairness |

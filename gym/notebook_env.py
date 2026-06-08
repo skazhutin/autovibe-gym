@@ -179,7 +179,7 @@ class NotebookGymEnv:
         hint_cooldown: int = 2,
     ):
         self.enable_thoughts = enable_thoughts
-        # Steps to wait between consecutive checklist hints (gym mode).
+        # Steps to wait between consecutive checklist hints (directive mode).
         self.hint_cooldown = max(1, int(hint_cooldown))
         self._feedback_policy = FeedbackPolicy(hint_cooldown_executions=self.hint_cooldown)
         self.scratchpad: list[dict[str, Any]] = []

@@ -3,8 +3,8 @@ Repeated single-shot: N independent attempts.
 
 Each attempt is one LLM call and one fresh execution namespace. The only signal
 shared between attempts is the best validation metric so far. The fair
-iterative no-checklist control is `experiments.run_gym --episode-mode
-iterative_no_checklist`.
+free gym control is `experiments.run_gym --episode-mode
+free_gym`.
 """
 import argparse
 import json

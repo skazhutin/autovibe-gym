@@ -1092,7 +1092,7 @@ def _create_from_config_in_root(
             )
             source_paths["val"] = train_source
         else:
-            warnings.append("Validation split is missing; iterative validation will be unavailable.")
+            warnings.append("Validation split is missing; multi-step validation will be unavailable.")
         if test_path:
             test_df, test_source = _read_source_table(str(upload_id) if upload_id else None, dataset_root, test_path)
             _validate_target(test_df, target, "test")

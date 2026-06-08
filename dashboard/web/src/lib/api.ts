@@ -1,7 +1,7 @@
 /** Typed client for the dashboard backend (FastAPI on /api, proxied in dev). */
 
-export type RunMode = "single" | "repeated" | "iterative" | "gym" | "fixed" | "batch";
-export type LaunchRunMode = "single" | "repeated" | "iterative" | "gym" | "fixed";
+export type RunMode = "single" | "repeated" | "free" | "directive" | "fixed" | "batch";
+export type LaunchRunMode = "single" | "repeated" | "free" | "directive" | "fixed";
 export type RunStatus = "success" | "failed" | "null" | "running";
 
 export interface Run {
@@ -384,7 +384,7 @@ export const api = {
   saveSettings: (s: Partial<Settings>) =>
     req<Settings>("/settings", { method: "PUT", body: JSON.stringify(s) }),
   remoteCheck: () =>
-    req<{ ok: boolean; repo?: boolean; gym?: boolean; output?: string; error?: string }>(
+    req<{ ok: boolean; repo?: boolean; runtime?: boolean; output?: string; error?: string }>(
       "/settings/remote-check",
       { method: "POST" }
     ),

@@ -21,7 +21,7 @@ from .jupyter_kernel import (
     JupyterKernelSession,
     LocalJupyterKernelBackend,
 )
-from .modes import EpisodeMode, GYM_WITH_CHECKLIST, ITERATIVE_NO_CHECKLIST
+from .modes import DIRECTIVE_GYM, FREE_GYM, EpisodeMode
 from .protocol import Action, Observation, StepResult
 from .workspace import Workspace
 
@@ -36,12 +36,12 @@ __all__ = [
     "ContainerJupyterKernelSession",
     "DatasetMetadata",
     "DatasetSplits",
+    "DIRECTIVE_GYM",
     "EpisodeMode",
-    "GYM_WITH_CHECKLIST",
+    "FREE_GYM",
     "GymAgent",
     "GymEnv",
     "GoogleAIStudioLLMClient",
-    "ITERATIVE_NO_CHECKLIST",
     "JupyterKernelSession",
     "LLMResponse",
     "LiteLLMClient",

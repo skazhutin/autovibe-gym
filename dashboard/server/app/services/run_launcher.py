@@ -3,8 +3,8 @@
 UI mode -> runner:
   single    -> experiments.run_baseline
   repeated  -> experiments.run_multishot   (--shots)
-  iterative -> experiments.run_gym --episode-mode iterative_no_checklist  (--max-steps)
-  gym       -> experiments.run_gym --episode-mode gym_with_checklist       (--max-steps)
+  free -> experiments.run_gym --episode-mode free_gym  (--max-steps)
+  directive -> experiments.run_gym --episode-mode directive_gym       (--max-steps)
   fixed     -> experiments.run_fixed       (--max-steps)
   batch     -> experiments.run --modes ... (selected product-mode batch)
 
@@ -36,15 +36,15 @@ _ACTIVE: dict[str, dict[str, Any]] = {}
 _MODE_TO_RUNNER = {
     "single": ("experiments.run_baseline", None),
     "repeated": ("experiments.run_multishot", None),
-    "iterative": ("experiments.run_gym", "iterative_no_checklist"),
-    "gym": ("experiments.run_gym", "gym_with_checklist"),
+    "free": ("experiments.run_gym", "free_gym"),
+    "directive": ("experiments.run_gym", "directive_gym"),
     "fixed": ("experiments.run_fixed", None),
     BATCH_REQUESTED_MODE: ("experiments.run", None),
 }
 
 
 def _supports_thoughts(mode: str) -> bool:
-    return mode in {"iterative", "gym"}
+    return mode in {"free", "directive", "fixed", "iterative", "gym"}
 
 
 def _selected_modes(cfg: dict[str, Any]) -> list[str]:
@@ -152,16 +152,19 @@ def _runner_args(cfg: dict[str, Any]) -> list[str]:
         args += ["--episode-mode", episode]
         if cfg.get("maxSteps"):
             args += ["--max-steps", str(cfg["maxSteps"])]
-        # Persistent agent scratchpad — only the notebook (gym/iterative) modes
+        # Persistent agent scratchpad — only the notebook (directive/free) modes
         # support it (multi-turn, so thoughts can be re-shown to the agent).
         if _supports_thoughts(mode) and cfg.get("enableThoughts"):
             args += ["--enable-thoughts"]
-        # Checklist hint frequency (only gym_with_checklist emits hints).
+        # Checklist hint frequency (only directive_gym emits hints).
         if cfg.get("hintCooldown"):
             args += ["--hint-cooldown", str(cfg["hintCooldown"])]
     elif mode == "fixed":
         if cfg.get("maxSteps"):
             args += ["--max-steps", str(cfg["maxSteps"])]
+        # Fixed gym is multi-turn too → supports the scratchpad.
+        if cfg.get("enableThoughts"):
+            args += ["--enable-thoughts"]
     elif mode == BATCH_REQUESTED_MODE and cfg.get("maxSteps"):
         args += ["--max-steps", str(cfg["maxSteps"])]
     if mode == "repeated" and cfg.get("shots"):
@@ -309,10 +312,7 @@ def launch(cfg: dict[str, Any]) -> dict[str, Any]:
 def _resolve_mlflow_id(run_name: str) -> str | None:
     from . import mlflow_store
 
-    for r in mlflow_store.list_runs():
-        if r.get("runName") == run_name:
-            return r["id"]
-    return None
+    return mlflow_store.run_id_by_name(run_name)
 
 
 def _refresh(local_id: str) -> dict[str, Any] | None:

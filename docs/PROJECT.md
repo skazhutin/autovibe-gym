@@ -213,7 +213,7 @@ Gym > Free-agent на малых/средних LLM.
 
 ## 9. 2026-05-29 Jupyter Environment Update
 
-The iterative Gym environment now uses a real Jupyter notebook backend for
+The multi-step Gym environment now uses a real Jupyter notebook backend for
 agent episodes.
 
 Core runtime:
@@ -253,9 +253,9 @@ Experiment modes:
 
 - `single_shot`: one solution without the interactive notebook loop.
 - `repeated_single_shot`: repeated non-notebook attempts, logged as such.
-- `iterative_no_checklist`: real Jupyter notebook with runtime and contract
+- `free_gym`: real Jupyter notebook with runtime and contract
   feedback only.
-- `gym_with_checklist`: the same Jupyter backend and budget plus selective
+- `directive_gym`: the same Jupyter backend and budget plus selective
   generic checklist hints.
 
 Security boundary:

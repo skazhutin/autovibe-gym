@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "autovibe-gym"
 version = "0.1.0"
-description = "LLM-powered AutoML Gym environment for iterative tabular ML agents."
+description = "LLM-powered AutoML Gym environment for multi-step tabular ML agents."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
