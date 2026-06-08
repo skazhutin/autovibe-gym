@@ -199,10 +199,10 @@ export default function NewRun() {
     if (settings) setExecution(settings.remote_enabled && serverAvailable ? "server" : "local");
   }, [settings, serverAvailable]);
 
-  // Fallback: if stored id not in list, pick first available
+  // Clear stale modelId if the saved model no longer exists; never auto-pick
   useEffect(() => {
-    if (models?.length && (!modelId || !models.find(m => m.id === modelId))) {
-      setModelId((models.find(m => m.online !== false) ?? models[0]).id);
+    if (models && modelId && !models.find(m => m.id === modelId)) {
+      setModelId("");
     }
   }, [models]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -329,33 +329,44 @@ export default function NewRun() {
           <div className="step-head"><span className="step-num">1</span><span className="step-title">Модель</span></div>
           {model ? (
             <>
-              <div className="picker-selected">
-                <div className="picker-selected-info">
-                  <Dot tone={model.online === false ? "red" : model.online ? "green" : "gray"} />
-                  <span className="mono" style={{ fontWeight: 500, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{model.name}</span>
-                  <span className="tag">{model.provider}</span>
-                  <span className="tag mono">{(model.ctx / 1024).toFixed(0)}k ctx</span>
+              <div className="ds-picker-card">
+                <div className="spread" style={{ marginBottom: 5 }}>
+                  <div className="ds-title" style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{model.name}</div>
+                  <div className="row" style={{ gap: 6, flexShrink: 0 }}>
+                    <Tag tone={model.online === false ? "red" : model.online ? "green" : undefined}>
+                      <Dot tone={model.online === false ? "red" : model.online ? "green" : "gray"} />
+                      {model.online === false ? "офлайн" : model.online ? "онлайн" : "не проверено"}
+                    </Tag>
+                    <Button variant="ghost" onClick={() => setModelPickerOpen(true)}>Изменить</Button>
+                    <button className={`icon-btn${modelSettingsOpen ? " icon-btn-active" : ""}`}
+                      title="Настройки модели" onClick={() => setModelSettingsOpen(v => !v)}>
+                      <Icon name="settings" size={16} />
+                    </button>
+                  </div>
                 </div>
-                <div className="row" style={{ gap: 6, flexShrink: 0 }}>
-                  <Button variant="ghost" onClick={() => setModelPickerOpen(true)}>Изменить</Button>
-                  <button className={`icon-btn${modelSettingsOpen ? " icon-btn-active" : ""}`}
-                    title="Настройки модели" onClick={() => setModelSettingsOpen(v => !v)}>
-                    <Icon name="settings" size={16} />
-                  </button>
+                <div className="run-meta-line" style={{ margin: "0 0 8px" }}>
+                  <Tag>{model.provider}</Tag>
+                  {model.hasApiKey && <Tag>API key</Tag>}
+                </div>
+                <div className="ds-stats">
+                  <div className="ds-stat"><span className="k">Input token limit</span><span className="v">{(model.ctx / 1024).toFixed(0)}k</span></div>
+                  <div className="ds-stat"><span className="k">Output token limit</span><span className="v">{model.maxTokens ? `${(model.maxTokens / 1024).toFixed(0)}k` : "—"}</span></div>
+                  <div className="ds-stat span-full"><span className="k">URL</span><span className="v" style={{ fontSize: 11.5 }}>{model.baseUrl || "—"}</span></div>
                 </div>
               </div>
               {modelSettingsOpen && (
                 <div className="picker-settings">
-                  <FI label="Output limit" info="Максимум токенов в одном ответе модели. Если модель упирается в лимит — ответ обрезается и прогон завершается с ошибкой. Напр. 8192 для большинства моделей.">
+                  <FI label="Output token limit" info="Максимум токенов в одном ответе модели. Если модель упирается в лимит — ответ обрезается и прогон завершается с ошибкой. Напр. 8192 для большинства моделей.">
                     <Stepper value={maxTokens} onChange={setMaxTokens} min={256} max={131072} step={256} />
                   </FI>
                 </div>
               )}
             </>
           ) : (
-            <Button variant="secondary" onClick={() => setModelPickerOpen(true)}>
-              <Icon name="plus" size={15} /> Выбрать модель
-            </Button>
+            <div className="picker-empty">
+              <span className="muted">Модель не выбрана</span>
+              <Button variant="secondary" onClick={() => setModelPickerOpen(true)}>Выбрать</Button>
+            </div>
           )}
           {models && !models.length && <div className="muted" style={{ marginTop: 8 }}>Нет моделей. Добавьте на экране «Модели».</div>}
         </Card>
@@ -543,9 +554,10 @@ export default function NewRun() {
               )}
             </>
           ) : (
-            <Button variant="secondary" onClick={() => setTaskPickerOpen(true)}>
-              <Icon name="plus" size={15} /> Выбрать задачу
-            </Button>
+            <div className="picker-empty">
+              <span className="muted">Задача не выбрана</span>
+              <Button variant="secondary" onClick={() => setTaskPickerOpen(true)}>Выбрать</Button>
+            </div>
           )}
         </Card>
 
