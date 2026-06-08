@@ -169,14 +169,14 @@
   position: sticky;
   top: 0;
   z-index: 20;
+  background: color-mix(in srgb, var(--bg) var(--overlay-pct, 78%), transparent);
+  backdrop-filter: blur(10px);
 }
 .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 16px 32px;
-  background: color-mix(in srgb, var(--bg) var(--overlay-pct, 78%), transparent);
-  backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--border);
 }
 .header h1 {
@@ -1059,8 +1059,6 @@ table.data tbody tr.clickable:hover {
 }
 #toolbar-portal:not(:empty) {
   padding: 28px 32px 0;
-  background: color-mix(in srgb, var(--bg) var(--overlay-pct, 78%), transparent);
-  backdrop-filter: blur(10px);
 }
 .main:has(#toolbar-portal:not(:empty)) .content {
   padding-top: 18px;
