@@ -262,6 +262,12 @@ export interface ChecklistItem {
   desc: string;
   closed: boolean;
   closedStep: number | null;
+  evidence?: ChecklistEvidence[];
+}
+export interface ChecklistEvidence {
+  step: number | null;
+  reason?: string;
+  cellId?: string | null;
 }
 export interface ChecklistData {
   items: ChecklistItem[];

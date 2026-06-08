@@ -183,7 +183,7 @@ def test_checklist_prefers_private_artifact_item_identity(tmp_path):
                 "covered": ["task_understanding", "target_exclusion", "validation_evaluated"],
                 "coverage": 0.25,
                 "evidence": [
-                    {"key": "task_understanding", "step": 1},
+                    {"key": "task_understanding", "step": 1, "reason": "read task prompt", "cell_id": "cell_01"},
                     {"key": "target_exclusion", "step": 2},
                     {"key": "validation_evaluated", "step": 3},
                 ],
@@ -200,6 +200,55 @@ def test_checklist_prefers_private_artifact_item_identity(tmp_path):
     assert data["knownClosed"] == 3
     assert closed == {"task_understanding", "target_exclusion", "validation_evaluated"}
     assert "missing_values_audit" not in closed
+    task_item = next(item for item in data["items"] if item["id"] == "task_understanding")
+    assert task_item["evidence"] == [{"step": 1, "reason": "read task prompt", "cellId": "cell_01"}]
+
+
+def test_checklist_reads_run_gym_episode_private_artifact_dir(tmp_path):
+    episode = tmp_path / "live" / "workspace"
+    episode.mkdir(parents=True)
+    artifact_dir = tmp_path / "mlflow" / "artifacts"
+    private = artifact_dir / "episode_private"
+    private.mkdir(parents=True)
+    (private / "checklist_private.json").write_text(
+        json.dumps(
+            {
+                "covered": [
+                    "task_understanding",
+                    "schema_review",
+                    "target_exclusion",
+                    "reproducible_solution",
+                    "baseline_candidate_created",
+                    "validation_evaluated",
+                    "submit_ready_artifact",
+                ],
+                "coverage": 0.58,
+                "evidence": [
+                    {"key": "task_understanding", "step": 1},
+                    {"key": "schema_review", "step": 1},
+                    {"key": "target_exclusion", "step": 1},
+                    {"key": "reproducible_solution", "step": 3},
+                    {"key": "baseline_candidate_created", "step": 4},
+                    {"key": "validation_evaluated", "step": 4},
+                    {"key": "submit_ready_artifact", "step": 4},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    data = mlflow_store.checklist(
+        episode,
+        target_col="target",
+        fallback_coverage=0.25,
+        artifact_dir=artifact_dir,
+    )
+
+    assert data["coverage"] == 0.58
+    assert data["closed"] == 7
+    assert data["knownClosed"] == 7
+    submit_item = next(item for item in data["items"] if item["id"] == "submit_ready_artifact")
+    assert submit_item["evidence"] == [{"step": 4, "reason": "", "cellId": None}]
 
 
 def test_checklist_replay_beats_stale_zero_fallback(tmp_path):

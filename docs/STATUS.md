@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-08 (gym now beats single-shot: validation-improvement nudge + unknown-cell-id robustness guard, both experiment-validated; run summary polish; model registry is source of truth for LLM config; ML toolbox deps added; dashboard/product-mode keys remapped: free=Free gym, directive=Directive gym, fixed=Fixed gym; dashboard detail metric goal label aligned to maximize/minimize; task cards now use title-case labels and inline grid dates; task detail page now exposes bottom prepare action; return action icon refreshed across archive screens; prepared task rebuild now accepts existing prepared split paths; task cards now omit updated date in list views; settings now include dashboard language preference; task cards no longer show metric-goal badge; dashboard now supports animation preference; dashboard checklist accuracy fix)
+**Last updated:** 2026-06-09 (gym now beats single-shot: validation-improvement nudge + unknown-cell-id robustness guard, both experiment-validated; run summary polish; model registry is source of truth for LLM config; ML toolbox deps added; dashboard/product-mode keys remapped: free=Free gym, directive=Directive gym, fixed=Fixed gym; dashboard detail metric goal label aligned to maximize/minimize; task cards now use title-case labels and inline grid dates; task detail page now exposes bottom prepare action; return action icon refreshed across archive screens; prepared task rebuild now accepts existing prepared split paths; task cards now omit updated date in list views; settings now include dashboard language preference; task cards no longer show metric-goal badge; dashboard now supports animation preference; dashboard checklist accuracy fix; dashboard run-detail evidence UX)
 **Phase:** Hardening after first full H200 recon + building the local control-panel dashboard for configuring/launching/inspecting runs.
 
 ---
@@ -214,6 +214,15 @@ Current dashboard logo cycle:
 - `dashboard/web`: TypeScript build + Vite production build passed.
 - Browser smoke captured `.sidebar-logo`; only existing dev warnings/favicon 404
   appeared in console.
+Current dashboard run-detail evidence UX cycle:
+
+- Run Detail now includes an experiment story panel, checklist evidence rows,
+  and a failure diagnosis panel for failed/null/error runs.
+- Checklist API exposes private/public evidence per closed item so checklist
+  rows can explain which step/cell closed each item.
+- Added the dashboard dumbbell mark as the browser favicon.
+- `tests/test_dashboard.py -q`, dashboard TypeScript build, Vite production
+  build, and browser smoke on `live_6ff52a79` passed locally.
 Additional checks:
 
 - `python -m experiments.run --dataset-dir datasets/demo/prepared --mode all --model fake-model --dry-run`

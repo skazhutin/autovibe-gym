@@ -514,8 +514,10 @@ def _replay_checklist(episode_dir: Path | None, target_col: str = "") -> tuple[d
         prev: set[str] = set()
         for ev in events:
             res = ev.get("execution_result") or {}
+            source = ev.get("source_after") or ""
+            stdout = res.get("stdout", "")
             cl.record_execution(
-                source=ev.get("source_after") or "", stdout=res.get("stdout", ""),
+                source=source, stdout=stdout if str(stdout).strip() else source,
                 cell_id=ev.get("cell_id"), step=ev.get("step", 0),
                 execution_success=bool(res.get("success", True)),
             )
@@ -531,13 +533,23 @@ def _replay_checklist(episode_dir: Path | None, target_col: str = "") -> tuple[d
 
 def _private_checklist(
     episode_dir: Path | None,
-) -> tuple[set[str], dict[str, int | None], float | None] | None:
-    if not episode_dir:
+    artifact_dir: Path | None = None,
+) -> tuple[set[str], dict[str, int | None], float | None, dict[str, list[dict[str, Any]]]] | None:
+    if not episode_dir and not artifact_dir:
         return None
-    candidates = [
-        episode_dir.parent / "private_episode" / "checklist_private.json",
-        episode_dir / "private_episode" / "checklist_private.json",
-    ]
+    candidates: list[Path] = []
+    if artifact_dir:
+        candidates.extend([
+            artifact_dir / "private_episode" / "checklist_private.json",
+            artifact_dir / "episode_private" / "checklist_private.json",
+        ])
+    if episode_dir:
+        candidates.extend([
+            episode_dir.parent / "private_episode" / "checklist_private.json",
+            episode_dir.parent / "episode_private" / "checklist_private.json",
+            episode_dir / "private_episode" / "checklist_private.json",
+            episode_dir / "episode_private" / "checklist_private.json",
+        ])
     for path in candidates:
         data = _read_json(path)
         if not isinstance(data, dict):
@@ -546,21 +558,32 @@ def _private_checklist(
         if not covered:
             continue
         closed_step: dict[str, int | None] = {k: None for k in _CHECK_LABELS}
+        evidence: dict[str, list[dict[str, Any]]] = {k: [] for k in _CHECK_LABELS}
         for item in data.get("evidence") or []:
             if not isinstance(item, dict):
                 continue
             key = str(item.get("key") or "")
-            if key not in covered or key not in closed_step or closed_step[key] is not None:
+            if key not in covered or key not in closed_step:
                 continue
+            step: int | None
             try:
-                closed_step[key] = int(item.get("step"))
+                step = int(item.get("step"))
             except (TypeError, ValueError):
-                closed_step[key] = None
+                step = None
+            if closed_step[key] is None:
+                closed_step[key] = step
+            reason = item.get("reason")
+            cell_id = item.get("cell_id")
+            evidence[key].append({
+                "step": step,
+                "reason": str(reason) if reason is not None else "",
+                "cellId": str(cell_id) if cell_id is not None else None,
+            })
         try:
             coverage = float(data["coverage"]) if data.get("coverage") is not None else None
         except (TypeError, ValueError):
             coverage = None
-        return covered, closed_step, coverage
+        return covered, closed_step, coverage, evidence
     return None
 
 
@@ -582,7 +605,7 @@ def _generated_solution_checklist(
         cl = NotebookChecklist(target_col=target_col or "target")
         cl.record_execution(
             source=code,
-            stdout=stdout,
+            stdout=stdout if stdout.strip() else code,
             cell_id="generated_solution.py",
             step=1,
             execution_success=True,
@@ -612,10 +635,11 @@ def checklist(
         pass
 
     total = len(items_meta)
+    evidence_by_key: dict[str, list[dict[str, Any]]] = {k: [] for k in _CHECK_LABELS}
 
-    private = _private_checklist(episode_dir)
+    private = _private_checklist(episode_dir, artifact_dir=artifact_dir)
     if private is not None:
-        marked, closed_step, private_coverage = private
+        marked, closed_step, private_coverage, evidence_by_key = private
         closed = len(marked)
         coverage = private_coverage if private_coverage is not None else round(closed / total, 2)
     else:
@@ -623,8 +647,18 @@ def checklist(
         generated = None if replay_coverage is not None else _generated_solution_checklist(artifact_dir, target_col)
         if generated is not None:
             marked, closed_step, coverage = generated
+            evidence_by_key = {
+                key: [{"step": step, "reason": "generated_solution.py replay", "cellId": "generated_solution.py"}]
+                for key, step in closed_step.items()
+                if step is not None
+            }
         else:
             marked = {m["id"] for m in items_meta if closed_step[m["id"]] is not None}
+            evidence_by_key = {
+                key: [{"step": step, "reason": "public notebook replay", "cellId": None}]
+                for key, step in closed_step.items()
+                if step is not None
+            }
             # Prefer concrete replay evidence when public artifacts exist. The
             # recorded metric is still useful for legacy runs with no episode files.
             coverage = replay_coverage if replay_coverage is not None else fallback_coverage
@@ -633,7 +667,8 @@ def checklist(
 
     items = [
         {**m, "closed": m["id"] in marked,
-         "closedStep": closed_step[m["id"]] if m["id"] in marked else None}
+         "closedStep": closed_step[m["id"]] if m["id"] in marked else None,
+         "evidence": evidence_by_key.get(m["id"], []) if m["id"] in marked else []}
         for m in items_meta
     ]
     return {
