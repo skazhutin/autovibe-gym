@@ -1404,7 +1404,7 @@ table.data tbody tr.clickable:hover {
 .task-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
 .dataset-toolbar { padding: 14px; position: sticky; top: 61px; z-index: 15; backdrop-filter: blur(8px); background: color-mix(in srgb, var(--surface) 92%, transparent); }
 .sort-tabs { display: flex; align-items: center; gap: 2px; background: var(--surface-2); border-radius: var(--r-sm); padding: 3px; flex-shrink: 0; }
-.field .sort-tabs { width: 100%; flex-shrink: 1; }
+.field .sort-tabs { width: 100%; flex-shrink: 1; border: 1px solid var(--border); padding: 2px; min-height: 39px; }
 .field .sort-tab { flex: 1; justify-content: center; }
 .sort-tab { display: inline-flex; align-items: center; gap: 5px; padding: 7px 10px; border: none; background: none; border-radius: calc(var(--r-sm) - 2px); font-size: 13px; font-family: inherit; color: var(--text-dim); cursor: pointer; white-space: nowrap; transition: background 0.12s, color 0.12s; }
 .sort-tab:hover { color: var(--text); }
