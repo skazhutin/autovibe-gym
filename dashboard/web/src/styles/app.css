@@ -1195,6 +1195,8 @@ table.data tbody tr.clickable:hover {
 /* ── Picker selected row (model / dataset) ── */
 .picker-selected { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .picker-empty { display: flex; align-items: center; gap: 12px; }
+.link-inline { background: none; border: none; padding: 0; font: inherit; color: var(--accent-ink); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.link-inline:hover { color: var(--text); }
 .picker-selected-info { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; flex-wrap: wrap; }
 .picker-settings { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
 .icon-btn-active { background: var(--accent-soft); color: var(--accent-ink); }

@@ -318,7 +318,13 @@ export default function NewRun() {
             <div className={`pick${execution === "server" ? " pick-active" : ""}${!serverAvailable ? " pick-disabled" : ""}`}
               onClick={() => serverAvailable && setExecution("server")}>
               <div className="pick-title">На сервере (SSH)</div>
-              <div className="pick-desc">{serverAvailable ? "gym и обучение — на сервере, мак не нагружается." : "Не настроено — Настройки → «Выполнение на сервере (SSH)»."}</div>
+              <div className="pick-desc">
+                {serverAvailable ? "gym и обучение — на сервере, мак не нагружается." : (
+                  <button className="link-inline" onClick={(e) => { e.stopPropagation(); nav("/settings"); }}>
+                    Не настроено — открыть настройки SSH →
+                  </button>
+                )}
+              </div>
               {execution === "server" && <span className="pick-check"><Icon name="check" size={18} /></span>}
             </div>
           </div>
@@ -329,7 +335,7 @@ export default function NewRun() {
           <div className="step-head"><span className="step-num">1</span><span className="step-title">Модель</span></div>
           {model ? (
             <>
-              <div className="ds-picker-card">
+              <div className="ds-picker-card" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
                 <div className="spread" style={{ marginBottom: 5 }}>
                   <div className="ds-title" style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{model.name}</div>
                   <div className="row" style={{ gap: 6, flexShrink: 0 }}>
@@ -337,7 +343,6 @@ export default function NewRun() {
                       <Dot tone={model.online === false ? "red" : model.online ? "green" : "gray"} />
                       {model.online === false ? "офлайн" : model.online ? "онлайн" : "не проверено"}
                     </Tag>
-                    <Button variant="ghost" onClick={() => setModelPickerOpen(true)}>Изменить</Button>
                     <button className={`icon-btn${modelSettingsOpen ? " icon-btn-active" : ""}`}
                       title="Настройки модели" onClick={() => setModelSettingsOpen(v => !v)}>
                       <Icon name="settings" size={16} />
@@ -352,6 +357,10 @@ export default function NewRun() {
                   <div className="ds-stat"><span className="k">Input token limit</span><span className="v">{(model.ctx / 1024).toFixed(0)}k</span></div>
                   <div className="ds-stat"><span className="k">Output token limit</span><span className="v">{model.maxTokens ? `${(model.maxTokens / 1024).toFixed(0)}k` : "—"}</span></div>
                   <div className="ds-stat span-full"><span className="k">URL</span><span className="v" style={{ fontSize: 11.5 }}>{model.baseUrl || "—"}</span></div>
+                  {model.createdAt && <div className="ds-stat span-full"><span className="k">Создана</span><span className="v">{new Date(model.createdAt).toLocaleString()}</span></div>}
+                </div>
+                <div style={{ display: "flex", justifyContent: "center", marginTop: 10 }}>
+                  <Button variant="ghost" onClick={() => setModelPickerOpen(true)}>Изменить</Button>
                 </div>
               </div>
               {modelSettingsOpen && (
