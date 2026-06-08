@@ -5,6 +5,7 @@ import { useAsync } from "../lib/hooks";
 import { Button, Card, SelectDropdown, Spinner } from "../components/ui";
 import { Icon } from "../components/Icon";
 import { applyAppearance, loadAppearance, type Appearance } from "../lib/theme";
+import { useI18n } from "../lib/i18n";
 
 const ACCENTS = ["#FFDD2D", "#FF8A3D", "#4BBE85", "#3B6CC7", "#9B4DCA"];
 
@@ -43,6 +44,7 @@ function Row({ label, info, children }: { label: string; info?: string; children
 }
 
 export default function Settings() {
+  const { language, setLanguage, t } = useI18n();
   const { data } = useAsync(() => api.getSettings(), []);
   const [form, setForm] = useState<Record<string, string>>({});
   const [remoteOn, setRemoteOn] = useState(false);
@@ -58,6 +60,7 @@ export default function Settings() {
     setForm({
       mlflow_tracking_uri: data.mlflow_tracking_uri, datasets_dir: data.datasets_dir,
       date_format: data.date_format ?? "mdy",
+      language: data.language ?? "ru",
       remote_ssh: data.remote_ssh ?? "", remote_ssh_opts: data.remote_ssh_opts ?? "",
       remote_repo: data.remote_repo ?? "", remote_python: data.remote_python ?? "",
       remote_runs_dir: data.remote_runs_dir ?? "",
@@ -78,9 +81,9 @@ export default function Settings() {
   }
 
   function validate(): string | null {
-    if (!form.mlflow_tracking_uri?.trim()) return "MLflow tracking URI не заполнен";
-    if (!form.datasets_dir?.trim()) return "Каталог датасетов не заполнен";
-    if (remoteOn && !form.remote_ssh?.trim()) return "SSH (user@host) не заполнен — обязательно при включённом сервере";
+    if (!form.mlflow_tracking_uri?.trim()) return t("settings.error.mlflow");
+    if (!form.datasets_dir?.trim()) return t("settings.error.datasets");
+    if (remoteOn && !form.remote_ssh?.trim()) return t("settings.error.remote");
     return null;
   }
 
@@ -93,6 +96,7 @@ export default function Settings() {
     if (payload.remote_password === "********") delete payload.remote_password;
     try {
       await api.saveSettings(payload);
+      if (form.language === "ru" || form.language === "en") setLanguage(form.language);
       setDirty(false);
     } finally { setBusy(false); }
   }
@@ -102,59 +106,57 @@ export default function Settings() {
     try {
       await api.saveSettings({ ...form, remote_enabled: remoteOn, remote_password: form.remote_password === "********" ? undefined : form.remote_password } as never);
       const r = await api.remoteCheck();
-      setCheck({ ok: r.ok, msg: r.ok ? `Связь есть · repo ${r.repo ? "✓" : "✗"} · runtime ${r.runtime ? "✓" : "✗"}` : (r.error || r.output || "недоступно") });
+      setCheck({ ok: r.ok, msg: r.ok ? `SSH ok · repo ${r.repo ? "✓" : "✗"} · runtime ${r.runtime ? "✓" : "✗"}` : (r.error || r.output || "unavailable") });
     } catch (e) {
-      setCheck({ ok: false, msg: e instanceof Error ? e.message : "ошибка" });
+      setCheck({ ok: false, msg: e instanceof Error ? e.message : "error" });
     } finally { setChecking(false); }
   }
 
   return (
     <div className="stack" style={{ maxWidth: 820 }}>
       <Card>
-        <h2 className="section-title">Сервер и подключения</h2>
-        <Row label="MLflow tracking URI" info="Адрес MLflow-сервера, где хранятся прогоны. Обычно file:./mlruns или http://localhost:5000">
+        <h2 className="section-title">{t("settings.server")}</h2>
+        <Row label={t("settings.mlflow")} info={t("settings.info.mlflow")}>
           <input className="input mono" value={form.mlflow_tracking_uri ?? ""} onChange={(e) => set("mlflow_tracking_uri", e.target.value)} />
         </Row>
-        <Row label="Каталог задач" info="Путь к папке tasks/ в корне проекта. Все задачи читаются и сохраняются туда.">
+        <Row label={t("settings.datasetsDir")} info={t("settings.info.datasetsDir")}>
           <input className="input mono" value={form.datasets_dir ?? ""} onChange={(e) => set("datasets_dir", e.target.value)} />
         </Row>
       </Card>
 
       <Card>
-        <h2 className="section-title">Выполнение на сервере (SSH)</h2>
+        <h2 className="section-title">{t("settings.remote")}</h2>
         <div className="muted" style={{ fontSize: 13, marginTop: -8, marginBottom: 8 }}>
-          Когда включено, gym и обучение моделей выполняются на сервере по SSH, а сайт остаётся
-          локальным и лишь подтягивает результаты — компьютер не нагружается. Рекомендуется
-          настроить SSH-ключ (<span className="mono">ssh-copy-id</span>); пароль — запасной вариант.
+          {t("settings.remoteBlurb")}
         </div>
-        <Row label="Запускать прогоны на сервере" info="Если выключено, прогоны запускаются локально на этой машине.">
+        <Row label={t("settings.remoteEnabled")} info={t("settings.info.remoteEnabled")}>
           <div className="row" style={{ justifyContent: "flex-end" }}>
-            <span className="faint" style={{ fontSize: 13 }}>{remoteOn ? "Сервер" : "Локально"}</span>
+            <span className="faint" style={{ fontSize: 13 }}>{remoteOn ? t("settings.remoteEnabledState.server") : t("settings.remoteEnabledState.local")}</span>
             <div className={`toggle${remoteOn ? " on" : ""}`} onClick={() => toggleRemote(!remoteOn)} />
           </div>
         </Row>
         {remoteOn && (
           <>
-            <Row label="SSH (user@host)" info="Адрес сервера в формате user@host или user@ip. Например: booml@10.8.52.11">
+            <Row label={t("settings.remoteSsh")} info={t("settings.info.remoteSsh")}>
               <input className="input mono" placeholder="booml@10.8.52.11" value={form.remote_ssh ?? ""} onChange={(e) => set("remote_ssh", e.target.value)} />
             </Row>
-            <Row label="Доп. SSH-опции" info="Дополнительные флаги для ssh. Например: -p 2222 для нестандартного порта.">
+            <Row label={t("settings.remoteSshOpts")} info={t("settings.info.remoteSshOpts")}>
               <input className="input mono" value={form.remote_ssh_opts ?? ""} onChange={(e) => set("remote_ssh_opts", e.target.value)} />
             </Row>
-            <Row label="Путь к репозиторию на сервере" info="Абсолютный путь к autovibe-gym на сервере. Например: /home/booml/autovibe-gym-current">
+            <Row label={t("settings.remoteRepo")} info={t("settings.info.remoteRepo")}>
               <input className="input mono" placeholder="/home/booml/autovibe-gym-current" value={form.remote_repo ?? ""} onChange={(e) => set("remote_repo", e.target.value)} />
             </Row>
-            <Row label="Python сервера (venv)" info="Путь к python из виртуального окружения на сервере.">
+            <Row label={t("settings.remotePython")} info={t("settings.info.remotePython")}>
               <input className="input mono" placeholder="/home/booml/autovibe-gym/.venv/bin/python" value={form.remote_python ?? ""} onChange={(e) => set("remote_python", e.target.value)} />
             </Row>
-            <Row label="Каталог прогонов на сервере" info="Рабочие папки эпизодов на сервере. Например: /home/booml/dash_runs">
+            <Row label={t("settings.remoteRunsDir")} info={t("settings.info.remoteRunsDir")}>
               <input className="input mono" placeholder="/home/booml/dash_runs" value={form.remote_runs_dir ?? ""} onChange={(e) => set("remote_runs_dir", e.target.value)} />
             </Row>
-            <Row label="Пароль SSH (необязательно)" info="Используйте только как запасной вариант. Рекомендуется SSH-ключ (ssh-copy-id). Пароль хранится только локально в data/.">
+            <Row label={t("settings.remotePassword")} info={t("settings.info.remotePassword")}>
               <input className="input" type="password" value={form.remote_password ?? ""} onChange={(e) => set("remote_password", e.target.value)} placeholder="••••••••" />
             </Row>
             <div className="row" style={{ marginTop: 6 }}>
-              <Button variant="secondary" onClick={runCheck} disabled={checking}>{checking ? <Spinner /> : <Icon name="refresh" size={16} />} Проверить связь</Button>
+              <Button variant="secondary" onClick={runCheck} disabled={checking}>{checking ? <Spinner /> : <Icon name="refresh" size={16} />} {t("settings.checkConnection")}</Button>
               {check && <span style={{ fontSize: 13, color: check.ok ? "var(--green)" : "var(--red)" }}>{check.msg}</span>}
             </div>
           </>
@@ -162,8 +164,18 @@ export default function Settings() {
       </Card>
 
       <Card>
-        <h2 className="section-title">Внешний вид</h2>
-        <Row label="Формат даты" info="Как показывать даты в интерфейсе. Влияет только на отображение, в базе хранится полная точная дата и время.">
+        <h2 className="section-title">{t("settings.dashboard")}</h2>
+        <Row label={t("settings.language")} info={t("settings.info.language")}>
+          <SelectDropdown
+            value={form.language ?? language}
+            options={[
+              { value: "ru", label: t("settings.language.ru") },
+              { value: "en", label: t("settings.language.en") },
+            ]}
+            onChange={(v) => set("language", v)}
+          />
+        </Row>
+        <Row label={t("settings.dateFormat")} info={t("settings.info.dateFormat")}>
           <SelectDropdown
             value={form.date_format ?? "mdy"}
             options={[
@@ -173,20 +185,20 @@ export default function Settings() {
             onChange={(v) => set("date_format", v)}
           />
         </Row>
-        <Row label="Тема" info="Светлая или тёмная тема интерфейса на базе цвета #333.">
+        <Row label={t("settings.theme")} info={t("settings.info.theme")}>
           <div className="row" style={{ justifyContent: "flex-end" }}>
-            <span className="faint" style={{ fontSize: 13 }}>{appearance.theme === "dark" ? "Тёмная" : "Светлая"}</span>
+            <span className="faint" style={{ fontSize: 13 }}>{appearance.theme === "dark" ? t("settings.theme.dark") : t("settings.theme.light")}</span>
             <div className={`toggle${appearance.theme === "dark" ? " on" : ""}`} onClick={() => setAppr({ theme: appearance.theme === "dark" ? "light" : "dark" })} />
           </div>
         </Row>
-        <Row label="Акцентный цвет" info="Основной цвет интерфейса — кнопки, ссылки, активные элементы.">
+        <Row label={t("settings.accent")} info={t("settings.info.accent")}>
           <div className="swatch-row" style={{ justifyContent: "flex-end" }}>
             {ACCENTS.map((c) => (
               <span key={c} className={`swatch${appearance.accent.toLowerCase() === c.toLowerCase() ? " active" : ""}`} style={{ background: c }} onClick={() => setAppr({ accent: c })} />
             ))}
           </div>
         </Row>
-        <Row label={`Скругление: ${appearance.radius}px`} info="Радиус скругления углов карточек и кнопок. От 8px (квадратный) до 24px (круглый).">
+        <Row label={`${t("settings.rounding")}: ${appearance.radius}px`} info={t("settings.info.rounding")}>
           <input className="range" type="range" min={8} max={24} value={appearance.radius} onChange={(e) => setAppr({ radius: Number(e.target.value) })} />
         </Row>
       </Card>
@@ -199,8 +211,8 @@ export default function Settings() {
             </div>
           )}
           <div className="settings-save-row">
-            <span className="settings-unsaved-label">У вас есть несохранённые изменения</span>
-            <Button variant="primary" onClick={save} disabled={busy}>{busy ? <Spinner /> : "Сохранить"}</Button>
+            <span className="settings-unsaved-label">{t("settings.unsaved")}</span>
+            <Button variant="primary" onClick={save} disabled={busy}>{busy ? <Spinner /> : t("settings.save")}</Button>
           </div>
         </div>,
         document.body

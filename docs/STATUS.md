@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-08 (task cards now omit updated date in list views)
+**Last updated:** 2026-06-08 (settings now include dashboard language preference)
 **Phase:** Hardening after first full H200 recon + building the local control-panel dashboard for configuring/launching/inspecting runs.
 
 ---
@@ -183,6 +183,13 @@ Current prepared-task rebuild cycle:
 - Dataset prepare now accepts existing `prepared/*.csv` split paths when older
   task configs do not retain raw `source_path` entries, so previously prepared
   tasks can be rebuilt from their saved prepared files.
+Current settings localization cycle:
+
+- Dashboard settings now include a saved `language` preference (`ru` / `en`).
+- Layout shell and Settings screen consume the shared language context, and the
+  dashboard-preferences section title is now `Параметры дэшборда`.
+- Settings control width was tightened so dropdown fields match the other rows
+  more closely.
 Current dashboard logo cycle:
 
 - Replaced the old H-like sidebar logo mark with a diagonal dumbbell mark

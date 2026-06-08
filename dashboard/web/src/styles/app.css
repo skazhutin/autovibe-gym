@@ -1605,7 +1605,7 @@ table.data tbody tr.clickable:hover {
 .set-row:last-child { border-bottom: none; }
 .set-row .label { font-weight: 600; font-size: 14px; }
 .set-row .hint { color: var(--text-faint); font-size: 12.5px; margin-top: 2px; }
-.set-row .control { width: 320px; max-width: 52%; flex: none; min-width: 0; }
+.set-row .control { width: 280px; max-width: 46%; flex: none; min-width: 0; }
 
 .settings-save-bar { position: fixed; bottom: 24px; right: 28px; z-index: 150; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
 .settings-save-row { display: flex; align-items: center; gap: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 10px 16px; box-shadow: var(--shadow-md); }

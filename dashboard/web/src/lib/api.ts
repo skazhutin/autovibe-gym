@@ -307,6 +307,7 @@ export interface Settings {
   datasets_dir: string;
   default_episode: string;
   date_format: "mdy" | "dmy";
+  language: "ru" | "en";
   theme: string;
   accent: string;
   radius: number;
