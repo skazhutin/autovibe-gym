@@ -133,7 +133,9 @@ export default function Layout() {
           <div id="toolbar-portal" />
         </div>
         <main className="content">
-          <Outlet context={setHeaderAction} />
+          <div className="page-shell" key={loc.pathname}>
+            <Outlet context={setHeaderAction} />
+          </div>
         </main>
       </div>
     </div>
