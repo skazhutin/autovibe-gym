@@ -7,7 +7,7 @@ import {
   type TaskCreatePayload,
   type TaskPreview,
   type TaskSource,
-  type TaskConfig,
+  type TaskTypeConfig,
   type UploadedFileNode,
 } from "../../lib/api";
 import { Button, Card, Field, Modal, SelectDropdown, Spinner, Tag } from "../ui";
@@ -442,7 +442,7 @@ export function TaskWizard({ onClose, onCreated }: { onClose: () => void; onCrea
     setMetricGoal(inferGoal(nextMetric));
   }
 
-  function taskConfig(): TaskConfig {
+  function taskConfig(): TaskTypeConfig {
     return {
       task_type: taskType,
       target_col: target.trim(),
