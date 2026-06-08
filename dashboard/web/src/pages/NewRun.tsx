@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { api, type Task, type TaskConfig, type LaunchRunMode, type ModelRec } from "../lib/api";
+import { ModelModal } from "./Models";
 import { useAsync } from "../lib/hooks";
 import { MODE_LABELS } from "../lib/format";
 import { Button, Card, Dot, Field, Spinner, Tag } from "../components/ui";
@@ -160,7 +161,7 @@ function TaskPickerModal({ tasks, current, onSelect, onClose }: {
 // ── Main page ────────────────────────────────────────────────────────────────
 export default function NewRun() {
   const nav = useNavigate();
-  const { data: models } = useAsync(() => api.listModels(), []);
+  const { data: models, reload: reloadModels } = useAsync(() => api.listModels(), []);
   const { data: tasks } = useAsync(() => api.listTasks(), []);
   const { data: settings } = useAsync(() => api.getSettings(), []);
   const serverAvailable = !!(settings?.remote_ssh && settings?.remote_repo);
@@ -170,7 +171,6 @@ export default function NewRun() {
   const [modelId, setModelId] = useState<string>(() => localStorage.getItem(STORAGE_MODEL) ?? "");
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const [modelSettingsOpen, setModelSettingsOpen] = useState(false);
-  const [maxTokens, setMaxTokens] = useState(8192);
 
   // ── Mode ──
   const [selectedModes, setSelectedModes] = useState<LaunchRunMode[]>(["gym"]);
@@ -235,6 +235,7 @@ export default function NewRun() {
   }
 
   const model = models?.find(m => m.id === modelId);
+  const maxTokens = model?.maxTokens ?? 8192;
   const task = tasks?.find(d => d.id === taskId);
   const selectedCount = selectedModes.length;
   const primaryMode = selectedModes[0] ?? "gym";
@@ -343,10 +344,6 @@ export default function NewRun() {
                       <Dot tone={model.online === false ? "red" : model.online ? "green" : "gray"} />
                       {model.online === false ? "офлайн" : model.online ? "онлайн" : "не проверено"}
                     </Tag>
-                    <button className={`icon-btn${modelSettingsOpen ? " icon-btn-active" : ""}`}
-                      title="Настройки модели" onClick={() => setModelSettingsOpen(v => !v)}>
-                      <Icon name="settings" size={16} />
-                    </button>
                   </div>
                 </div>
                 <div className="run-meta-line" style={{ margin: "0 0 8px" }}>
@@ -359,16 +356,16 @@ export default function NewRun() {
                   <div className="ds-stat span-full"><span className="k">URL</span><span className="v" style={{ fontSize: 11.5 }}>{model.baseUrl || "—"}</span></div>
                   {model.createdAt && <div className="ds-stat span-full"><span className="k">Создана</span><span className="v">{new Date(model.createdAt).toLocaleString()}</span></div>}
                 </div>
-                <div style={{ display: "flex", justifyContent: "center", marginTop: 10 }}>
-                  <Button variant="ghost" onClick={() => setModelPickerOpen(true)}>Изменить</Button>
-                </div>
+              </div>
+              <div style={{ display: "flex", justifyContent: "center", gap: 8, marginTop: 10 }}>
+                <Button variant="ghost" onClick={() => setModelPickerOpen(true)}>Изменить</Button>
+                <button className={`icon-btn${modelSettingsOpen ? " icon-btn-active" : ""}`}
+                  title="Настройки модели" onClick={() => setModelSettingsOpen(v => !v)}>
+                  <Icon name="settings" size={16} />
+                </button>
               </div>
               {modelSettingsOpen && (
-                <div className="picker-settings">
-                  <FI label="Output token limit" info="Максимум токенов в одном ответе модели. Если модель упирается в лимит — ответ обрезается и прогон завершается с ошибкой. Напр. 8192 для большинства моделей.">
-                    <Stepper value={maxTokens} onChange={setMaxTokens} min={256} max={131072} step={256} />
-                  </FI>
-                </div>
+                <ModelModal initial={model} onClose={() => setModelSettingsOpen(false)} onDone={() => { setModelSettingsOpen(false); reloadModels(); }} />
               )}
             </>
           ) : (
