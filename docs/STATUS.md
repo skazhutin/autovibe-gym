@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-08 (task detail page now exposes bottom prepare action)
+**Last updated:** 2026-06-08 (return action icon refreshed across archive screens)
 **Phase:** Hardening after first full H200 recon + building the local control-panel dashboard for configuring/launching/inspecting runs.
 
 ---
@@ -173,6 +173,10 @@ Current task-detail prepare-action cycle:
 
 - Unprepared task detail pages now show a bottom `Подготовить` action wired to
   the existing prepare endpoint and refresh flow.
+Current archive return-icon cycle:
+
+- The shared `undo` icon used by archive restore actions now uses a cleaner
+  return-arrow shape across tasks, runs, and models archive screens.
 Current dashboard logo cycle:
 
 - Replaced the old H-like sidebar logo mark with a diagonal dumbbell mark
