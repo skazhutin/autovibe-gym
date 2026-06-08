@@ -59,7 +59,6 @@ function TaskCard({ d, dateFormat, onOpen, selecting, isSelected, onToggle }: { 
         <div className="ds-stat"><span className="k">Metric</span><span className="v">{d.metric}</span></div>
         <div className="ds-stat"><span className="k">Source</span><span className="v">{sourceText(d)}</span></div>
         {d.createdAt && <div className="ds-stat"><span className="k">Created</span><span className="v">{formatDateOnly(d.createdAt, dateFormat)}</span></div>}
-        {d.updatedAt && <div className="ds-stat"><span className="k">Updated</span><span className="v">{formatDateOnly(d.updatedAt, dateFormat)}</span></div>}
       </div>
       <div className="split-pills">
         {splitTag(d.hasTrain, "Train")}
