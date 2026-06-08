@@ -36,8 +36,8 @@ function FI({ label, info, children }: { label: string; info: string; children: 
   );
 }
 
-export type ModelDraft = { name: string; provider: string; baseUrl: string; apiKey: string; ctx: number | string; temp: number | string; maxTokens: number | string };
-export const defaultDraft = (): ModelDraft => ({ name: "", provider: PROVIDERS[0], baseUrl: "", apiKey: "", ctx: 32768, temp: 0.4, maxTokens: 8192 });
+export type ModelDraft = { name: string; provider: string; baseUrl: string; apiKey: string; ctx: number | string; maxTokens: number | string };
+export const defaultDraft = (): ModelDraft => ({ name: "", provider: PROVIDERS[0], baseUrl: "", apiKey: "", ctx: 32768, maxTokens: 8192 });
 
 export function ModelModal({ initial, draft, onDraftChange, onClose, onDone, onUnarchive }: {
   initial?: ModelRec; draft?: ModelDraft; onDraftChange?: (d: ModelDraft) => void; onClose: () => void; onDone: () => void; onUnarchive?: () => void;
@@ -48,7 +48,6 @@ export function ModelModal({ initial, draft, onDraftChange, onClose, onDone, onU
     baseUrl: initial.baseUrl ?? "",
     apiKey: "",
     ctx: initial.ctx,
-    temp: initial.temp ?? 0.4,
     maxTokens: initial.maxTokens ?? 8192,
   } : defaultDraft()));
   const [busy, setBusy] = useState(false);
@@ -65,7 +64,6 @@ export function ModelModal({ initial, draft, onDraftChange, onClose, onDone, onU
       ...f,
       baseUrl: showBaseUrl ? f.baseUrl : "",
       ctx: Number(f.ctx),
-      temp: Number(f.temp),
       maxTokens: Number(f.maxTokens),
       apiKey: f.apiKey || undefined,
     };
@@ -98,15 +96,12 @@ export function ModelModal({ initial, draft, onDraftChange, onClose, onDone, onU
       <div className="stack" style={{ gap: 14 }}>
         <FI label="Имя модели" info="Название модели как у провайдера, напр. anthropic/claude-opus-4-5, gemini-2.5-flash"><input className="input mono" value={f.name} onChange={(e) => set("name", e.target.value)} /></FI>
         <div className="grid-2">
-          <FI label="Провайдер" info="Тип API: OpenAI-совместимый и vLLM требуют Base URL, Gemini — Google API Key, LiteLLM — любой провайдер через litellm"><SelectDropdown value={f.provider} options={PROVIDERS.map((p) => ({ value: p, label: p }))} onChange={(v) => set("provider", v)} /></FI>
           <FI label="Input token limit" info="Максимум токенов в запросе (контекстное окно модели). Если превышено — прогон завершится с ошибкой. Напр. 32768 для большинства моделей, 128000 для GPT-4o."><input className="input mono" value={f.ctx} onChange={(e) => set("ctx", e.target.value.replace(/\D/g, ""))} /></FI>
         </div>
+        <FI label="Провайдер" info="Тип API: OpenAI-совместимый и vLLM требуют Base URL, Gemini — Google API Key, LiteLLM — любой провайдер через litellm"><SelectDropdown value={f.provider} options={PROVIDERS.map((p) => ({ value: p, label: p }))} onChange={(v) => set("provider", v)} /></FI>
         {showBaseUrl && <FI label="URL" info="Базовый адрес API. Для vLLM/локального сервера: http://host:8000/v1. Для OpenRouter: https://openrouter.ai/api/v1"><input className="input mono" value={f.baseUrl} onChange={(e) => set("baseUrl", e.target.value)} placeholder="http://host:8000/v1" /></FI>}
         <FI label="API-ключ" info={initial?.hasApiKey ? "Ключ уже сохранён — оставьте пустым, чтобы не менять" : "Ключ авторизации у провайдера. Для локального vLLM можно оставить пустым."}><input className="input" type="password" value={f.apiKey} onChange={(e) => set("apiKey", e.target.value)} placeholder="••••••••" /></FI>
-        <div className="grid-2">
-          <FI label="Температура" info="Случайность ответов модели: 0 — всегда одинаково, 1 — очень вариативно. Рекомендуется 0.3–0.6 для кода."><input className="input mono" value={f.temp} onChange={(e) => set("temp", e.target.value)} /></FI>
-          <FI label="Output token limit" info="Максимум токенов в одном ответе. Если модель упирается в этот лимит — ответ обрезается и прогон завершается с ошибкой."><input className="input mono" value={f.maxTokens} onChange={(e) => set("maxTokens", e.target.value.replace(/\D/g, ""))} /></FI>
-        </div>
+        <FI label="Output token limit" info="Максимум токенов в одном ответе. Если модель упирается в этот лимит — ответ обрезается и прогон завершается с ошибкой."><input className="input mono" value={f.maxTokens} onChange={(e) => set("maxTokens", e.target.value.replace(/\D/g, ""))} /></FI>
         {test && <div style={{ fontSize: 13, color: test === "Соединение есть" ? "var(--green)" : test === "…" ? "var(--text-dim)" : "var(--red)" }}>{test === "…" ? <Spinner /> : test}</div>}
       </div>
     </Modal>

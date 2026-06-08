@@ -34,7 +34,6 @@ def _seed() -> list[dict[str, Any]]:
             "apiKeyEnv": "",
             "apiKey": "",
             "ctx": m["ctx"],
-            "temp": 0.4,
             "maxTokens": 4096,
             "online": None,
         }
@@ -77,7 +76,6 @@ def create_model(payload: dict[str, Any]) -> dict[str, Any]:
         "apiKeyEnv": payload.get("apiKeyEnv") or "",
         "apiKey": payload.get("apiKey") or "",
         "ctx": payload.get("ctx") or 32768,
-        "temp": payload.get("temp", 0.4),
         "maxTokens": payload.get("maxTokens") or 8192,
         "online": None,
         "createdAt": datetime.now(timezone.utc).isoformat(),
