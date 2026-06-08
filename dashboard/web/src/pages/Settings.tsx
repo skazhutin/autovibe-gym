@@ -71,7 +71,7 @@ export default function Settings() {
       accent: data.accent,
       radius: data.radius,
       animations: data.animations ?? "on",
-      overlayOpacity: (data as unknown as Record<string, unknown>).overlay_opacity as number ?? 78,
+      overlayOpacity: data.overlay_opacity ?? loadAppearance().overlayOpacity,
     });
     setRemoteOn(!!data.remote_enabled);
     setDirty(false);
@@ -99,7 +99,7 @@ export default function Settings() {
     if (err) { setValidErr(err); return; }
     setValidErr(null);
     setBusy(true);
-    const payload: Record<string, unknown> = { ...form, remote_enabled: remoteOn, ...appearance };
+    const payload: Record<string, unknown> = { ...form, remote_enabled: remoteOn, ...appearance, overlay_opacity: appearance.overlayOpacity };
     if (payload.remote_password === "********") delete payload.remote_password;
     try {
       await api.saveSettings(payload);
@@ -214,8 +214,28 @@ export default function Settings() {
         <Row label={`${t("settings.rounding")}: ${appearance.radius}px`} info={t("settings.info.rounding")}>
           <input className="range" type="range" min={8} max={24} value={appearance.radius} onChange={(e) => setAppr({ radius: Number(e.target.value) })} />
         </Row>
-        <Row label={`${t("settings.overlay")}: ${appearance.overlayOpacity}%`} info={t("settings.info.overlay")}>
-          <input className="range" type="range" min={0} max={100} value={appearance.overlayOpacity} onChange={(e) => setAppr({ overlayOpacity: Number(e.target.value) })} />
+        <Row label={t("settings.overlay")} info={t("settings.info.overlay")}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
+            <div className="swatch-row" style={{ justifyContent: "flex-end", gap: 6 }}>
+              {[0, 25, 50, 75, 90, 100].map((v) => (
+                <button
+                  key={v}
+                  onClick={() => setAppr({ overlayOpacity: v })}
+                  style={{
+                    padding: "4px 9px", fontSize: 12, fontWeight: 600, borderRadius: "var(--r-sm)",
+                    border: "1px solid var(--border)",
+                    background: appearance.overlayOpacity === v ? "var(--accent)" : "var(--surface-2)",
+                    color: appearance.overlayOpacity === v ? "#1a1a1a" : "var(--text-dim)",
+                    cursor: "pointer",
+                  }}
+                >{v}%</button>
+              ))}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, width: "100%" }}>
+              <input className="range" style={{ flex: 1 }} type="range" min={0} max={100} value={appearance.overlayOpacity} onChange={(e) => setAppr({ overlayOpacity: Number(e.target.value) })} />
+              <span style={{ fontSize: 13, fontWeight: 600, minWidth: 36, textAlign: "right" }}>{appearance.overlayOpacity}%</span>
+            </div>
+          </div>
         </Row>
       </Card>
 
