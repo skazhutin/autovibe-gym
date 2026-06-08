@@ -99,13 +99,13 @@ export function ModelModal({ initial, draft, onDraftChange, onClose, onDone, onU
         <FI label="Имя модели" info="Название модели как у провайдера, напр. anthropic/claude-opus-4-5, gemini-2.5-flash"><input className="input mono" value={f.name} onChange={(e) => set("name", e.target.value)} /></FI>
         <div className="grid-2">
           <FI label="Провайдер" info="Тип API: OpenAI-совместимый и vLLM требуют Base URL, Gemini — Google API Key, LiteLLM — любой провайдер через litellm"><SelectDropdown value={f.provider} options={PROVIDERS.map((p) => ({ value: p, label: p }))} onChange={(v) => set("provider", v)} /></FI>
-          <FI label="Input tokens limit" info="Максимум токенов в запросе (контекстное окно модели). Если превышено — прогон завершится с ошибкой. Напр. 32768 для большинства моделей, 128000 для GPT-4o."><input className="input mono" value={f.ctx} onChange={(e) => set("ctx", e.target.value.replace(/\D/g, ""))} /></FI>
+          <FI label="Input token limit" info="Максимум токенов в запросе (контекстное окно модели). Если превышено — прогон завершится с ошибкой. Напр. 32768 для большинства моделей, 128000 для GPT-4o."><input className="input mono" value={f.ctx} onChange={(e) => set("ctx", e.target.value.replace(/\D/g, ""))} /></FI>
         </div>
         {showBaseUrl && <FI label="URL" info="Базовый адрес API. Для vLLM/локального сервера: http://host:8000/v1. Для OpenRouter: https://openrouter.ai/api/v1"><input className="input mono" value={f.baseUrl} onChange={(e) => set("baseUrl", e.target.value)} placeholder="http://host:8000/v1" /></FI>}
         <FI label="API-ключ" info={initial?.hasApiKey ? "Ключ уже сохранён — оставьте пустым, чтобы не менять" : "Ключ авторизации у провайдера. Для локального vLLM можно оставить пустым."}><input className="input" type="password" value={f.apiKey} onChange={(e) => set("apiKey", e.target.value)} placeholder="••••••••" /></FI>
         <div className="grid-2">
           <FI label="Температура" info="Случайность ответов модели: 0 — всегда одинаково, 1 — очень вариативно. Рекомендуется 0.3–0.6 для кода."><input className="input mono" value={f.temp} onChange={(e) => set("temp", e.target.value)} /></FI>
-          <FI label="Output tokens limit" info="Максимум токенов в одном ответе. Если модель упирается в этот лимит — ответ обрезается и прогон завершается с ошибкой."><input className="input mono" value={f.maxTokens} onChange={(e) => set("maxTokens", e.target.value.replace(/\D/g, ""))} /></FI>
+          <FI label="Output token limit" info="Максимум токенов в одном ответе. Если модель упирается в этот лимит — ответ обрезается и прогон завершается с ошибкой."><input className="input mono" value={f.maxTokens} onChange={(e) => set("maxTokens", e.target.value.replace(/\D/g, ""))} /></FI>
         </div>
         {test && <div style={{ fontSize: 13, color: test === "Соединение есть" ? "var(--green)" : test === "…" ? "var(--text-dim)" : "var(--red)" }}>{test === "…" ? <Spinner /> : test}</div>}
       </div>
@@ -321,12 +321,10 @@ export default function Models() {
                 {m.hasApiKey && <Tag>API key</Tag>}
               </div>
               <div className="ds-stats">
-                <div className="ds-stat"><span className="k">Input limit</span><span className="v">{(m.ctx / 1024).toFixed(0)}k</span></div>
-                <div className="ds-stat"><span className="k">Output limit</span><span className="v">{m.maxTokens ? `${(m.maxTokens / 1024).toFixed(0)}k` : "—"}</span></div>
-                <div className={`ds-stat${(m.baseUrl || "").length > 35 ? " span-full" : ""}`}><span className="k">Base URL</span><span className="v" style={{ fontSize: 11.5 }}>{m.baseUrl || "—"}</span></div>
-              </div>
-              <div className="faint task-dates" style={{ marginTop: 10, fontSize: 11.5 }}>
-                {m.createdAt && <span>Создана {new Date(m.createdAt).toLocaleString()}</span>}
+                <div className="ds-stat"><span className="k">Input token limit</span><span className="v">{(m.ctx / 1024).toFixed(0)}k</span></div>
+                <div className="ds-stat"><span className="k">Output token limit</span><span className="v">{m.maxTokens ? `${(m.maxTokens / 1024).toFixed(0)}k` : "—"}</span></div>
+                <div className={`ds-stat${(m.baseUrl || "").length > 35 ? " span-full" : ""}`}><span className="k">URL</span><span className="v" style={{ fontSize: 11.5 }}>{m.baseUrl || "—"}</span></div>
+                {m.createdAt && <div className="ds-stat span-full"><span className="k">Создана</span><span className="v">{new Date(m.createdAt).toLocaleString()}</span></div>}
               </div>
             </Card>
           ))}
