@@ -169,6 +169,18 @@ def main():
         )
 
         agent = GymAgent(env=env, model=model_name, max_tokens=max_tokens)
+        # Log the system-prompt preset BEFORE the agent runs, so the record
+        # survives even if the run crashes. The full prompt text goes into
+        # the private artifact dir — it never lands in agent-visible space.
+        mlflow.set_tags({
+            "prompt_preset_id": agent.prompt_preset_id,
+            "prompt_sha256": agent.prompt_sha256 or "default",
+            "prompt_default": "true" if agent.prompt_preset_id == "default" else "false",
+        })
+        mlflow.log_text(
+            agent.assembled_system_prompt(thoughts_on=bool(args.enable_thoughts)),
+            "episode_private/system_prompt.txt",
+        )
         try:
             summary = agent.run()
         finally:

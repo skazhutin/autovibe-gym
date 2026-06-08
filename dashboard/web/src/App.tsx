@@ -12,6 +12,7 @@ import Compare from "./pages/Compare";
 import Datasets from "./pages/Datasets";
 import DatasetDetail from "./pages/DatasetDetail";
 import Models from "./pages/Models";
+import Prompts from "./pages/Prompts";
 import SettingsPage from "./pages/Settings";
 
 export default function App() {
@@ -32,6 +33,7 @@ export default function App() {
         <Route path="problems" element={<Datasets />} />
         <Route path="problems/:id" element={<DatasetDetail />} />
         <Route path="models" element={<Models />} />
+        <Route path="prompts" element={<Prompts />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
     </Routes>

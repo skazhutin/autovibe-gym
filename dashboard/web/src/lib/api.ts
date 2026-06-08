@@ -335,6 +335,10 @@ export interface LaunchPayload {
   execution?: "server" | "local";
   enableThoughts?: boolean;
   hintCooldown?: number;
+  // System-prompt preset id. Only affects iterative/gym/fixed runs (the
+  // launcher silently ignores it for single-shot and repeated which have
+  // their own one-shot prompts). Falls back to "default" on the backend.
+  promptPresetId?: string;
 }
 
 const BASE = "/api";
@@ -374,6 +378,51 @@ export interface ServerHealth {
   online: boolean;
   configured: boolean;
   servers: { baseUrl: string; online: boolean; status?: number; error?: string }[];
+}
+
+// System-prompt presets ----------------------------------------------------
+// The agent's system prompt is split into named blocks. Each block has a
+// "tier" that controls how the editor surfaces it. Locked blocks (kernel
+// variable names, JSON schema) are tied to runtime code and cannot be
+// overridden — backend rejects writes; UI shows a lock. Trusted blocks
+// are editable but the UI confirms before first change because removing
+// sentences here is a common way to silently break the agent. Editable
+// blocks are free.
+export type PromptBlockTier = "locked" | "trusted" | "editable";
+
+export interface PromptPresetSummary {
+  id: string;
+  name: string;
+  is_default: boolean;
+  block_override_count: number;
+  updated_at: string | null;
+}
+
+export interface PromptPresetDetail {
+  id: string;
+  name: string;
+  blocks: Record<string, string>;
+  block_overrides: Record<string, string>;
+  thoughts_on: string;
+  thoughts_off: string;
+  thoughts_on_overridden: boolean;
+  thoughts_off_overridden: boolean;
+  block_tiers: Record<string, PromptBlockTier>;
+  block_order: string[];
+  locked_blocks: string[];
+  created_at: string | null;
+  updated_at: string | null;
+  is_default: boolean;
+  sha256: string;
+  warnings: string[];
+}
+
+export interface PromptPresetSavePayload {
+  id: string;
+  name: string;
+  blocks: Record<string, string>;
+  thoughts_on?: string | null;
+  thoughts_off?: string | null;
 }
 
 export const api = {
@@ -461,4 +510,13 @@ export const api = {
     req<{ online: boolean; status?: number; error?: string }>(`/models/${id}/health`, {
       method: "POST",
     }),
+
+  listPrompts: () =>
+    req<{ items: PromptPresetSummary[]; default_id: string }>("/prompts"),
+  getPrompt: (id: string) => req<PromptPresetDetail>(`/prompts/${id}`),
+  getDefaultPrompt: () => req<PromptPresetDetail>("/prompts/default"),
+  savePrompt: (p: PromptPresetSavePayload) =>
+    req<PromptPresetDetail>("/prompts", { method: "POST", body: JSON.stringify(p) }),
+  deletePrompt: (id: string) =>
+    req<{ deleted: string }>(`/prompts/${id}`, { method: "DELETE" }),
 };
