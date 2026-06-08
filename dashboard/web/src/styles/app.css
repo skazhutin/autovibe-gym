@@ -1058,9 +1058,7 @@ table.data tbody tr.clickable:hover {
   margin-bottom: 18px;
 }
 #toolbar-portal:not(:empty) {
-  padding: 0 32px 16px;
-  background: color-mix(in srgb, var(--bg) 78%, transparent);
-  backdrop-filter: blur(10px);
+  padding: 0 32px 18px;
 }
 .dataset-toolbar {
   position: sticky;
