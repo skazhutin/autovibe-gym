@@ -94,9 +94,11 @@ export default function Runs() {
     }
   }
 
+  const toolbarEl = document.getElementById("toolbar-portal");
+
   return (
     <div className="stack" style={{ gap: 18 }}>
-      <Card className="dataset-toolbar">
+      {toolbarEl && createPortal(<Card className="dataset-toolbar">
         <div className="filters" style={{ marginBottom: 0 }}>
           <div className="search">
             <Icon name="search" size={17} />
@@ -123,7 +125,7 @@ export default function Runs() {
             <Button variant="secondary" onClick={() => setSelecting(true)}>Выбрать</Button>
           )}
         </div>
-      </Card>
+      </Card>, toolbarEl)}
 
       <Card style={{ padding: 0 }}>
         {loading && !runs ? (

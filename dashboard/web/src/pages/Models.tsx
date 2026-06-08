@@ -227,9 +227,11 @@ export default function Models() {
     });
   }
 
+  const toolbarEl = document.getElementById("toolbar-portal");
+
   return (
     <div className="stack" style={{ gap: 18 }}>
-      <Card className="dataset-toolbar">
+      {toolbarEl && createPortal(<Card className="dataset-toolbar">
         <div className="filters models-toolbar" style={{ marginBottom: 0 }}>
           <div className="search models-toolbar-search">
             <Icon name="search" size={17} />
@@ -288,7 +290,7 @@ export default function Models() {
             </div>
           </div>
         )}
-      </Card>
+      </Card>, toolbarEl)}
       {loading && !data ? (
         <Skeleton h={200} />
       ) : filtered.length ? (

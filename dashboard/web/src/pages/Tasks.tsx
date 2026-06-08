@@ -174,11 +174,13 @@ export default function Tasks() {
     return <div className="grid-3">{[0, 1, 2].map((i) => <Card key={i}><Skeleton h={180} /></Card>)}</div>;
   }
 
+  const toolbarEl = document.getElementById("toolbar-portal");
+
   return (
     <div className="stack" style={{ gap: 18 }}>
       {notice && <div className="success-line"><Icon name="check" size={15} /> {notice}</div>}
 
-      <Card className="dataset-toolbar">
+      {toolbarEl && createPortal(<Card className="dataset-toolbar">
         <div className="filters tasks-toolbar" style={{ marginBottom: 0 }}>
           <div className="search tasks-toolbar-search">
             <Icon name="search" size={16} />
@@ -249,7 +251,7 @@ export default function Tasks() {
             </div>
           </div>
         )}
-      </Card>
+      </Card>, toolbarEl)}
 
       {!filtered.length ? (
         <EmptyState
