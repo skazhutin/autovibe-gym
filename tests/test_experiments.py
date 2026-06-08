@@ -128,7 +128,7 @@ def test_run_fixed_tool_only_stage_stops_at_turn_guard(tmp_path):
         metric_name="accuracy",
         max_steps=10,
         workspace_dir=tmp_path,
-        mode="gym_with_checklist",
+        mode="directive_gym",
     )
     client = ToolOnlyClient()
     agent = run_fixed.FixedTransitionsAgent(
@@ -199,7 +199,7 @@ def test_compare_prints_no_runs_message(monkeypatch, capsys):
 def test_compare_prints_sorted_table_and_writes_csv(monkeypatch, tmp_path, capsys):
     runs = pd.DataFrame(
         {
-            "params.experiment_type": ["gym", "baseline"],
+            "params.experiment_type": ["directive_gym", "baseline"],
             "params.model": ["m1", "m2"],
             "params.dataset": ["d", "d"],
             "params.mode": ["local", "local"],
@@ -229,7 +229,7 @@ def test_compare_prints_sorted_table_and_writes_csv(monkeypatch, tmp_path, capsy
 def test_compare_metric_sort_orders_by_selected_metric(monkeypatch, capsys):
     runs = pd.DataFrame(
         {
-            "params.experiment_type": ["gym", "baseline"],
+            "params.experiment_type": ["directive_gym", "baseline"],
             "params.model": ["m1", "m2"],
             "params.dataset": ["d", "d"],
             "params.mode": ["local", "local"],
@@ -250,7 +250,7 @@ def test_compare_metric_sort_orders_by_selected_metric(monkeypatch, capsys):
 def test_compare_handles_runs_without_test_metric(monkeypatch, capsys):
     runs = pd.DataFrame(
         {
-            "params.experiment_type": ["gym"],
+            "params.experiment_type": ["directive_gym"],
             "params.model": ["m1"],
             "params.dataset": ["d"],
             "params.mode": ["local"],
@@ -273,27 +273,27 @@ def test_compare_groups_all_batch_by_mode_order(monkeypatch, capsys):
     runs = pd.DataFrame(
         {
             "params.experiment_type": [
-                "gym_with_checklist",
+                "directive_gym",
                 "baseline_single_shot",
-                "fixed_transitions",
+                "fixed_gym",
                 "repeated_single_shot",
-                "iterative_no_checklist",
+                "free_gym",
             ],
             "params.requested_mode": ["all", "all", "all", "all", "all"],
             "params.batch_id": ["batch-1", "batch-1", "batch-1", "batch-1", "batch-1"],
             "params.product_mode": [
-                "gym_with_checklist",
+                "directive_gym",
                 "single_shot",
-                "fixed_transitions",
+                "fixed_gym",
                 "repeated_single_shot",
-                "iterative_no_checklist",
+                "free_gym",
             ],
             "params.mode_label": [
-                "gym_with_checklist",
+                "directive_gym",
                 "single_shot",
-                "fixed_transitions",
+                "fixed_gym",
                 "repeated_single_shot",
-                "iterative_no_checklist",
+                "free_gym",
             ],
             "params.mode_order": [4, 1, 5, 2, 3],
             "params.model": ["m1", "m1", "m1", "m1", "m1"],
@@ -311,9 +311,9 @@ def test_compare_groups_all_batch_by_mode_order(monkeypatch, capsys):
     assert "requested_mode" in printed
     assert "batch_id" in printed
     assert printed.index("single_shot") < printed.index("repeated_single_shot")
-    assert printed.index("repeated_single_shot") < printed.index("iterative_no_checklist")
-    assert printed.index("iterative_no_checklist") < printed.index("gym_with_checklist")
-    assert printed.index("gym_with_checklist") < printed.index("fixed_transitions")
+    assert printed.index("repeated_single_shot") < printed.index("free_gym")
+    assert printed.index("free_gym") < printed.index("directive_gym")
+    assert printed.index("directive_gym") < printed.index("fixed_gym")
 
 
 # ---------------------------------------------------------------------------
@@ -345,7 +345,7 @@ def test_run_matrix_dry_run_prints_plan(tmp_path, capsys, monkeypatch):
     monkeypatch.setattr("sys.argv", [
         "run_matrix",
         "--datasets", str(tmp_path / "ds_a"),
-        "--episode-modes", "gym_with_checklist",
+        "--episode-modes", "directive_gym",
         "--model", "fake-model",
         "--dry-run",
     ])
@@ -354,7 +354,7 @@ def test_run_matrix_dry_run_prints_plan(tmp_path, capsys, monkeypatch):
 
     out = capsys.readouterr().out
     assert "ds_a" in out
-    assert "gym_with_checklist" in out
+    assert "directive_gym" in out
     assert "dry-run" in out
 
 
@@ -416,9 +416,9 @@ def test_shared_modes_all_expands_to_five_product_modes():
     assert [m.key for m in expand_requested_mode("all")] == [
         "single_shot",
         "repeated_single_shot",
-        "iterative_no_checklist",
-        "gym_with_checklist",
-        "fixed_transitions",
+        "free_gym",
+        "directive_gym",
+        "fixed_gym",
     ]
 
 
@@ -443,9 +443,9 @@ def test_common_run_all_dry_run_lists_five_commands_with_shared_batch(monkeypatc
     assert "[run] Planned 5 run(s)" in out
     assert "single_shot" in out
     assert "repeated_single_shot" in out
-    assert "iterative_no_checklist" in out
-    assert "gym_with_checklist" in out
-    assert "fixed_transitions" in out
+    assert "free_gym" in out
+    assert "directive_gym" in out
+    assert "fixed_gym" in out
     batch_ids = re.findall(r"--batch-id\s+(\S+)", out)
     assert len(batch_ids) >= 5
     assert len(set(batch_ids)) == 1
@@ -460,8 +460,8 @@ def test_common_run_selected_modes_dry_run_lists_selected_commands_with_shared_b
             "datasets/demo/prepared",
             "--modes",
             "single_shot",
-            "gym_with_checklist",
-            "fixed_transitions",
+            "directive_gym",
+            "fixed_gym",
             "--model",
             "fake-model",
             "--run-name",
@@ -478,8 +478,8 @@ def test_common_run_selected_modes_dry_run_lists_selected_commands_with_shared_b
     assert "[run] requested_mode=batch" in out
     assert "[run] Planned 3 run(s)" in out
     assert "single_shot" in out
-    assert "gym_with_checklist" in out
-    assert "fixed_transitions" in out
+    assert "directive_gym" in out
+    assert "fixed_gym" in out
     assert "repeated_single_shot" not in out
     assert "unit_batch_single_shot" in out
     assert "workspace\\single_shot" in out or "workspace/single_shot" in out

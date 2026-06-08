@@ -101,7 +101,7 @@ export default function Settings() {
     try {
       await api.saveSettings({ ...form, remote_enabled: remoteOn, remote_password: form.remote_password === "********" ? undefined : form.remote_password } as never);
       const r = await api.remoteCheck();
-      setCheck({ ok: r.ok, msg: r.ok ? `Связь есть · repo ${r.repo ? "✓" : "✗"} · gym ${r.gym ? "✓" : "✗"}` : (r.error || r.output || "недоступно") });
+      setCheck({ ok: r.ok, msg: r.ok ? `Связь есть · repo ${r.repo ? "✓" : "✗"} · runtime ${r.runtime ? "✓" : "✗"}` : (r.error || r.output || "недоступно") });
     } catch (e) {
       setCheck({ ok: false, msg: e instanceof Error ? e.message : "ошибка" });
     } finally { setChecking(false); }

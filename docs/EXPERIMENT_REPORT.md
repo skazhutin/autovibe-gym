@@ -15,8 +15,8 @@ stratified random split 70/15/15, seed=42.
 |------|:-----------:|:----------------:|:------:|:-------:|:------------:|
 | single-shot (baseline) | **0.743** | 1 shot | 0 | 13s | 2 120 |
 | repeated single-shot | 0.740 | 5 attempts | 6 | 71s | 11 284 |
-| flexible transitions (gym) | 0.735 | 12 / 15 steps | 4 | 199s | 136 115 |
-| fixed transitions | 0.699 | 22 steps | 9 | 707s | — |
+| directive gym | 0.735 | 12 / 15 steps | 4 | 199s | 136 115 |
+| fixed gym | 0.699 | 22 steps | 9 | 707s | — |
 
 ### Findings
 
@@ -29,7 +29,7 @@ Gym is the only mode that achieved `checklist_coverage = 1.0` (all 8 DS pipeline
 covered). The baseline produced no such signal. This validates the environment's
 diagnostic purpose: even when the gym score is lower, it shows *what* the agent did.
 
-**Finding 3 — Fixed transitions incurred the highest cost with the lowest score.**
+**Finding 3 — Fixed gym incurred the highest cost with the lowest score.**
 22 steps, 9 errors, 707 seconds. The rigid per-stage budget caused the agent to exhaust
 its preprocessing and feature engineering budget before finding good features, and then
 run out of time in model selection. This demonstrates that fixed ordering without
@@ -52,8 +52,8 @@ temperature, humidity, light, and PIR sensor readings.
 |------|:-----------:|:----------------:|:------:|:-------:|:------------:|
 | single-shot (baseline) | **1.000** | 1 shot | 0 | 30s | 1 126 |
 | repeated single-shot | 1.000 | 10 attempts | 12 | 315s | 12 600 |
-| flexible transitions (gym) | null† | 15 / 15 steps | 6 | 143s | 186 822 |
-| fixed transitions | null† | 22 steps | 6 | 207s | 335 131 |
+| directive gym | null† | 15 / 15 steps | 6 | 143s | 186 822 |
+| fixed gym | null† | 22 steps | 6 | 207s | 335 131 |
 
 †null = model could not be submitted; agent engineered temporal features outside Pipeline
 (see Section 5b for the submission failure analysis).
@@ -100,7 +100,7 @@ on the hidden test split.
 | Mode | best val (agent-reported) | test_metric | gap |
 |------|:-------------------------:|:-----------:|:---:|
 | repeated single-shot | 0.690 | 0.740 | −0.050 |
-| gym (flexible) | ~0.73* | 0.735 | ~0.005 |
+| directive gym | ~0.73* | 0.735 | ~0.005 |
 
 *gym val score estimated from agent stdout; precise val not separately logged.
 
@@ -114,8 +114,8 @@ No evidence of val-set overfitting: test score is consistently ≥ val score.
 |------|:-------------------------:|:-----------:|:---:|
 | single-shot (baseline) | ~1.000 | 1.000 | ≈0 |
 | repeated single-shot | ~1.000 | 1.000 | ≈0 |
-| gym (flexible) | ~0.99* | null† | — |
-| fixed transitions | ~0.99* | null† | — |
+| directive gym | ~0.99* | null† | — |
+| fixed gym | ~0.99* | null† | — |
 
 *val score from agent stdout on derived temporal features.
 †submit blocked — pre-flight validation found model incompatible with raw test rows.
@@ -226,7 +226,7 @@ Both robustness failures are logged in the failure taxonomy (Section 6).
 The environment exposes failures across 5 categories (per TZ):
 
 ### Planning failures
-- Fixed transitions: agent did not adapt to per-stage budget constraints → wasted
+- Fixed gym: agent did not adapt to per-stage budget constraints → wasted
   EDA steps on model selection, ran out of budget mid-HPT.
 
 ### Data failures  
@@ -238,7 +238,7 @@ The environment exposes failures across 5 categories (per TZ):
 ### Model failures
 - Repeated single-shot: 6 errors in 5 attempts (model training exceptions), but
   best attempt still produced valid predictions.
-- Fixed transitions: 9 errors in 22 steps — agent got stuck in preprocessing stage.
+- Fixed gym: 9 errors in 22 steps — agent got stuck in preprocessing stage.
 
 ### Submission failures
 - Gym (student_dropout, first run): label type mismatch — agent encoded labels, returned

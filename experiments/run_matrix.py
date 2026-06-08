@@ -6,13 +6,13 @@ each run to MLflow. Supports --dry-run for previewing the matrix without
 executing experiments.
 
 Usage:
-    # Full default matrix (all example datasets × gym_with_checklist + iterative_no_checklist)
+    # Full default matrix (all example datasets × directive_gym + free_gym)
     python -m experiments.run_matrix --mode local
 
     # Custom datasets and modes
     python -m experiments.run_matrix \\
         --datasets datasets/example_student_dropout datasets/example_room_occupancy \\
-        --episode-modes gym_with_checklist iterative_no_checklist \\
+        --episode-modes directive_gym free_gym \\
         --mode cloud --model gpt-4o
 
     # Preview without running
@@ -36,7 +36,7 @@ except ImportError:
 if load_dotenv is not None:
     load_dotenv()
 
-DEFAULT_EPISODE_MODES = ["gym_with_checklist", "iterative_no_checklist"]
+DEFAULT_EPISODE_MODES = ["directive_gym", "free_gym"]
 
 
 def _discover_datasets(root: str = "datasets") -> list[str]:

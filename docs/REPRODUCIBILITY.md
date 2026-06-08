@@ -68,7 +68,7 @@ python -m experiments.run_multishot \
 # Free gym
 python -m experiments.run_gym \
   --dataset-dir datasets/student_dropout/prepared \
-  --mode local --episode-mode iterative_no_checklist --max-steps 15
+  --mode local --episode-mode free_gym --max-steps 15
 
 # Directive gym
 python -m experiments.run_gym \

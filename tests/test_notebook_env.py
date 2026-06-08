@@ -17,7 +17,7 @@ def _accuracy(y_true, y_pred):
     return sum(int(a == b) for a, b in zip(y_true, y_pred)) / len(y_true)
 
 
-def _make_env(tmp_path, *, mode="gym_with_checklist", hidden_green=False, enable_thoughts=False):
+def _make_env(tmp_path, *, mode="directive_gym", hidden_green=False, enable_thoughts=False):
     train = pd.DataFrame(
         {
             "color": ["red", "blue", "red", "blue"],
@@ -452,7 +452,7 @@ def test_kernel_visible_artifacts_do_not_expose_private_evaluation_state(tmp_pat
         env.close()
 
 
-@pytest.mark.parametrize("mode", ["gym_with_checklist", "iterative_no_checklist"])
+@pytest.mark.parametrize("mode", ["directive_gym", "free_gym"])
 def test_notebook_step_budget_blocks_actions_after_exhaustion(tmp_path, mode):
     env = _make_env(tmp_path, mode=mode)
     try:
@@ -531,7 +531,7 @@ def _docker_available() -> bool:
 @pytest.mark.skipif(not _docker_available(), reason="Docker not available")
 def test_notebook_env_docker_backend_end_to_end(tmp_path):
     backend = ContainerJupyterKernelBackend()
-    env = _make_env(tmp_path, mode="iterative_no_checklist")
+    env = _make_env(tmp_path, mode="free_gym")
     env.close()
     env = NotebookGymEnv(
         train=env.state.train,
@@ -542,7 +542,7 @@ def test_notebook_env_docker_backend_end_to_end(tmp_path):
         metric_name="accuracy",
         max_steps=20,
         workspace_dir=tmp_path,
-        mode="iterative_no_checklist",
+        mode="free_gym",
         backend=backend,
     )
     try:

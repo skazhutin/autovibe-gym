@@ -18,7 +18,7 @@ DEFAULTS = {
     "mlflow_tracking_uri": "",
     "datasets_dir": "",
     "default_mode": "local",
-    "default_episode": "gym_with_checklist",
+    "default_episode": "directive_gym",
     "theme": "light",
     "accent": "#FFDD2D",
     "radius": 18,

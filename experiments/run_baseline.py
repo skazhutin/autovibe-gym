@@ -1,5 +1,5 @@
 """
-Single-shot baseline: one LLM call, no iterative feedback, no checklist.
+Single-shot baseline: one LLM call, no multi-step feedback, no checklist.
 
 Usage:
     python -m experiments.run_baseline --dataset-dir datasets/example_dry_bean/prepared --mode local

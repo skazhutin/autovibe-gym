@@ -21,7 +21,7 @@ router = APIRouter(prefix="/runs", tags=["runs"])
 class LaunchPayload(BaseModel):
     modelId: str | None = None
     model: str | None = None
-    mode: str  # single | repeated | iterative | gym | fixed | batch
+    mode: str  # single | repeated | free | directive | fixed | batch
     modes: list[str] | None = None
     taskId: str
     budgetMode: str = "local"  # local | cloud
@@ -31,8 +31,8 @@ class LaunchPayload(BaseModel):
     temp: float | None = None
     seed: int | None = None
     execution: str | None = None  # "server" | "local" | None (use default)
-    enableThoughts: bool | None = None  # agent scratchpad (gym/iterative only)
-    hintCooldown: int | None = None  # steps between checklist hints (gym only)
+    enableThoughts: bool | None = None  # agent scratchpad (directive/free only)
+    hintCooldown: int | None = None  # steps between checklist hints (directive only)
 
 
 def _target_col(task_id: str | None) -> str:

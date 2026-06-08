@@ -390,7 +390,7 @@ class GymEnv:
         )
         return {
             "task": (
-                "You are solving a supervised ML task in an iterative AutoML Gym.\n"
+                "You are solving a supervised ML task in an multi-step AutoML Gym.\n"
                 f"Target column: '{self.state.target_col}'\n"
                 f"Metric: {self.state.metric_name}\n"
                 f"Max code steps: {self.state.max_steps}\n\n"

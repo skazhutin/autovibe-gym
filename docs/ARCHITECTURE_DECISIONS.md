@@ -427,13 +427,13 @@ LLM часто делает preprocessing вручную на train, напри�
 | ADR-014 | Feedback channel separation | ✅ Done |
 | ADR-015 | Generic selective hidden-checklist policy | ✅ Done |
 | ADR-016 | Hide hidden score from agent feedback | ✅ Done |
-| ADR-017 | Iterative no-checklist as fair control | ✅ Done |
+| ADR-017 | Free gym as fair control | ✅ Done |
 | ADR-018 | Security boundary for local Jupyter backend | ✅ Done |
 | ADR-019 | ContainerJupyterKernelBackend (Docker sandbox) | ✅ Done |
 
 ---
 
-## ADR-011: Real Jupyter notebook as the iterative environment
+## ADR-011: Real Jupyter notebook as the multi-step environment
 
 **Status:** Accepted
 **Date:** 2026-05-29
@@ -446,7 +446,7 @@ dirty interactive state, or clean replay.
 
 ### Decision
 Use a real nbformat v4 `.ipynb` file and a persistent `ipykernel` session for
-iterative Gym episodes. `NotebookDocument` owns the notebook document and
+multi-step Gym episodes. `NotebookDocument` owns the notebook document and
 `JupyterKernelSession` executes authored code cells through the Jupyter message
 protocol. Legacy `code` actions are mapped to "add code cell and execute".
 
@@ -513,7 +513,7 @@ state have different visibility rules.
 ### Decision
 Use explicit feedback items with `runtime`, `contract`, `checklist`, and
 `terminal` channels. Runtime and contract feedback can be visible to all
-iterative modes. Checklist feedback is visible only in `gym_with_checklist`.
+free/directive modes. Checklist feedback is visible only in `directive_gym`.
 Terminal/private evaluation details are never sent to the agent.
 
 ### Consequences
@@ -566,7 +566,7 @@ outputs while still present in private summaries.
 
 ---
 
-## ADR-017: Iterative no-checklist as the fair control
+## ADR-017: Free gym as the fair control
 
 **Status:** Accepted
 **Date:** 2026-05-29
@@ -576,14 +576,14 @@ The previous multishot runner was not the right control for checklist feedback
 because it did not use the same notebook environment.
 
 ### Decision
-Define `EpisodeMode` and run both `iterative_no_checklist` and
-`gym_with_checklist` through the same Jupyter backend, action protocol, budget,
+Define `EpisodeMode` and run both `free_gym` and
+`directive_gym` through the same Jupyter backend, action protocol, budget,
 runtime feedback, and contract feedback. The only behavioral difference is
 checklist feedback visibility.
 
 ### Consequences
 `experiments.run_multishot` is logged as `repeated_single_shot`; the fair
-checklist ablation is `experiments.run_gym --episode-mode iterative_no_checklist`.
+checklist ablation is `experiments.run_gym --episode-mode free_gym`.
 
 ---
 

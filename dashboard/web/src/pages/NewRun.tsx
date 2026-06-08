@@ -18,8 +18,8 @@ const MODE_INFO: {
 }[] = [
   { id: "single",   env: false, desc: "Один полный ответ без обратной связи от среды.",                                                     hasSteps: false, hasShots: false, hasHint: false, hasThoughts: false },
   { id: "repeated", env: false, desc: "N независимых попыток (multi-shot), только скалярная val-метрика между ними.",                       hasSteps: false, hasShots: true,  hasHint: false, hasThoughts: false },
-  { id: "iterative",env: true,  desc: "Итеративная среда без подсказок чеклиста: runtime и contract feedback.",                             hasSteps: true,  hasShots: false, hasHint: false, hasThoughts: true  },
-  { id: "gym",      env: true,  desc: "Свободная интерактивная среда с неявными подсказками чеклиста DS-пайплайна.",                       hasSteps: true,  hasShots: false, hasHint: true,  hasThoughts: true  },
+  { id: "free",env: true,  desc: "Свободная среда без подсказок чеклиста: runtime и contract feedback.",                               hasSteps: true,  hasShots: false, hasHint: false, hasThoughts: true  },
+  { id: "directive",      env: true,  desc: "Свободная интерактивная среда с неявными подсказками чеклиста DS-пайплайна.",                       hasSteps: true,  hasShots: false, hasHint: true,  hasThoughts: true  },
   { id: "fixed",    env: true,  desc: "Фиксированные стадии gym: EDA, preprocessing, feature engineering, model selection, tuning.",       hasSteps: true,  hasShots: false, hasHint: false, hasThoughts: true  },
 ];
 
@@ -173,8 +173,8 @@ export default function NewRun() {
   const [modelSettingsOpen, setModelSettingsOpen] = useState(false);
 
   // ── Mode ──
-  const [selectedModes, setSelectedModes] = useState<LaunchRunMode[]>(["gym"]);
-  const [expandedModes, setExpandedModes] = useState<Set<LaunchRunMode>>(new Set(["gym"] as LaunchRunMode[]));
+  const [selectedModes, setSelectedModes] = useState<LaunchRunMode[]>(["directive"]);
+  const [expandedModes, setExpandedModes] = useState<Set<LaunchRunMode>>(new Set(["directive"] as LaunchRunMode[]));
   const [modeParams, setModeParams] = useState<Partial<Record<LaunchRunMode, ModeParams>>>({});
 
   // ── Task ──
@@ -238,12 +238,12 @@ export default function NewRun() {
   const maxTokens = model?.maxTokens ?? 8192;
   const task = tasks?.find(d => d.id === taskId);
   const selectedCount = selectedModes.length;
-  const primaryMode = selectedModes[0] ?? "gym";
+  const primaryMode = selectedModes[0] ?? "directive";
   const multiMode = selectedCount > 1;
-  const stepBased = selectedModes.some(m => m === "iterative" || m === "gym" || m === "fixed");
+  const stepBased = selectedModes.some(m => m === "free" || m === "directive" || m === "fixed");
   const repeatedLike = selectedModes.includes("repeated");
-  const checklistMode = selectedModes.includes("gym");
-  const thoughtsSupported = selectedModes.some(m => m === "gym" || m === "iterative" || m === "fixed");
+  const checklistMode = selectedModes.includes("directive");
+  const thoughtsSupported = selectedModes.some(m => m === "directive" || m === "free" || m === "fixed");
   const canLaunch = selectedCount > 0 && !!modelId && !!task?.prepared && !launching;
 
   function toggleMode(id: LaunchRunMode) {
@@ -294,7 +294,7 @@ export default function NewRun() {
         shots: repeatedLike ? getModeParams("repeated").shots : undefined,
         execution,
         enableThoughts: thoughtsSupported ? p.enableThoughts : undefined,
-        hintCooldown: checklistMode ? getModeParams("gym").hintCooldown : undefined,
+        hintCooldown: checklistMode ? getModeParams("directive").hintCooldown : undefined,
       });
       nav(multiMode ? "/runs" : `/runs/${run.id}`);
     } catch (e) {
@@ -589,13 +589,13 @@ export default function NewRun() {
         <div className="preview-row"><span className="k">Среда</span><span className={`v${execution === "server" ? " acc" : ""}`}>{execution === "server" ? "на сервере" : "на компьютере"}</span></div>
         <div className="preview-row"><span className="k">Модель</span><span className="v mono" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{model?.name ?? "—"}</span></div>
         <div className="preview-row"><span className="k">Провайдер</span><span className="v">{model?.provider ?? "—"}</span></div>
-        <div className="preview-row"><span className="k">Режим</span><span className={`v${selectedModes.includes("gym") ? " acc" : ""}`}>{multiMode ? `${selectedCount} режима` : MODE_LABELS[primaryMode]}</span></div>
+        <div className="preview-row"><span className="k">Режим</span><span className={`v${selectedModes.includes("directive") ? " acc" : ""}`}>{multiMode ? `${selectedCount} режима` : MODE_LABELS[primaryMode]}</span></div>
         <div className="preview-row"><span className="k">Задача</span><span className="v">{task?.name ?? "—"}</span></div>
         <div className="preview-row"><span className="k">Задача</span><span className="v">{task?.task ?? "—"}</span></div>
         {multiMode && <div className="preview-row"><span className="k">Прогонов</span><span className="v acc">{selectedCount} отдельных</span></div>}
         {stepBased && <div className="preview-row"><span className="k">Шагов</span><span className="v">{getModeParams(primaryMode).maxSteps}</span></div>}
         {repeatedLike && <div className="preview-row"><span className="k">Попыток</span><span className="v">{getModeParams("repeated").shots}</span></div>}
-        {checklistMode && <div className="preview-row"><span className="k">Подсказка каждые</span><span className="v">{getModeParams("gym").hintCooldown} шаг.</span></div>}
+        {checklistMode && <div className="preview-row"><span className="k">Подсказка каждые</span><span className="v">{getModeParams("directive").hintCooldown} шаг.</span></div>}
         <div className="preview-row"><span className="k">Токены / темп.</span><span className="v">{(maxTokens / 1024).toFixed(0)}k / {getModeParams(primaryMode).temp.toFixed(2)}</span></div>
 
         <div style={{ marginTop: 18 }}>

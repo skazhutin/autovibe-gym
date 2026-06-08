@@ -1,6 +1,6 @@
 # AutoVibe Gym
 
-AutoVibe Gym is an iterative AutoML environment where an LLM writes ML code,
+AutoVibe Gym is a multi-step AutoML environment where an LLM writes ML code,
 receives structured feedback, improves the solution, and submits one final model
 against a hidden test split.
 
@@ -85,10 +85,10 @@ $DOCKER -m experiments.run_baseline --dataset-dir $DS --mode cloud
 # Mode 2 — Repeated single-shot (5 attempts, ~2 min)
 $DOCKER -m experiments.run_multishot --dataset-dir $DS --mode cloud
 
-# Mode 3 — Flexible transitions / gym (15 steps, ~5 min)
+# Mode 3 — Directive gym (15 steps, ~5 min)
 $DOCKER -m experiments.run_gym --dataset-dir $DS --mode cloud
 
-# Mode 4 — Fixed transitions (5 stages, ~5 min)
+# Mode 4 — Fixed gym (5 stages, ~5 min)
 $DOCKER -m experiments.run_fixed --dataset-dir $DS --mode cloud
 ```
 
@@ -122,13 +122,13 @@ requested_mode  batch_id          mode_label            test_metric  steps  toke
 --------------  ----------------  --------------------  -----------  -----  -------  -------
 all             20260603-...      single_shot                 0.747      1    2 120      12s
 all             20260603-...      repeated_single_shot        0.730      5   11 228     110s
-all             20260603-...      gym_with_checklist          0.745     14  146 013     111s
-all             20260603-...      fixed_transitions            null     17  218 322     218s
+all             20260603-...      directive_gym          0.745     14  146 013     111s
+all             20260603-...      fixed_gym            null     17  218 322     218s
 ```
 
 > The single-shot baseline wins on score **and** cost.
 > The gym reveals what the agent did (checklist coverage, failure types).
-> Fixed transitions with rigid stage order performs worst when the agent
+> Fixed gym with rigid stage order performs worst when the agent
 > exhausts its preprocessing budget before finding good features.
 > `null` means no valid hidden-test submission, not a score of zero.
 
@@ -253,7 +253,7 @@ artifacts/*.pkl
 
 ## Execution Sandbox
 
-The default iterative Gym runner uses a local real Jupyter kernel. This provides
+The default free/directive Gym runner uses a local real Jupyter kernel. This provides
 real notebook behavior, saved outputs, rich displays, and clean replay. The
 implementation strips common secret environment variables from the kernel and
 physically keeps hidden test files and private evaluator artifacts outside the
@@ -336,12 +336,12 @@ python -m mlflow server --host 127.0.0.1 --port 5000 --backend-store-uri sqlite:
 
 ## Experiment Modes
 
-`experiments.run_gym` supports two fair iterative modes on the same Jupyter
+`experiments.run_gym` supports two fair notebook modes on the same Jupyter
 backend:
 
-- `iterative_no_checklist`: real notebook, runtime feedback, contract feedback,
+- `free_gym`: real notebook, runtime feedback, contract feedback,
   no data-science checklist hints.
-- `gym_with_checklist`: the same notebook/backend/budget/actions plus selective
+- `directive_gym`: the same notebook/backend/budget/actions plus selective
   generic checklist hints.
 
 The non-notebook controls remain:
@@ -359,16 +359,16 @@ python -m experiments.run --dataset-dir datasets/example_dry_bean/prepared --mod
 ```
 
 `--mode all` expands to four separate product runs in this order:
-`single_shot`, `repeated_single_shot`, `gym_with_checklist`,
-`fixed_transitions`. Each child run logs `requested_mode`, `batch_id`,
+`single_shot`, `repeated_single_shot`, `directive_gym`,
+`fixed_gym`. Each child run logs `requested_mode`, `batch_id`,
 `product_mode`, `mode_label`, and `mode_order` so `experiments.compare` can
 group the batch without mixing metrics into one run.
 
 Run the checklist ablation:
 
 ```bash
-python -m experiments.run_gym --dataset-dir datasets/example_dry_bean/prepared --episode-mode iterative_no_checklist
-python -m experiments.run_gym --dataset-dir datasets/example_dry_bean/prepared --episode-mode gym_with_checklist
+python -m experiments.run_gym --dataset-dir datasets/example_dry_bean/prepared --episode-mode free_gym
+python -m experiments.run_gym --dataset-dir datasets/example_dry_bean/prepared --episode-mode directive_gym
 ```
 
 ## Dataset Layout

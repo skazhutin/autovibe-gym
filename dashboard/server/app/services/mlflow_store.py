@@ -23,12 +23,12 @@ from ..config import get_settings
 _MODE_MAP = {
     "baseline": "single",
     "baseline_single_shot": "single",
-    "gym_with_checklist": "gym",
-    "iterative_no_checklist": "iterative",
+    "directive_gym": "directive",
+    "free_gym": "free",
     "multishot": "repeated",
     "single_shot": "single",
     "repeated_single_shot": "repeated",
-    "fixed_transitions": "fixed",
+    "fixed_gym": "fixed",
 }
 
 _CHECK_LABELS: dict[str, str] = {
@@ -119,7 +119,7 @@ def _run_record(run) -> dict[str, Any]:
     tags = run.data.tags or {}
     info = run.info
     mode_param = params.get("experiment_type") or params.get("episode_mode") or ""
-    ui_mode = _MODE_MAP.get(mode_param, "gym")
+    ui_mode = _MODE_MAP.get(mode_param, "directive")
     product_mode = params.get("product_mode") or mode_param
     requested_mode = params.get("requested_mode") or product_mode
     batch_id = params.get("batch_id") or None

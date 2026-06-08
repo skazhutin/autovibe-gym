@@ -95,11 +95,11 @@ def test_run_record_maps_repeated_single_shot_attempt_progress():
     assert record["steps"] == 5
 
 
-def test_run_record_maps_fixed_transitions_to_fixed_mode():
+def test_run_record_maps_fixed_gym_to_fixed_mode():
     record = mlflow_store._run_record(
         _fake_run(
             params={
-                "experiment_type": "fixed_transitions",
+                "experiment_type": "fixed_gym",
                 "model": "fake-model",
                 "dataset": "unit-ds",
             },
@@ -114,11 +114,11 @@ def test_run_record_exposes_all_batch_metadata():
     record = mlflow_store._run_record(
         _fake_run(
             params={
-                "experiment_type": "gym_with_checklist",
+                "experiment_type": "directive_gym",
                 "requested_mode": "all",
                 "batch_id": "batch-1",
-                "product_mode": "gym_with_checklist",
-                "mode_label": "gym_with_checklist",
+                "product_mode": "directive_gym",
+                "mode_label": "directive_gym",
                 "mode_order": "3",
                 "model": "fake-model",
                 "dataset": "unit-ds",
@@ -129,14 +129,14 @@ def test_run_record_exposes_all_batch_metadata():
 
     assert record["requestedMode"] == "all"
     assert record["batchId"] == "batch-1"
-    assert record["productMode"] == "gym_with_checklist"
+    assert record["productMode"] == "directive_gym"
     assert record["modeOrder"] == 3
 
 
 def test_run_record_hides_placeholder_zero_score_for_failed_submit():
     record = mlflow_store._run_record(
         _fake_run(
-            params={"experiment_type": "gym_with_checklist"},
+            params={"experiment_type": "directive_gym"},
             metrics={
                 "test_metric": 0.0,
                 "has_test_metric": 0,
@@ -291,10 +291,10 @@ def test_run_detail_frontend_declares_stage_and_think_rendering():
 def test_run_launcher_planned_steps_match_dashboard_modes():
     assert run_launcher._planned_steps({"mode": "single"}) == 1
     assert run_launcher._planned_steps({"mode": "repeated", "shots": 4}) == 4
-    assert run_launcher._planned_steps({"mode": "gym", "maxSteps": 8}) == 8
-    assert run_launcher._planned_steps({"mode": "iterative", "maxSteps": 6}) == 6
+    assert run_launcher._planned_steps({"mode": "directive", "maxSteps": 8}) == 8
+    assert run_launcher._planned_steps({"mode": "free", "maxSteps": 6}) == 6
     assert run_launcher._planned_steps({"mode": "fixed", "maxSteps": 12}) == 12
-    assert run_launcher._planned_steps({"mode": "batch", "modes": ["single", "repeated", "gym"]}) == 3
+    assert run_launcher._planned_steps({"mode": "batch", "modes": ["single", "repeated", "directive"]}) == 3
     assert run_launcher._planned_steps({"mode": "all"}) == 5
 
 
@@ -307,7 +307,7 @@ def test_run_launcher_batch_mode_uses_common_runner_with_selected_modes(monkeypa
     args = run_launcher._runner_args(
         {
             "mode": "batch",
-            "modes": ["single", "repeated", "iterative", "gym", "fixed"],
+            "modes": ["single", "repeated", "free", "directive", "fixed"],
             "budgetMode": "local",
             "modelId": "fake",
             "runName": "dash_live_unit",
@@ -322,9 +322,9 @@ def test_run_launcher_batch_mode_uses_common_runner_with_selected_modes(monkeypa
         "--modes",
         "single_shot",
         "repeated_single_shot",
-        "iterative_no_checklist",
-        "gym_with_checklist",
-        "fixed_transitions",
+        "free_gym",
+        "directive_gym",
+        "fixed_gym",
         "--budget-mode",
     ]
     assert "local" in args
@@ -367,7 +367,7 @@ def test_run_launcher_uses_model_name_from_model_id(monkeypatch):
 
     args = run_launcher._runner_args(
         {
-            "mode": "gym",
+            "mode": "directive",
             "budgetMode": "local",
             "modelId": "openrouter",
             "runName": "dash_live_unit",
@@ -383,7 +383,7 @@ def test_run_launcher_requires_model_id():
     with pytest.raises(ValueError, match="Model must be selected"):
         run_launcher._runner_args(
             {
-                "mode": "gym",
+                "mode": "directive",
                 "budgetMode": "local",
                 "runName": "dash_live_unit",
                 "maxSteps": 8,

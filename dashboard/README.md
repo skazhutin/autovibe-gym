@@ -90,7 +90,7 @@ BUILD=1 PORT=8011 HOST=0.0.0.0 dashboard/server/serve.sh
   в MLflow (`mlflow.db` + `mlruns/` в корне репо). Бэкенд читает их оттуда и из
   артефактов эпизода (`solution.ipynb`, `validation_trajectory.json`, `episode_summary.json`).
 - 4 режима UI → 3 раннера: single→baseline, repeated→multishot,
-  iterative→`run_gym --episode-mode iterative_no_checklist`, gym→`run_gym --episode-mode gym_with_checklist`.
+  free→`run_gym --episode-mode free_gym`, directive→`run_gym --episode-mode directive_gym`.
 - Датасеты читаются из `datasets/<name>/prepared/meta.json`; загрузка кладёт CSV туда же.
 - Реестр моделей хранится в `dashboard/server/data/models.json` (у gym своего реестра нет).
 

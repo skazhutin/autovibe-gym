@@ -1,5 +1,5 @@
 """
-Fixed transitions experiment runner.
+Fixed gym experiment runner.
 
 The pipeline is divided into mandatory stages executed in order.
 The agent gets stage-specific goals and full checklist feedback,
@@ -105,7 +105,7 @@ MODE_DEFAULTS = {
 
 
 # ---------------------------------------------------------------------------
-# Fixed transitions agent
+# Fixed gym agent
 # ---------------------------------------------------------------------------
 
 CODE_OR_NOTEBOOK_STEP_ACTIONS = {
@@ -137,7 +137,7 @@ class FixedTransitionsAgent:
 
     At each stage transition the agent receives a new user message announcing
     the stage goal. Within a stage the feedback loop is identical to the
-    flexible gym (checklist hints, stdout/stderr, budget).
+    directive gym (checklist hints, stdout/stderr, budget).
     """
 
     def __init__(
@@ -481,7 +481,7 @@ def main():
             "mode": args.mode,
             "model": model_name,
             "dataset": dataset_name,
-            "experiment_type": "fixed_transitions",
+            "experiment_type": "fixed_gym",
             "thoughts_enabled": args.enable_thoughts,
             "max_steps": max_steps,
             "max_tokens": max_tokens,
@@ -491,7 +491,7 @@ def main():
             "dataset_split_strategy": splits.metadata.split_strategy,
             "dataset_role": splits.metadata.role,
             "dataset_sampled": str(splits.metadata.sampled),
-            **mode_metadata_params(args, "fixed_transitions"),
+            **mode_metadata_params(args, "fixed_gym"),
         })
 
         env = NotebookGymEnv(
@@ -503,7 +503,7 @@ def main():
             metric_name=metric_name,
             max_steps=max_steps,
             workspace_dir=args.workspace_dir,
-            mode="gym_with_checklist",
+            mode="directive_gym",
             kernel_timeout=sandbox_timeout,
             enable_thoughts=args.enable_thoughts,
         )
@@ -515,7 +515,7 @@ def main():
             max_tokens=max_tokens,
         )
         summary = agent.run()
-        summary.update(mode_metadata_params(args, "fixed_transitions"))
+        summary.update(mode_metadata_params(args, "fixed_gym"))
         episode_workspace = summary.get("episode_workspace")
 
         # Best-effort post-run self-summary, once the agent has solved the task
