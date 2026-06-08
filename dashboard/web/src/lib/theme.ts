@@ -13,7 +13,7 @@ export const DEFAULT_APPEARANCE: Appearance = {
   accent: "#FFDD2D",
   radius: 18,
   animations: "on",
-  overlayOpacity: 78,
+  overlayOpacity: 50,
 };
 
 export function loadAppearance(): Appearance {
@@ -59,6 +59,7 @@ export function applyAppearance(a: Appearance): void {
   root.style.setProperty("--accent-wash", withAlpha(a.accent, 0.1));
   root.style.setProperty("--radius", `${a.radius}px`);
   root.style.setProperty("--overlay-pct", `${a.overlayOpacity}%`);
-  root.style.setProperty("--overlay-blur", (a.overlayOpacity <= 0 || a.overlayOpacity >= 100) ? "none" : "blur(10px)");
+  const blurPx = ((100 - a.overlayOpacity) / 100) * 10;
+  root.style.setProperty("--overlay-blur", blurPx > 0 ? `blur(${blurPx.toFixed(1)}px)` : "none");
   localStorage.setItem(KEY, JSON.stringify(a));
 }
