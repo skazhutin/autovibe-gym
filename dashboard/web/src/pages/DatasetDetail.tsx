@@ -19,9 +19,9 @@ const TABS = [
 
 type Split = "train" | "val" | "test";
 const STATUS_LABEL: Record<string, string> = {
-  prepared: "prepared",
-  partial: "partial",
-  unprepared: "unprepared",
+  prepared: "подготовлен",
+  partial: "частичный",
+  unprepared: "не подготовлен",
 };
 const TASK_LABEL: Record<string, string> = {
   auto: "auto",
@@ -443,10 +443,10 @@ function AgentNotesTab({ id, config, onSaved }: { id: string; config: DatasetCon
         <FieldInfo label="Структура данных" info="Описание колонок: типы, форматы, особенности (пропуски, выбросы). Помогает агенту быстрее разобраться с данными.">
           <textarea className="input" rows={3} value={notes.data_structure} onChange={(e) => set({ data_structure: e.target.value })} />
         </FieldInfo>
-        <FieldInfo label="Дополнительные комментарии" info="Любые пояснения для агента: известные проблемы в данных, советы по feature engineering, особенности задачи.">
+        <FieldInfo label="Дополнительные комментарии" info="Любые пояснения для агента: известные задачи в данных, советы по feature engineering, особенности задачи.">
           <textarea className="input" rows={3} value={notes.additional_comments} onChange={(e) => set({ additional_comments: e.target.value })} />
         </FieldInfo>
-        <FieldInfo label="Предупреждения" info="Потенциальные источники data leakage или других проблем, о которых должен знать агент. Не указывайте тестовые ответы.">
+        <FieldInfo label="Предупреждения" info="Потенциальные источники data leakage или других нюансов, о которых должен знать агент. Не указывайте тестовые ответы.">
           <textarea className="input" rows={2} value={notes.leakage_warning} onChange={(e) => set({ leakage_warning: e.target.value })} />
         </FieldInfo>
         <div className="row">

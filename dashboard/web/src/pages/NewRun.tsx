@@ -129,7 +129,7 @@ function DatasetPickerModal({ datasets, current, onSelect, onClose }: {
   return createPortal(
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-box" style={{ width: 560, maxWidth: "96vw" }} onClick={e => e.stopPropagation()}>
-        <h3 className="modal-title">Выбрать проблему</h3>
+        <h3 className="modal-title">Выбрать задачу</h3>
         <div className="filters" style={{ margin: "8px 0 4px" }}>
           <div className="search">
             <Icon name="search" size={16} />
@@ -148,7 +148,7 @@ function DatasetPickerModal({ datasets, current, onSelect, onClose }: {
               {!d.prepared && <span className="tag tag-red">не подготовлен</span>}
             </div>
           ))}
-          {!filtered.length && <div className="muted" style={{ padding: "16px 8px", fontSize: 13 }}>Нет подходящих проблем.</div>}
+          {!filtered.length && <div className="muted" style={{ padding: "16px 8px", fontSize: 13 }}>Нет подходящих задач.</div>}
         </div>
         <div className="modal-actions"><Button variant="ghost" onClick={onClose}>Закрыть</Button></div>
       </div>
@@ -434,7 +434,7 @@ export default function NewRun() {
 
         {/* 3. Problem (Dataset) */}
         <Card>
-          <div className="step-head"><span className="step-num">3</span><span className="step-title">Проблема</span></div>
+          <div className="step-head"><span className="step-num">3</span><span className="step-title">Задача</span></div>
           {dataset ? (
             <>
               <div className="ds-picker-card">
@@ -443,7 +443,7 @@ export default function NewRun() {
                   <div className="row" style={{ gap: 6, flexShrink: 0 }}>
                     <Button variant="ghost" onClick={() => setDatasetPickerOpen(true)}>Изменить</Button>
                     <button className={`icon-btn${datasetSettingsOpen ? " icon-btn-active" : ""}`}
-                      title="Настройки проблемы" onClick={() => setDatasetSettingsOpen(v => !v)}>
+                      title="Настройки задачи" onClick={() => setDatasetSettingsOpen(v => !v)}>
                       <Icon name="settings" size={16} />
                     </button>
                   </div>
@@ -523,7 +523,7 @@ export default function NewRun() {
                                   value={datasetConfig.agent_notes.task_description}
                                   onChange={e => setDatasetConfig(c => c ? { ...c, agent_notes: { ...c.agent_notes, task_description: e.target.value } } : c)} />
                               </FI>
-                              <FI label="Дополнительные комментарии" info="Дополнительные подсказки агенту: особенности данных, известные проблемы, запреты. Агент видит это в каждом шаге.">
+                              <FI label="Дополнительные комментарии" info="Дополнительные подсказки агенту: особенности данных, известные ограничения, запреты. Агент видит это в каждом шаге.">
                                 <textarea className="input" rows={2} style={{ resize: "vertical" }}
                                   value={datasetConfig.agent_notes.additional_comments}
                                   onChange={e => setDatasetConfig(c => c ? { ...c, agent_notes: { ...c.agent_notes, additional_comments: e.target.value } } : c)} />
@@ -544,7 +544,7 @@ export default function NewRun() {
             </>
           ) : (
             <Button variant="secondary" onClick={() => setDatasetPickerOpen(true)}>
-              <Icon name="plus" size={15} /> Выбрать проблему
+              <Icon name="plus" size={15} /> Выбрать задачу
             </Button>
           )}
         </Card>
@@ -568,7 +568,7 @@ export default function NewRun() {
         <div className="preview-row"><span className="k">Модель</span><span className="v mono" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{model?.name ?? "—"}</span></div>
         <div className="preview-row"><span className="k">Провайдер</span><span className="v">{model?.provider ?? "—"}</span></div>
         <div className="preview-row"><span className="k">Режим</span><span className={`v${selectedModes.includes("gym") ? " acc" : ""}`}>{multiMode ? `${selectedCount} режима` : MODE_LABELS[primaryMode]}</span></div>
-        <div className="preview-row"><span className="k">Проблема</span><span className="v">{dataset?.name ?? "—"}</span></div>
+        <div className="preview-row"><span className="k">Задача</span><span className="v">{dataset?.name ?? "—"}</span></div>
         <div className="preview-row"><span className="k">Задача</span><span className="v">{dataset?.task ?? "—"}</span></div>
         {multiMode && <div className="preview-row"><span className="k">Прогонов</span><span className="v acc">{selectedCount} отдельных</span></div>}
         {stepBased && <div className="preview-row"><span className="k">Шагов</span><span className="v">{getModeParams(primaryMode).maxSteps}</span></div>}
@@ -582,8 +582,8 @@ export default function NewRun() {
             {launching ? "Запуск…" : multiMode ? `Запустить ${selectedCount} прогона` : "Запустить прогон"}
           </Button>
         </div>
-        {!dataset && <div className="preview-est">Выберите проблему</div>}
-        {dataset && !dataset.prepared && <div className="preview-est">Проблема не подготовлена</div>}
+        {!dataset && <div className="preview-est">Выберите задачу</div>}
+        {dataset && !dataset.prepared && <div className="preview-est">Задача не подготовлена</div>}
         {error && <div className="preview-est" style={{ color: "var(--red)" }}>{error}</div>}
       </div>
 
