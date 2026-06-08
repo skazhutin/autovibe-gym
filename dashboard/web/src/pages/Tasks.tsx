@@ -28,11 +28,6 @@ const TASK_LABEL: Record<string, string> = {
   auto: "auto",
   unknown: "unknown",
 };
-const METRIC_GOAL_LABEL: Record<string, string> = {
-  max: "maximize",
-  min: "minimize",
-};
-
 function statusOf(d: Task): TaskStatus {
   return d.status ?? (d.prepared ? "prepared" : d.hasTrain ? "partial" : "unprepared");
 }
@@ -77,7 +72,6 @@ function TaskCard({ d, dateFormat, onOpen, selecting, isSelected, onToggle }: { 
       {d.desc && <div className="muted clamp-2">{d.desc}</div>}
       <div className="run-meta-line" style={{ margin: 0 }}>
         <Tag tone={d.taskType === "regression" ? "blue" : d.taskType === "classification" ? "accent" : "neutral"}>{taskLabel}</Tag>
-        <Tag>{METRIC_GOAL_LABEL[d.metricGoal ?? "max"] ?? d.metricGoal}</Tag>
         {(d.tags ?? []).slice(0, 3).map((tag) => <Tag key={tag} tone="neutral">{tag}</Tag>)}
         {d.warningsCount ? <Tag tone="red">{d.warningsCount} warnings</Tag> : null}
       </div>
