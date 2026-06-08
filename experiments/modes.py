@@ -43,8 +43,8 @@ REPEATED_SINGLE_SHOT = ProductMode(
 
 GYM_WITH_CHECKLIST = ProductMode(
     key="gym_with_checklist",
-    display_name="Free gym",
-    matrix_label="free gym",
+    display_name="Directive gym",
+    matrix_label="directive gym",
     dashboard_mode="gym",
     module="experiments.run_gym",
     experiment_type="gym_with_checklist",
@@ -54,8 +54,8 @@ GYM_WITH_CHECKLIST = ProductMode(
 
 FIXED_TRANSITIONS = ProductMode(
     key="fixed_transitions",
-    display_name="Directive gym",
-    matrix_label="directive gym",
+    display_name="Fixed gym",
+    matrix_label="fixed gym",
     dashboard_mode="fixed",
     module="experiments.run_fixed",
     experiment_type="fixed_transitions",
@@ -64,8 +64,8 @@ FIXED_TRANSITIONS = ProductMode(
 
 ITERATIVE_NO_CHECKLIST = ProductMode(
     key="iterative_no_checklist",
-    display_name="Iterative no checklist",
-    matrix_label="iterative no-checklist",
+    display_name="Free gym",
+    matrix_label="free gym",
     dashboard_mode="iterative",
     module="experiments.run_gym",
     experiment_type="iterative_no_checklist",
@@ -104,11 +104,16 @@ MODE_ALIASES = {
     "multishot": REPEATED_SINGLE_SHOT.key,
     "iterative": ITERATIVE_NO_CHECKLIST.key,
     "iterative-no-checklist": ITERATIVE_NO_CHECKLIST.key,
+    "free": ITERATIVE_NO_CHECKLIST.key,
+    "free-gym": ITERATIVE_NO_CHECKLIST.key,
     "gym": GYM_WITH_CHECKLIST.key,
     "gym-with-checklist": GYM_WITH_CHECKLIST.key,
     "flexible-gym": GYM_WITH_CHECKLIST.key,
+    "directive": GYM_WITH_CHECKLIST.key,
+    "directive-gym": GYM_WITH_CHECKLIST.key,
     "fixed": FIXED_TRANSITIONS.key,
     "fixed-transitions": FIXED_TRANSITIONS.key,
+    "fixed-gym": FIXED_TRANSITIONS.key,
 }
 
 
