@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import os
 
@@ -14,6 +15,55 @@ from .prompts import (
 )
 
 from .protocol import ACTION_JSON_SCHEMA, Action, ActionParseError, Observation
+
+
+def _load_prompt_overrides() -> dict[str, object]:
+    """Read the dashboard-supplied prompt preset from env, if any.
+
+    Two env vars are supported:
+
+      ``AUTOVIBE_PROMPT_PAYLOAD_B64`` — base64-encoded JSON. Preferred because
+        it survives shell quoting and SSH transport unchanged.
+      ``AUTOVIBE_PROMPT_PAYLOAD_FILE`` — path to a JSON file written by the
+        run_launcher next to process.log. Useful for debugging.
+
+    The decoded JSON has the shape produced by
+    ``prompt_store.build_runtime_payload``::
+
+        {
+          "preset_id": "minimal",
+          "blocks": {"failure_patterns": "..."},
+          "thoughts_on_text": "..." | null,
+          "thoughts_off_text": "..." | null,
+          "sha256": "<hex>"
+        }
+
+    Returns ``{}`` when no env is set or parsing fails — falling back to the
+    canonical default prompt assembled from gym.prompts.DEFAULT_BLOCKS.
+    """
+    raw: str | None = None
+    b64 = os.getenv("AUTOVIBE_PROMPT_PAYLOAD_B64")
+    if b64:
+        try:
+            raw = base64.b64decode(b64.encode("ascii")).decode("utf-8")
+        except (ValueError, UnicodeDecodeError):
+            return {}
+    elif os.getenv("AUTOVIBE_PROMPT_PAYLOAD_FILE"):
+        path = os.environ["AUTOVIBE_PROMPT_PAYLOAD_FILE"]
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                raw = f.read()
+        except OSError:
+            return {}
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return data
 
 
 def _default_client() -> LLMClient:
@@ -52,15 +102,35 @@ class GymAgent:
         self.messages: list[dict] = []
         self.total_input_tokens = 0
         self.total_output_tokens = 0
+        # Dashboard-supplied prompt preset (if any). Empty when running from
+        # the CLI without the dashboard env vars, in which case the default
+        # block set is used.
+        self._prompt_overrides: dict[str, object] = _load_prompt_overrides()
+        self.prompt_preset_id: str = str(
+            self._prompt_overrides.get("preset_id", "default") or "default"
+        )
+        self.prompt_sha256: str | None = (
+            self._prompt_overrides.get("sha256") if isinstance(self._prompt_overrides.get("sha256"), str) else None
+        )
 
     def run(self) -> dict:
         context = self.env.reset()
         self.messages = [{"role": "user", "content": context["task"]}]
         max_agent_turns = max(self.env.state.max_steps * 2 + 5, 10)
         thoughts_on = bool(getattr(self.env, "enable_thoughts", False))
-        # Goes through gym.prompts so a future dashboard-driven preset can
-        # override blocks at run time without touching this call site.
-        system_prompt = build_system_prompt(thoughts_on=thoughts_on)
+        # Goes through gym.prompts so a dashboard-driven preset overrides
+        # blocks/thoughts at run time without touching this call site. With
+        # no overrides this is byte-identical to the historical prompt.
+        overrides = self._prompt_overrides
+        blocks_override = overrides.get("blocks") if isinstance(overrides.get("blocks"), dict) else None
+        thoughts_on_text = overrides.get("thoughts_on_text")
+        thoughts_off_text = overrides.get("thoughts_off_text")
+        system_prompt = build_system_prompt(
+            blocks_override,
+            thoughts_on=thoughts_on,
+            thoughts_on_text=thoughts_on_text if isinstance(thoughts_on_text, str) else None,
+            thoughts_off_text=thoughts_off_text if isinstance(thoughts_off_text, str) else None,
+        )
 
         for turn in range(max_agent_turns):
             response = self.client.complete(

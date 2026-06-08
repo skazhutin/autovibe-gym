@@ -15,6 +15,7 @@ the process exits we resolve the MLflow run it produced and serve its artifacts.
 """
 from __future__ import annotations
 
+import base64
 import json
 import os
 import signal
@@ -26,7 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from ..config import get_settings
-from . import model_store, remote_exec
+from . import model_store, prompt_store, remote_exec
 from experiments.modes import ALL_PRODUCT_MODES, BATCH_REQUESTED_MODE, MODE_BY_DASHBOARD_MODE
 from gym.model_config import runtime_env_for_model
 
@@ -45,6 +46,36 @@ _MODE_TO_RUNNER = {
 
 def _supports_thoughts(mode: str) -> bool:
     return mode in {"iterative", "gym"}
+
+
+def _supports_prompt_preset(mode: str) -> bool:
+    """The system-prompt preset only ships to the iterative/gym agent — the
+    single-shot and repeated runners have their own one-shot prompts that
+    live in experiments/run_baseline.py and experiments/run_multishot.py.
+    The fixed runner uses the gym SYSTEM_PROMPT, so it is included."""
+    return mode in {"iterative", "gym", "fixed"}
+
+
+def _resolve_prompt_payload(cfg: dict[str, Any]) -> dict[str, Any] | None:
+    """Return the prompt runtime payload for this run, or None if N/A.
+
+    Returns dict with at minimum: preset_id, blocks (dict), thoughts_on_text,
+    thoughts_off_text, sha256. Missing or non-existent preset_id falls back
+    silently to the canonical default so a stale dashboard cannot brick a
+    run. The dashboard surfaces preset validity on /new before launch."""
+    mode = cfg.get("mode")
+    if not isinstance(mode, str) or not _supports_prompt_preset(mode):
+        return None
+    preset_id = cfg.get("promptPresetId") or prompt_store.DEFAULT_PRESET_ID
+    thoughts_on = _supports_thoughts(mode) and bool(cfg.get("enableThoughts"))
+    try:
+        payload = prompt_store.build_runtime_payload(preset_id, thoughts_on=thoughts_on)
+    except KeyError:
+        # Preset was deleted between selection and launch — fall back to default.
+        payload = prompt_store.build_runtime_payload(
+            prompt_store.DEFAULT_PRESET_ID, thoughts_on=thoughts_on
+        )
+    return payload
 
 
 def _selected_modes(cfg: dict[str, Any]) -> list[str]:
@@ -223,6 +254,21 @@ def _build_env(cfg: dict[str, Any]) -> dict[str, str]:
     env["AUTOVIBE_KERNEL_BACKEND"] = "local"
     # LLM connection + thread caps (load_dotenv won't override these explicit vars).
     env.update(_llm_env(cfg))
+    # Dashboard-selected system-prompt preset. b64 of the JSON survives shell
+    # quoting and SSH transport unchanged. Agents (gym.agent._load_prompt_overrides)
+    # decode this; absence falls back to the canonical default prompt.
+    payload = cfg.get("_promptPayload")  # populated by launch() before this is called
+    if isinstance(payload, dict):
+        slim = {
+            "preset_id": payload.get("preset_id"),
+            "blocks": payload.get("blocks") or {},
+            "thoughts_on_text": payload.get("thoughts_on_text"),
+            "thoughts_off_text": payload.get("thoughts_off_text"),
+            "sha256": payload.get("sha256"),
+        }
+        env["AUTOVIBE_PROMPT_PAYLOAD_B64"] = base64.b64encode(
+            json.dumps(slim, ensure_ascii=False).encode("utf-8")
+        ).decode("ascii")
     return env
 
 
@@ -245,6 +291,19 @@ def launch(cfg: dict[str, Any]) -> dict[str, Any]:
     workspace = run_dir / "workspace"
     workspace.mkdir(parents=True, exist_ok=True)
     cfg["workspaceDir"] = str(workspace)
+
+    # Resolve the system-prompt preset (default unless overridden). The
+    # payload is dropped into _build_env via cfg["_promptPayload"] and a
+    # plain JSON copy is written into the run dir for the dashboard to
+    # display ("which preset did this run use?"). It is NOT placed into
+    # workspace because workspace is the kernel-visible dir; the prompt is
+    # for the LLM, not for the agent's own kernel.
+    prompt_payload = _resolve_prompt_payload(cfg)
+    if prompt_payload is not None:
+        cfg["_promptPayload"] = prompt_payload
+        (run_dir / "prompt_payload.json").write_text(
+            json.dumps(prompt_payload, indent=2, ensure_ascii=False), "utf-8"
+        )
 
     model = model_store.get_model(cfg["modelId"]) if cfg.get("modelId") else None
     meta = {
@@ -281,6 +340,8 @@ def launch(cfg: dict[str, Any]) -> dict[str, Any]:
         "thoughtsEnabled": _supports_thoughts(cfg["mode"]) and bool(cfg.get("enableThoughts")),
         "source": "live",
         "mlflowId": None,
+        "promptPresetId": (prompt_payload or {}).get("preset_id") if prompt_payload else None,
+        "promptSha256": (prompt_payload or {}).get("sha256") if prompt_payload else None,
     }
 
     # Remote mode: run the gym on the server over SSH; the Mac only syncs results.
@@ -375,6 +436,21 @@ def _launch_remote(cfg: dict[str, Any], meta: dict[str, Any], run_dir: Path) -> 
     dataset_rel = f"datasets/{Path(cfg['datasetDir']).name}"
     args = _runner_args(cfg)
     env = _llm_env(cfg)
+    # System-prompt preset travels via env var (b64 of JSON) so SSH transport
+    # does not need extra file copies. Falls back to default on the remote
+    # side if the var is absent.
+    payload = cfg.get("_promptPayload")
+    if isinstance(payload, dict):
+        slim = {
+            "preset_id": payload.get("preset_id"),
+            "blocks": payload.get("blocks") or {},
+            "thoughts_on_text": payload.get("thoughts_on_text"),
+            "thoughts_off_text": payload.get("thoughts_off_text"),
+            "sha256": payload.get("sha256"),
+        }
+        env["AUTOVIBE_PROMPT_PAYLOAD_B64"] = base64.b64encode(
+            json.dumps(slim, ensure_ascii=False).encode("utf-8")
+        ).decode("ascii")
     meta.update({
         "remote": True, "remoteSsh": rc["ssh"], "wsRemote": ws_remote, "logRemote": log_remote,
         "command": f"ssh {rc['ssh']} :: {rc['python']} {' '.join(args)} --dataset-dir {dataset_rel}",
