@@ -312,6 +312,7 @@ export interface Settings {
   accent: string;
   radius: number;
   animations: "on" | "off";
+  overlay_opacity?: number;
   remote_enabled: boolean;
   remote_ssh: string;
   remote_ssh_opts: string;
