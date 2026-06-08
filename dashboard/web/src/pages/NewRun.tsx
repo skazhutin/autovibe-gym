@@ -85,6 +85,8 @@ export default function NewRun() {
   const [shots, setShots] = useState(5);
   const [enableThoughts, setEnableThoughts] = useState(false);
   const [hintCooldown, setHintCooldown] = useState(2);
+  const [promptPresetId, setPromptPresetId] = useState<string>("default");
+  const { data: prompts } = useAsync(() => api.listPrompts(), []);
   const [launching, setLaunching] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -147,6 +149,10 @@ export default function NewRun() {
         execution,
         enableThoughts: thoughtsSupported ? enableThoughts : undefined,
         hintCooldown: checklistMode ? hintCooldown : undefined,
+        // The launcher silently ignores this for single-shot/repeated runs
+        // (they have their own one-shot prompts), so it is safe to always
+        // pass it. Default keeps current control-benchmark behaviour.
+        promptPresetId: promptPresetId || "default",
       });
       nav(multiMode ? "/runs" : `/runs/${run.id}`);
     } catch (e) {
@@ -272,6 +278,31 @@ export default function NewRun() {
             <FieldInfo label="Seed" info="Фиксирует случайность запуска, чтобы результаты было проще воспроизводить и сравнивать.">
               <Stepper value={seed} onChange={setSeed} min={0} max={999999} />
             </FieldInfo>
+            {stepBased && (
+              <FieldInfo
+                label={
+                  <>
+                    Системный промпт
+                    {promptPresetId !== "default" && (
+                      <span className="tag tag-accent mono" style={{ marginLeft: 8 }}>modified</span>
+                    )}
+                  </>
+                }
+                info="Какой системный промпт получит агент. Изменения промпта могут сильно влиять на качество и поведение — сравнение прогонов имеет смысл только при одинаковом пресете. Управляется на странице /prompts."
+              >
+                <select
+                  className="input"
+                  value={promptPresetId}
+                  onChange={(e) => setPromptPresetId(e.target.value)}
+                >
+                  {(prompts?.items ?? [{ id: "default", name: "Default", is_default: true, block_override_count: 0, updated_at: null }]).map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}{p.is_default ? " (default)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </FieldInfo>
+            )}
           </div>
           {thoughtsSupported && (
             <div className="spread" style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
@@ -300,6 +331,15 @@ export default function NewRun() {
         {repeatedLike && <div className="preview-row"><span className="k">Попыток</span><span className="v">{shots}</span></div>}
         {checklistMode && <div className="preview-row"><span className="k">Подсказка каждые</span><span className="v">{hintCooldown} шаг.</span></div>}
         <div className="preview-row"><span className="k">Токены / темп.</span><span className="v">{(maxTokens / 1024).toFixed(0)}k / {temp.toFixed(2)}</span></div>
+        {stepBased && (
+          <div className="preview-row">
+            <span className="k">Промпт</span>
+            <span className={`v${promptPresetId !== "default" ? " acc" : ""}`}>
+              {prompts?.items.find((p) => p.id === promptPresetId)?.name ?? promptPresetId}
+              {promptPresetId !== "default" && " · modified"}
+            </span>
+          </div>
+        )}
 
         <div style={{ marginTop: 18 }}>
           <Button variant="primary" size="lg" block disabled={!canLaunch} onClick={launch}>

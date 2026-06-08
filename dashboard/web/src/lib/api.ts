@@ -335,6 +335,10 @@ export interface LaunchPayload {
   execution?: "server" | "local";
   enableThoughts?: boolean;
   hintCooldown?: number;
+  // System-prompt preset id. Only affects iterative/gym/fixed runs (the
+  // launcher silently ignores it for single-shot and repeated which have
+  // their own one-shot prompts). Falls back to "default" on the backend.
+  promptPresetId?: string;
 }
 
 const BASE = "/api";

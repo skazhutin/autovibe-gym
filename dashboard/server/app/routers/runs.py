@@ -33,6 +33,7 @@ class LaunchPayload(BaseModel):
     execution: str | None = None  # "server" | "local" | None (use default)
     enableThoughts: bool | None = None  # agent scratchpad (gym/iterative only)
     hintCooldown: int | None = None  # steps between checklist hints (gym only)
+    promptPresetId: str | None = None  # system-prompt preset (iterative/gym/fixed only)
 
 
 def _target_col(dataset_id: str | None) -> str:
