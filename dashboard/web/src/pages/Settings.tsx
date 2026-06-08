@@ -134,20 +134,20 @@ export default function Settings() {
         </Row>
         {remoteOn && (
           <>
-            <Row label="SSH (user@host)" info="Адрес сервера в формате user@host или user@ip. Например: booml@10.8.52.11">
-              <input className="input mono" placeholder="booml@10.8.52.11" value={form.remote_ssh ?? ""} onChange={(e) => set("remote_ssh", e.target.value)} />
+            <Row label="SSH (user@host)" info="Адрес сервера в формате user@host или user@ip. Например: user@host.example.com">
+              <input className="input mono" placeholder="user@host.example.com" value={form.remote_ssh ?? ""} onChange={(e) => set("remote_ssh", e.target.value)} />
             </Row>
             <Row label="Доп. SSH-опции" info="Дополнительные флаги для ssh. Например: -p 2222 для нестандартного порта.">
               <input className="input mono" value={form.remote_ssh_opts ?? ""} onChange={(e) => set("remote_ssh_opts", e.target.value)} />
             </Row>
-            <Row label="Путь к репозиторию на сервере" info="Абсолютный путь к autovibe-gym на сервере. Например: /home/booml/autovibe-gym-current">
-              <input className="input mono" placeholder="/home/booml/autovibe-gym-current" value={form.remote_repo ?? ""} onChange={(e) => set("remote_repo", e.target.value)} />
+            <Row label="Путь к репозиторию на сервере" info="Абсолютный путь к autovibe-gym на сервере. Например: /home/user/autovibe-gym">
+              <input className="input mono" placeholder="/home/user/autovibe-gym" value={form.remote_repo ?? ""} onChange={(e) => set("remote_repo", e.target.value)} />
             </Row>
             <Row label="Python сервера (venv)" info="Путь к python из виртуального окружения на сервере.">
-              <input className="input mono" placeholder="/home/booml/autovibe-gym/.venv/bin/python" value={form.remote_python ?? ""} onChange={(e) => set("remote_python", e.target.value)} />
+              <input className="input mono" placeholder="/home/user/autovibe-gym/.venv/bin/python" value={form.remote_python ?? ""} onChange={(e) => set("remote_python", e.target.value)} />
             </Row>
-            <Row label="Каталог прогонов на сервере" info="Рабочие папки эпизодов на сервере. Например: /home/booml/dash_runs">
-              <input className="input mono" placeholder="/home/booml/dash_runs" value={form.remote_runs_dir ?? ""} onChange={(e) => set("remote_runs_dir", e.target.value)} />
+            <Row label="Каталог прогонов на сервере" info="Рабочие папки эпизодов на сервере. Например: /home/user/runs">
+              <input className="input mono" placeholder="/home/user/runs" value={form.remote_runs_dir ?? ""} onChange={(e) => set("remote_runs_dir", e.target.value)} />
             </Row>
             <Row label="Пароль SSH (необязательно)" info="Используйте только как запасной вариант. Рекомендуется SSH-ключ (ssh-copy-id). Пароль хранится только локально в data/.">
               <input className="input" type="password" value={form.remote_password ?? ""} onChange={(e) => set("remote_password", e.target.value)} placeholder="••••••••" />

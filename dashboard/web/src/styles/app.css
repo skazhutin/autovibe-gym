@@ -4,7 +4,10 @@
 .app {
   display: flex;
   min-height: 100vh;
-  overflow-x: hidden;
+  /* clip (not hidden) keeps horizontal overflow contained without turning
+     .app into a scroll container, which would break position: sticky on
+     descendants like the New Run .preview sidebar. */
+  overflow-x: clip;
 }
 .sidebar {
   width: var(--sidebar-w);
