@@ -1780,7 +1780,7 @@ table.data tbody tr.clickable:nth-child(7) { animation-delay: 150ms; }
 
 /* ============ Settings rows ============ */
 .set-group { margin-bottom: 12px; }
-.set-row { display: flex; justify-content: space-between; gap: 20px; padding: 12px 0; border-bottom: 1px solid var(--border); align-items: center; min-width: 0; }
+.set-row { display: flex; justify-content: space-between; gap: 20px; padding: 0 0; min-height: 52px; border-bottom: 1px solid var(--border); align-items: center; min-width: 0; }
 .set-row:last-child { border-bottom: none; }
 .set-row .label { font-weight: 600; font-size: 14px; }
 .set-row .hint { color: var(--text-faint); font-size: 12.5px; margin-top: 2px; }
