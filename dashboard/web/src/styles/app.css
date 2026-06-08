@@ -1432,7 +1432,9 @@ table.data tbody tr.clickable:hover {
 .models-toolbar-controls { display: flex; flex-wrap: nowrap; gap: 10px; align-items: center; flex-shrink: 0; }
 .clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .split-pills { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-.task-dates { display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; }
+.task-dates { margin-top: 2px; }
+.task-dates .ds-stat .k,
+.task-dates .ds-stat .v { font-size: 11.5px; }
 .tasks-toolbar { flex-wrap: wrap; }
 .tasks-toolbar-search { flex: 1; min-width: 200px; }
 .tasks-toolbar-controls { display: flex; flex-wrap: nowrap; gap: 10px; align-items: center; flex-shrink: 0; }
