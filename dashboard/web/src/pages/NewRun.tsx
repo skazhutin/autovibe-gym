@@ -174,7 +174,7 @@ export default function NewRun() {
 
   // ── Mode ──
   const [selectedModes, setSelectedModes] = useState<LaunchRunMode[]>(["directive"]);
-  const [expandedModes, setExpandedModes] = useState<Set<LaunchRunMode>>(new Set(["directive"] as LaunchRunMode[]));
+  const [expandedModes, setExpandedModes] = useState<Set<LaunchRunMode>>(new Set());
   const [modeParams, setModeParams] = useState<Partial<Record<LaunchRunMode, ModeParams>>>({});
 
   // ── Task ──
@@ -254,7 +254,6 @@ export default function NewRun() {
         return prev.filter(m => m !== id);
       }
       if (prev.length >= MAX_SELECTED_MODES) return prev;
-      setExpandedModes(s => new Set([...s, id]));
       return [...prev, id];
     });
   }
