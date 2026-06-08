@@ -2,6 +2,7 @@ export interface Appearance {
   theme: "light" | "dark";
   accent: string;
   radius: number;
+  animations: "on" | "off";
 }
 
 const KEY = "autovibe.appearance";
@@ -10,6 +11,7 @@ export const DEFAULT_APPEARANCE: Appearance = {
   theme: "light",
   accent: "#FFDD2D",
   radius: 18,
+  animations: "on",
 };
 
 export function loadAppearance(): Appearance {
@@ -45,6 +47,7 @@ function withAlpha(hex: string, alpha: number): string {
 export function applyAppearance(a: Appearance): void {
   const root = document.documentElement;
   root.setAttribute("data-theme", a.theme);
+  root.setAttribute("data-motion", a.animations);
   root.style.setProperty("--accent", a.accent);
   root.style.setProperty(
     "--accent-ink",

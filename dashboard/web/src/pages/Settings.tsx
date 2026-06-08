@@ -66,6 +66,12 @@ export default function Settings() {
       remote_runs_dir: data.remote_runs_dir ?? "",
       remote_password: data.remote_has_password ? "********" : "",
     });
+    setAppearance({
+      theme: data.theme === "dark" ? "dark" : "light",
+      accent: data.accent,
+      radius: data.radius,
+      animations: data.animations ?? "on",
+    });
     setRemoteOn(!!data.remote_enabled);
     setDirty(false);
   }, [data]);
@@ -196,6 +202,12 @@ export default function Settings() {
             {ACCENTS.map((c) => (
               <span key={c} className={`swatch${appearance.accent.toLowerCase() === c.toLowerCase() ? " active" : ""}`} style={{ background: c }} onClick={() => setAppr({ accent: c })} />
             ))}
+          </div>
+        </Row>
+        <Row label={t("settings.animations")} info={t("settings.info.animations")}>
+          <div className="row" style={{ justifyContent: "flex-end" }}>
+            <span className="faint" style={{ fontSize: 13 }}>{appearance.animations === "on" ? t("settings.animations.on") : t("settings.animations.off")}</span>
+            <div className={`toggle${appearance.animations === "on" ? " on" : ""}`} onClick={() => setAppr({ animations: appearance.animations === "on" ? "off" : "on" })} />
           </div>
         </Row>
         <Row label={`${t("settings.rounding")}: ${appearance.radius}px`} info={t("settings.info.rounding")}>

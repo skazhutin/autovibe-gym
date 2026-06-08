@@ -311,6 +311,7 @@ export interface Settings {
   theme: string;
   accent: string;
   radius: number;
+  animations: "on" | "off";
   remote_enabled: boolean;
   remote_ssh: string;
   remote_ssh_opts: string;

@@ -63,6 +63,9 @@ const RU: Dict = {
   "settings.theme.dark": "Тёмная",
   "settings.theme.light": "Светлая",
   "settings.accent": "Акцентный цвет",
+  "settings.animations": "Анимации",
+  "settings.animations.on": "Включены",
+  "settings.animations.off": "Выключены",
   "settings.rounding": "Скругление",
   "settings.unsaved": "У вас есть несохранённые изменения",
   "settings.save": "Сохранить",
@@ -82,6 +85,7 @@ const RU: Dict = {
   "settings.info.language": "Язык интерфейса дэшборда. На русском общеупотребимые ML/IT термины сохраняются на английском.",
   "settings.info.theme": "Светлая или тёмная тема интерфейса.",
   "settings.info.accent": "Основной цвет интерфейса — кнопки, ссылки и активные элементы.",
+  "settings.info.animations": "Если выключено, весь motion в интерфейсе отключается. Если включено, используются мягкие переходы и аккуратные интеракции.",
   "settings.info.rounding": "Радиус скругления углов карточек и кнопок. От 8px до 24px.",
 };
 
@@ -144,6 +148,9 @@ const EN: Dict = {
   "settings.theme.dark": "Dark",
   "settings.theme.light": "Light",
   "settings.accent": "Accent color",
+  "settings.animations": "Animations",
+  "settings.animations.on": "On",
+  "settings.animations.off": "Off",
   "settings.rounding": "Corner radius",
   "settings.unsaved": "You have unsaved changes",
   "settings.save": "Save",
@@ -163,6 +170,7 @@ const EN: Dict = {
   "settings.info.language": "Dashboard UI language.",
   "settings.info.theme": "Light or dark UI theme.",
   "settings.info.accent": "Primary interface color for buttons, links, and active elements.",
+  "settings.info.animations": "If disabled, all interface motion is turned off. If enabled, the dashboard uses soft transitions and polished interaction motion.",
   "settings.info.rounding": "Corner radius for cards and buttons. From 8px to 24px.",
 };
 
