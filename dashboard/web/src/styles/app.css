@@ -1054,13 +1054,11 @@ table.data tbody tr.clickable:hover {
   flex-wrap: wrap;
   align-items: center;
   margin-bottom: 18px;
+}
+.dataset-toolbar {
   position: sticky;
   top: 65px;
   z-index: 15;
-  background: var(--bg);
-  padding-top: 4px;
-  padding-bottom: 4px;
-  margin-top: -4px;
 }
 .search {
   position: relative;
