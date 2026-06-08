@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-08 (gym now beats single-shot: validation-improvement nudge + unknown-cell-id robustness guard, both experiment-validated; run summary polish; model registry is source of truth for LLM config; ML toolbox deps added; dashboard/product-mode keys remapped: free=Free gym, directive=Directive gym, fixed=Fixed gym; dashboard detail metric goal label aligned to maximize/minimize; task cards now use title-case labels and inline grid dates; task detail page now exposes bottom prepare action; return action icon refreshed across archive screens; prepared task rebuild now accepts existing prepared split paths; task cards now omit updated date in list views; settings now include dashboard language preference; task cards no longer show metric-goal badge)
+**Last updated:** 2026-06-08 (gym now beats single-shot: validation-improvement nudge + unknown-cell-id robustness guard, both experiment-validated; run summary polish; model registry is source of truth for LLM config; ML toolbox deps added; dashboard/product-mode keys remapped: free=Free gym, directive=Directive gym, fixed=Fixed gym; dashboard detail metric goal label aligned to maximize/minimize; task cards now use title-case labels and inline grid dates; task detail page now exposes bottom prepare action; return action icon refreshed across archive screens; prepared task rebuild now accepts existing prepared split paths; task cards now omit updated date in list views; settings now include dashboard language preference; task cards no longer show metric-goal badge; dashboard now supports animation preference)
 **Phase:** Hardening after first full H200 recon + building the local control-panel dashboard for configuring/launching/inspecting runs.
 
 ---
@@ -190,6 +190,13 @@ Current settings localization cycle:
   dashboard-preferences section title is now `Параметры дэшборда`.
 - Settings control width was tightened so dropdown fields match the other rows
   more closely.
+Current dashboard motion cycle:
+
+- Dashboard settings now include a saved `animations` preference.
+- `data-motion="off"` disables transitions and animations globally, including
+  existing inline motion styles.
+- When enabled, buttons, cards, toggles, and a few core interactive surfaces
+  use a more consistent motion curve and timing set.
 Current dashboard logo cycle:
 
 - Replaced the old H-like sidebar logo mark with a diagonal dumbbell mark

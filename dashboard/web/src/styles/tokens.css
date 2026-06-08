@@ -41,6 +41,13 @@
   --shadow-md: 0 6px 22px rgba(0, 0, 0, 0.08);
   --shadow-lg: 0 18px 50px rgba(0, 0, 0, 0.18);
 
+  /* Motion */
+  --ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-soft: cubic-bezier(0.3, 0, 0.2, 1);
+  --dur-fast: 140ms;
+  --dur-mid: 220ms;
+  --dur-slow: 360ms;
+
   /* Typography */
   --font-ui: "Helvetica Neue", Helvetica, "Segoe UI", Arial, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
@@ -179,4 +186,12 @@ button {
   100% {
     background-position: 468px 0;
   }
+}
+
+html[data-motion="off"] *,
+html[data-motion="off"] *::before,
+html[data-motion="off"] *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
 }

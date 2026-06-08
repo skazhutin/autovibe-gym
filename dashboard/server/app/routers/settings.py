@@ -24,6 +24,7 @@ DEFAULTS = {
     "theme": "light",
     "accent": "#FFDD2D",
     "radius": 18,
+    "animations": "on",
     # Remote execution: run the gym ON the server over SSH (site stays local).
     "remote_enabled": False,
     "remote_ssh": "",          # user@host  (e.g. booml@10.8.52.11)
@@ -45,6 +46,7 @@ class SettingsPayload(BaseModel):
     theme: str | None = None
     accent: str | None = None
     radius: int | None = None
+    animations: str | None = None
     remote_enabled: bool | None = None
     remote_ssh: str | None = None
     remote_ssh_opts: str | None = None

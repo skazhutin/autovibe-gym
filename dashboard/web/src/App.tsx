@@ -27,6 +27,16 @@ export default function App() {
     applyAppearance(loadAppearance());
   }, []);
 
+  useEffect(() => {
+    if (!data) return;
+    applyAppearance({
+      theme: data.theme === "dark" ? "dark" : "light",
+      accent: data.accent,
+      radius: data.radius,
+      animations: data.animations ?? "on",
+    });
+  }, [data]);
+
   return (
     <I18nProvider key={data?.language ?? "ru"} initialLanguage={data?.language ?? "ru"}>
       <Routes>
