@@ -40,7 +40,7 @@ const P: Record<string, string> = {
   list: "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01",
   check2: "M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11",
   archive: "M3 3h18v5H3zM5 8v13h14V8M10 12h4",
-  undo: "M3 7v6h6M3 13A9 9 0 1 0 5.7 5.7L3 7",
+  undo: "M9 14 4 9l5-5M4 9h9a7 7 0 1 1 0 14h-3",
   table: "M3 3h18v18H3zM3 9h18M3 15h18M9 3v18M15 3v18",
   sliders: "M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6",
   sparkles: "M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3ZM19 14l.9 2.1 2.1.9-2.1.9L19 20l-.9-2.1-2.1-.9 2.1-.9L19 14Z",
