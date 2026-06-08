@@ -23,7 +23,7 @@
   overflow-y: auto;
   overflow-x: hidden;
   z-index: 30;
-  transition: width var(--dur-slow) var(--ease-standard), padding var(--dur-slow) var(--ease-standard), box-shadow var(--dur-mid) var(--ease-standard);
+  transition: box-shadow var(--dur-mid) var(--ease-standard);
 }
 .sidebar.collapsed {
   width: var(--sidebar-w-collapsed);
@@ -173,7 +173,7 @@
   margin-left: var(--sidebar-w);
   display: flex;
   flex-direction: column;
-  transition: margin-left var(--dur-slow) var(--ease-standard);
+  /* no sidebar-slide animation */
 }
 .app.sidebar-collapsed .main {
   margin-left: var(--sidebar-w-collapsed);

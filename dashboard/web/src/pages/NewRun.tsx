@@ -538,11 +538,6 @@ export default function NewRun() {
                         </div>
                       ) : (
                         <div className="stack" style={{ gap: 12 }}>
-                          <label className="check-row">
-                            <input type="checkbox" checked={datasetConfig.agent_notes.visible_to_agent}
-                              onChange={e => setTaskConfig(c => c ? { ...c, agent_notes: { ...c.agent_notes, visible_to_agent: e.target.checked } } : c)} />
-                            Передавать заметки агенту
-                          </label>
                           <FI label="Описание задачи" info="Текст, который агент получит как описание задачи в начале прогона. Объясните что нужно предсказать и почему.">
                             <textarea className="input" rows={3} style={{ resize: "vertical", width: "100%" }}
                               value={datasetConfig.agent_notes.task_description}
