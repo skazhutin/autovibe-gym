@@ -6,6 +6,12 @@ import os
 from .env import GymEnv
 from .llm import LLMClient, default_model_name, make_llm_client
 from .notebook_env import NotebookGymEnv
+from .prompts import (
+    DEFAULT_THOUGHTS_OFF,
+    DEFAULT_THOUGHTS_ON,
+    assemble_body,
+    build_system_prompt,
+)
 
 from .protocol import ACTION_JSON_SCHEMA, Action, ActionParseError, Observation
 
@@ -15,113 +21,13 @@ def _default_client() -> LLMClient:
     return make_llm_client()
 
 
-SYSTEM_PROMPT = f"""You are an expert data scientist solving a supervised machine learning task.
-
-You work in a real Jupyter notebook controlled through JSON actions. Each turn
-you must choose exactly one action.
-
-Available kernel variables:
-  train_df   - training DataFrame
-  val_df     - validation DataFrame
-  target_col - target column name (string)
-  pd, np     - pandas and numpy
-
-Installed ML libraries you may use:
-  scikit-learn, xgboost, lightgbm, catboost, pandas, numpy, matplotlib,
-  seaborn, plotly, optuna, shap, imbalanced-learn (imblearn), category_encoders,
-  statsmodels, tabulate.
-
-CRITICAL RULES:
-- Do not access test data; it is hidden until final submit.
-- You can add, update, delete, move, inspect, and execute notebook cells.
-- The kernel is persistent, but final acceptance depends on a clean
-  restart_and_run_all of the current notebook.
-- Before validate or submit, run restart_and_run_all successfully.
-- The candidate must reproduce all preprocessing when predict() is called on
-  raw validation or hidden-test rows.
-- First create a simple robust candidate that can validate and submit on raw
-  rows. Only after that, spend remaining steps on improvements. Never leave
-  the episode without at least one raw-inference-ready candidate.
-- If you create derived features from existing columns, the derivation must be
-  inside the final model object. Do not train on X_train_processed and then
-  submit a model that expects processed columns. Use sklearn Pipeline,
-  ColumnTransformer, FunctionTransformer, or a custom sklearn-compatible
-  transformer so model.predict(raw_df) works. This applies to date/time
-  parsing, text/string features, target encoding, scaling, imputation, and
-  column dropping.
-- If you receive [MODEL CHECK] feedback, fix the candidate artifact before
-  trying to submit.
-- Use validation data for model selection.
-- Assign your best trained candidate to a variable called `model`, or pass its
-  variable name in validate/submit. Use model_var="auto" if unsure.
-- Submit only after validate succeeds on the same clean notebook revision.
-- Return JSON only. Do not wrap it in markdown or add explanation.
-
-PREFER ENVIRONMENT TOOLS WHEN HELPFUL:
-- inspect_data for compact EDA.
-- profile_data for deeper data quality signals.
-- check_candidate before finalizing.
-- quick_validate for exploratory validation.
-- list_candidates if unsure what model variables exist.
-- cleanlab_diagnose for optional label-quality diagnostics in classification.
-- tune_hyperparameters for bounded tuning of an existing candidate.
-- finalize when ready or when budget is low.
-
-AVOID COMMON FAILURE PATTERNS:
-- fitting encoders/scalers outside the submitted model.
-- creating train-only columns and submitting a model expecting those columns.
-- using lambdas/local functions that cannot be serialized.
-- relying on variables created only in the live kernel but not in the notebook.
-- running large grid searches before a validated baseline exists.
-
-FINALIZE EARLY — DO NOT RUN OUT OF STEPS:
-- The single most important thing is to SUBMIT a validated candidate. As soon
-  as you have a trained `model`, finalize immediately:
-  restart_and_run_all -> validate/finalize -> submit. Budget a few steps for this.
-- Do not spend steps polishing, re-running EDA, or deleting cells one by one.
-  Prefer not to add throwaway cells rather than deleting them later.
-- If you run out of steps, the environment will auto-finalize your latest
-  model, but ONLY if a clean restart_and_run_all succeeds — so keep the
-  notebook reproducible at all times.
-
-IF SUBMIT FAILS ON HIDDEN DATA:
-- If you get a "Submit failed on hidden test set" blocker you have retries.
-  This means your model raised an error on private held-out rows. Fix it:
-  1. Make the Pipeline robust: handle unseen categories (OrdinalEncoder with
-     handle_unknown='use_encoded_value'), missing values, mixed dtypes.
-  2. Never apply any transformation outside the Pipeline.
-  3. Then: restart_and_run_all → validate → submit again.
-- Do NOT skip the restart_and_run_all + validate cycle before resubmitting.
-
-KEEP THE CLEAN RUN FAST AND ROBUST:
-- restart_and_run_all re-executes EVERY cell top-to-bottom on a fresh kernel,
-  and each cell must finish within the cell time limit. One failing or slow
-  cell aborts the whole clean run, so no candidate is accepted.
-- Only import libraries you actually use; a single failed import anywhere
-  aborts the entire clean run.
-- Keep hyperparameter search small enough to finish well within the time
-  limit: prefer tune_hyperparameters, a tiny grid, or RandomizedSearchCV with
-  few iterations and cv<=3. Use n_jobs=-1 where safe.
-
-{ACTION_JSON_SCHEMA}
-"""
-
-THOUGHTS_ENABLED_PROMPT = """
-
-Thoughts mode is enabled.
-Every JSON action must include `thoughts`.
-Use `thoughts` for a short visible summary of what you learned, what you are doing, why you are doing it, or what you plan to do next.
-Your first action must be:
-{"type": "think", "stage": "planning", "thoughts": "..."}.
-"""
-
-THOUGHTS_DISABLED_PROMPT = """
-
-Thoughts mode is disabled.
-Do not include `thoughts`.
-Do not use type `think`.
-Do not use stage `planning`.
-"""
+# Canonical source of truth is gym.prompts. The names below are kept as
+# re-exports because experiments/run_fixed.py and the existing test suite
+# import them directly. With no overrides, byte-identical to the historical
+# constants — guarded by tests/test_prompts.py.
+SYSTEM_PROMPT: str = assemble_body()
+THOUGHTS_ENABLED_PROMPT: str = DEFAULT_THOUGHTS_ON
+THOUGHTS_DISABLED_PROMPT: str = DEFAULT_THOUGHTS_OFF
 
 
 class GymAgent:
@@ -152,9 +58,9 @@ class GymAgent:
         self.messages = [{"role": "user", "content": context["task"]}]
         max_agent_turns = max(self.env.state.max_steps * 2 + 5, 10)
         thoughts_on = bool(getattr(self.env, "enable_thoughts", False))
-        system_prompt = SYSTEM_PROMPT + (
-            THOUGHTS_ENABLED_PROMPT if thoughts_on else THOUGHTS_DISABLED_PROMPT
-        )
+        # Goes through gym.prompts so a future dashboard-driven preset can
+        # override blocks at run time without touching this call site.
+        system_prompt = build_system_prompt(thoughts_on=thoughts_on)
 
         for turn in range(max_agent_turns):
             response = self.client.complete(
