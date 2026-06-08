@@ -568,7 +568,14 @@ export default function NewRun() {
           <div className="step-head"><span className="step-num">4</span><span className="step-title">Параметры</span></div>
           <div style={{ maxWidth: 220 }}>
             <FI label="Seed" info="Фиксирует случайность запуска, чтобы результаты было проще воспроизводить и сравнивать.">
-              <Stepper value={seed} onChange={setSeed} min={0} max={999999} />
+              <div className="row" style={{ gap: 6 }}>
+                <input className="input mono" style={{ flex: 1 }} type="number" min={0} max={999999}
+                  value={seed} onChange={e => setSeed(Math.max(0, Math.min(999999, Number(e.target.value) || 0)))} />
+                <button className="icon-btn" title="Случайный seed"
+                  onClick={() => setSeed(Math.floor(Math.random() * 1000000))}>
+                  <Icon name="refresh" size={16} />
+                </button>
+              </div>
             </FI>
           </div>
         </Card>
