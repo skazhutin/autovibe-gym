@@ -12,6 +12,7 @@ const NAV = [
   { to: "/compare", label: "Сравнение", icon: "compare" },
   { to: "/problems", label: "Проблемы", icon: "database" },
   { to: "/models", label: "Модели", icon: "cpu" },
+  { to: "/prompts", label: "Промпты", icon: "terminal" },
   { to: "/settings", label: "Настройки", icon: "settings" },
 ];
 
@@ -25,6 +26,7 @@ const META: { match: (p: string) => boolean; title: string; sub: string }[] = [
   { match: (p) => p.startsWith("/problems/"), title: "Проблема", sub: "Датасет, статистика и метаданные" },
   { match: (p) => p.startsWith("/problems"), title: "Проблемы", sub: "Датасеты для экспериментов LLM-агента" },
   { match: (p) => p.startsWith("/models"), title: "Модели", sub: "Реестр LLM-эндпоинтов" },
+  { match: (p) => p.startsWith("/prompts"), title: "Промпты", sub: "Системные промпты агента: пресеты и блоки" },
   { match: (p) => p.startsWith("/settings"), title: "Настройки", sub: "Подключения и внешний вид" },
 ];
 
