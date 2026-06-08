@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import type { SetHeaderAction } from "../components/Layout";
 import { api, type Task, type TaskStatus } from "../lib/api";
+import { formatDateOnly } from "../lib/date";
 import { useAsync } from "../lib/hooks";
 import { createPortal } from "react-dom";
 import { Button, Card, EmptyState, Field, Modal, SelectDropdown, Skeleton, Spinner, Tag } from "../components/ui";
@@ -62,7 +63,7 @@ function textBlob(d: Task) {
     .toLowerCase();
 }
 
-function TaskCard({ d, onOpen, selecting, isSelected, onToggle }: { d: Task; onOpen: () => void; selecting: boolean; isSelected: boolean; onToggle: () => void }) {
+function TaskCard({ d, dateFormat, onOpen, selecting, isSelected, onToggle }: { d: Task; dateFormat: "mdy" | "dmy"; onOpen: () => void; selecting: boolean; isSelected: boolean; onToggle: () => void }) {
   const status = statusOf(d);
   const taskLabel = TASK_LABEL[d.taskType ?? d.task] ?? d.task;
   return (
@@ -93,9 +94,9 @@ function TaskCard({ d, onOpen, selecting, isSelected, onToggle }: { d: Task; onO
         {splitTag(d.hasVal, "val")}
         {splitTag(d.hasTest, "test")}
       </div>
-      <div className="faint task-dates">
-        {d.createdAt && <span>создана {new Date(d.createdAt).toLocaleString()}</span>}
-        {d.updatedAt && <span>обновлена {new Date(d.updatedAt).toLocaleString()}</span>}
+      <div className="ds-stats task-dates">
+        {d.createdAt && <div className="ds-stat"><span className="k">создана</span><span className="v">{formatDateOnly(d.createdAt, dateFormat)}</span></div>}
+        {d.updatedAt && <div className="ds-stat"><span className="k">обновлена</span><span className="v">{formatDateOnly(d.updatedAt, dateFormat)}</span></div>}
       </div>
     </Card>
   );
@@ -105,6 +106,7 @@ export default function Tasks() {
   const setHeaderAction = useOutletContext<SetHeaderAction>();
   const nav = useNavigate();
   const { data, loading, reload } = useAsync(() => api.listTasks(), []);
+  const { data: settings } = useAsync(() => api.getSettings(), []);
   const [wizardOpen, setWizardOpen] = useState(false);
 
   useEffect(() => {
@@ -269,7 +271,7 @@ export default function Tasks() {
       ) : (
         <div className="task-grid">
           {filtered.map((d) => (
-            <TaskCard key={d.id} d={d} onOpen={() => nav(`/problems/${d.id}`)} selecting={selecting} isSelected={selected.has(d.id)} onToggle={() => toggleSelect(d.id)} />
+            <TaskCard key={d.id} d={d} dateFormat={settings?.date_format ?? "mdy"} onOpen={() => nav(`/problems/${d.id}`)} selecting={selecting} isSelected={selected.has(d.id)} onToggle={() => toggleSelect(d.id)} />
           ))}
         </div>
       )}

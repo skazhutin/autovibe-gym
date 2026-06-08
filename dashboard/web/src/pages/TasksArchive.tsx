@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { api, type Task, type TaskStatus } from "../lib/api";
+import { formatDateOnly } from "../lib/date";
 import { useAsync } from "../lib/hooks";
 import { Button, Card, EmptyState, Skeleton, Tag } from "../components/ui";
 import { Icon } from "../components/Icon";
@@ -33,7 +34,7 @@ function sourceText(d: Task) {
   return !value || value === "source" ? "-" : value;
 }
 
-function TaskCard({ d, onOpen, selecting, isSelected, onToggle }: { d: Task; onOpen: () => void; selecting: boolean; isSelected: boolean; onToggle: () => void }) {
+function TaskCard({ d, dateFormat, onOpen, selecting, isSelected, onToggle }: { d: Task; dateFormat: "mdy" | "dmy"; onOpen: () => void; selecting: boolean; isSelected: boolean; onToggle: () => void }) {
   const status = statusOf(d);
   const taskLabel = TASK_LABEL[d.taskType ?? d.task] ?? d.task;
   return (
@@ -64,9 +65,9 @@ function TaskCard({ d, onOpen, selecting, isSelected, onToggle }: { d: Task; onO
         {splitTag(d.hasVal, "val")}
         {splitTag(d.hasTest, "test")}
       </div>
-      <div className="faint task-dates">
-        {d.createdAt && <span>создана {new Date(d.createdAt).toLocaleString()}</span>}
-        {d.updatedAt && <span>обновлена {new Date(d.updatedAt).toLocaleString()}</span>}
+      <div className="ds-stats task-dates">
+        {d.createdAt && <div className="ds-stat"><span className="k">создана</span><span className="v">{formatDateOnly(d.createdAt, dateFormat)}</span></div>}
+        {d.updatedAt && <div className="ds-stat"><span className="k">обновлена</span><span className="v">{formatDateOnly(d.updatedAt, dateFormat)}</span></div>}
       </div>
     </Card>
   );
@@ -93,6 +94,7 @@ function ConfirmModal({ count, onConfirm, onCancel, busy }: { count: number; onC
 export default function DatasetsArchive() {
   const nav = useNavigate();
   const { data: tasks, loading, reload } = useAsync(() => api.listArchivedTasks(), []);
+  const { data: settings } = useAsync(() => api.getSettings(), []);
   const [q, setQ] = useState("");
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -166,6 +168,7 @@ export default function DatasetsArchive() {
             <TaskCard
               key={d.id}
               d={d}
+              dateFormat={settings?.date_format ?? "mdy"}
               onOpen={() => nav(`/problems/${d.id}`)}
               selecting={selecting}
               isSelected={selected.has(d.id)}
