@@ -144,19 +144,19 @@ export default function Settings() {
         {remoteOn && (
           <>
             <Row label={t("settings.remoteSsh")} info={t("settings.info.remoteSsh")}>
-              <input className="input mono" placeholder="booml@10.8.52.11" value={form.remote_ssh ?? ""} onChange={(e) => set("remote_ssh", e.target.value)} />
+              <input className="input mono" placeholder="user@host.example.com" value={form.remote_ssh ?? ""} onChange={(e) => set("remote_ssh", e.target.value)} />
             </Row>
             <Row label={t("settings.remoteSshOpts")} info={t("settings.info.remoteSshOpts")}>
               <input className="input mono" value={form.remote_ssh_opts ?? ""} onChange={(e) => set("remote_ssh_opts", e.target.value)} />
             </Row>
             <Row label={t("settings.remoteRepo")} info={t("settings.info.remoteRepo")}>
-              <input className="input mono" placeholder="/home/booml/autovibe-gym-current" value={form.remote_repo ?? ""} onChange={(e) => set("remote_repo", e.target.value)} />
+              <input className="input mono" placeholder="/home/user/autovibe-gym" value={form.remote_repo ?? ""} onChange={(e) => set("remote_repo", e.target.value)} />
             </Row>
             <Row label={t("settings.remotePython")} info={t("settings.info.remotePython")}>
-              <input className="input mono" placeholder="/home/booml/autovibe-gym/.venv/bin/python" value={form.remote_python ?? ""} onChange={(e) => set("remote_python", e.target.value)} />
+              <input className="input mono" placeholder="/home/user/autovibe-gym/.venv/bin/python" value={form.remote_python ?? ""} onChange={(e) => set("remote_python", e.target.value)} />
             </Row>
             <Row label={t("settings.remoteRunsDir")} info={t("settings.info.remoteRunsDir")}>
-              <input className="input mono" placeholder="/home/booml/dash_runs" value={form.remote_runs_dir ?? ""} onChange={(e) => set("remote_runs_dir", e.target.value)} />
+              <input className="input mono" placeholder="/home/user/runs" value={form.remote_runs_dir ?? ""} onChange={(e) => set("remote_runs_dir", e.target.value)} />
             </Row>
             <Row label={t("settings.remotePassword")} info={t("settings.info.remotePassword")}>
               <input className="input" type="password" value={form.remote_password ?? ""} onChange={(e) => set("remote_password", e.target.value)} placeholder="••••••••" />
