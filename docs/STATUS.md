@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-06 (post-run model self-summary on «Мысли» tab; model registry is source of truth for LLM config; ML toolbox deps added; dashboard table polish)
+**Last updated:** 2026-06-06 (run summary stays English, summary card renders structured sections, verbose outputs normalized on read, no per-section over-truncation; retrospective run summary grounded in submitted solution; thoughts toggle limited to gym/iterative; model registry is source of truth for LLM config; ML toolbox deps added; dashboard table polish)
 **Phase:** Hardening after first full H200 recon + building the local control-panel dashboard for configuring/launching/inspecting runs.
 
 ---
@@ -86,9 +86,9 @@ Current deterministic action observability cycle:
 - Dashboard TypeScript build + Vite production build passed via bundled Node
   runtime (`tsc -b`, `vite build`).
 - Browser smoke on `http://127.0.0.1:8010/runs/live_codex_stage`: Run Detail
-  header showed `Этап = Анализ валидации`; Trajectory rendered `think`,
-  type/stage badges, and inline thoughts; Thoughts tab rendered scratchpad
-  entries; desktop and mobile viewport console checks had no warnings/errors.
+  header showed `Этап = Анализ валидации`; Trajectory rendered `think` and
+  type/stage badges; Thoughts tab rendered scratchpad entries; desktop and
+  mobile viewport console checks had no warnings/errors.
 - Follow-up launcher check after a real dashboard run: selected model records
   now explicitly set `LLM_PROVIDER` (`openai`, `google`, or `litellm`) so a
   `.env` Gemini default cannot route OpenAI-compatible dashboard models through
@@ -336,9 +336,12 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 
 | Date | Change |
 |------|--------|
+| 2026-06-06 | Tightened run-summary UX: the prompt remains English-only, normalization no longer chops already-short section bodies mid-sentence, and the Run Detail «Саммари решения» card now renders parsed summary sections (plus inline code) as a structured two-column report instead of raw markdown paragraphs |
 | 2026-06-06 | Post-run self-summary: once the model solved the task (reached a final submit for gym/fixed — even if the hidden test rejected it — or produced a usable candidate for single/repeated) one extra best-effort LLM call asks the model to summarize its own solution; saved as `run_summary.json` (`gym/run_summary.py`), served via `GET /runs/{id}/summary` + `hasSummary` on `get_run`, and rendered as a standalone report card (accent side-stripe, neutral surface — deliberately not styled like a step thought) above a «Ход рассуждений по шагам» section on the «Мысли» tab, which now shows for any run with a summary even when thoughts mode is off (old/unsolved runs without either stay hidden). Privacy preserved: the summarizer only sees the conversation it already had, never the hidden test score |
 | 2026-06-06 | Dashboard launcher now passes explicit `LLM_PROVIDER` from the selected model provider, preventing OpenAI-compatible models from inheriting a Gemini `.env` default |
 | 2026-06-06 | LLM model configuration moved out of `.env` into the shared model registry with CLI management, required `--model` registry resolution, provider-specific Gemini/LiteLLM runtime env, and no LLM keys in `.env` |
+| 2026-06-06 | Hardened post-submit run-summary generation: stricter four-section retrospective prompt in English, lower token cap, and normalization that strips reasoning/draft/checklist scaffolding both when generating new summaries and when reading already-saved `run_summary.json` artifacts |
+| 2026-06-06 | Post-submit self-summary is now explicitly retrospective and grounded in the actual submitted solution code (`final_notebook.py` / generated baseline code), while the dashboard thoughts toggle/launcher scope is limited to Iterative and Gym rather than Fixed |
 | 2026-06-06 | Deterministic action observability: agent JSON actions now use canonical `type`, required ordered `stage`, canonical `thoughts` in thoughts mode, and non-mutating `think`; NotebookGymEnv/GymEnv enforce the contract, artifacts/API/dashboard expose current stage and thoughts, docs/tests updated |
 | 2026-06-06 | Added LLM-agent ML toolbox to requirements.txt + pyproject.toml: catboost, seaborn, plotly, optuna, shap, imbalanced-learn, category_encoders, statsmodels, tabulate — all missing from the venv, all commonly reached for by agents; seaborn was already listed in requirements.txt but never installed (PR #53) |
 | 2026-06-06 | Dashboard runs table: added `.truncate` CSS (max-width 220px, ellipsis) on model and dataset columns to eliminate horizontal micro-scroll caused by long model names after chevron removal (PR #50) |

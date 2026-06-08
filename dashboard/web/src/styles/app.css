@@ -1541,6 +1541,37 @@ table.data tbody tr.clickable:hover {
 .run-summary-body ul:last-child { margin-bottom: 0; }
 .run-summary-body li { margin: 3px 0; }
 .run-summary-body strong { color: var(--text); font-weight: 650; }
+.run-summary-code {
+  font-family: var(--mono);
+  font-size: .92em;
+  padding: 1px 5px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface) 78%, var(--accent) 22%);
+  border: 1px solid color-mix(in srgb, var(--border) 78%, var(--accent) 22%);
+}
+.run-summary-sections { display: flex; flex-direction: column; gap: 12px; }
+.run-summary-section {
+  display: grid;
+  grid-template-columns: minmax(0, 156px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+.run-summary-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  padding-top: 2px;
+}
+.run-summary-section-body {
+  min-width: 0;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+@media (max-width: 720px) {
+  .run-summary-section { grid-template-columns: 1fr; gap: 4px; }
+}
 
 .thoughts { display: flex; flex-direction: column; gap: 12px; }
 .thought { display: flex; gap: 14px; align-items: stretch; position: relative; }

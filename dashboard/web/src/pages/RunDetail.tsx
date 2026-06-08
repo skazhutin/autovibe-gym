@@ -60,13 +60,15 @@ function actionTone(type: string) {
 /** Render a small subset of markdown (**bold** + "- " bullet lists) used by the
  *  model's self-summary. We don't pull in a markdown dependency for this. */
 function renderInline(text: string, keyBase: string): React.ReactNode[] {
-  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
-    part.startsWith("**") && part.endsWith("**") ? (
-      <strong key={`${keyBase}-${i}`}>{part.slice(2, -2)}</strong>
-    ) : (
-      <span key={`${keyBase}-${i}`}>{part}</span>
-    )
-  );
+  return text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return <strong key={`${keyBase}-${i}`}>{part.slice(2, -2)}</strong>;
+    }
+    if (part.startsWith("`") && part.endsWith("`")) {
+      return <code key={`${keyBase}-${i}`} className="run-summary-code">{part.slice(1, -1)}</code>;
+    }
+    return <span key={`${keyBase}-${i}`}>{part}</span>;
+  });
 }
 
 function MarkdownLite({ text }: { text: string }) {
@@ -100,7 +102,45 @@ function MarkdownLite({ text }: { text: string }) {
   return <>{blocks}</>;
 }
 
+type SummarySection = { title: string; body: string };
+
+function parseSummarySections(text: string): SummarySection[] {
+  const sections: SummarySection[] = [];
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  let current: SummarySection | null = null;
+
+  const pushCurrent = () => {
+    if (!current) return;
+    current.body = current.body.replace(/\s+/g, " ").trim();
+    if (current.title && current.body) sections.push(current);
+    current = null;
+  };
+
+  lines.forEach((raw) => {
+    const line = raw.trim();
+    if (!line) {
+      pushCurrent();
+      return;
+    }
+    const match = line.match(/^\*\*(.+?)\*\*\s*[—-]\s*(.+)$/);
+    if (match) {
+      pushCurrent();
+      current = { title: match[1].trim(), body: match[2].trim() };
+      return;
+    }
+    if (!current) {
+      current = { title: "", body: line };
+      return;
+    }
+    current.body = `${current.body} ${line}`.trim();
+  });
+  pushCurrent();
+
+  return sections.filter((section) => section.title);
+}
+
 function SummaryCard({ text, model }: { text: string; model?: string | null }) {
+  const sections = parseSummarySections(text);
   return (
     <div className="run-summary">
       <div className="run-summary-head">
@@ -109,7 +149,20 @@ function SummaryCard({ text, model }: { text: string; model?: string | null }) {
         {model && <span className="run-summary-model mono">{model}</span>}
       </div>
       <div className="run-summary-body">
-        <MarkdownLite text={text} />
+        {sections.length > 0 ? (
+          <div className="run-summary-sections">
+            {sections.map((section, index) => (
+              <div key={`${section.title}-${index}`} className="run-summary-section">
+                <div className="run-summary-section-title">{section.title}</div>
+                <div className="run-summary-section-body">
+                  {renderInline(section.body, `summary-${index}`)}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <MarkdownLite text={text} />
+        )}
       </div>
     </div>
   );
@@ -224,7 +277,6 @@ function TrajectoryTab({ id, live }: { id: string; live: boolean }) {
               <span className="st">{s.title}</span>
               {s.budgetRemaining !== undefined && s.budgetRemaining !== null && <span className="st">осталось {s.budgetRemaining}</span>}
             </div>
-            {s.thoughts && <div className="thought-inline">{s.thoughts}</div>}
             {s.code && <CodeBlock code={s.code} />}
             {s.feedback.map((f, fi) => (
               <div key={fi} className="fb">
