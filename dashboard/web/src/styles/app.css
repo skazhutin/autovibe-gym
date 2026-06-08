@@ -1553,9 +1553,8 @@ table.data tbody tr.clickable:nth-child(7) { animation-delay: 150ms; }
 .cmp-picker-modal { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); box-shadow: var(--shadow-md); width: 860px; max-width: 96vw; max-height: 80vh; display: flex; flex-direction: column; overflow: hidden; animation: modal-enter var(--dur-slow) var(--ease-standard) both; }
 .cmp-picker-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .cmp-picker-list { flex: 1; overflow-y: auto; }
-.cmp-picker-row { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background var(--dur-fast) var(--ease-soft), transform var(--dur-fast) var(--ease-standard); }
+.cmp-picker-row { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background var(--dur-fast) var(--ease-soft); }
 .cmp-picker-row:hover { background: var(--surface-2); }
-.cmp-picker-row:hover { transform: translateX(2px); }
 .cmp-picker-row.selected { background: var(--accent-soft); }
 .cmp-picker-row.disabled { opacity: 0.4; cursor: not-allowed; }
 .cmp-picker-row input { accent-color: var(--accent-ink); flex-shrink: 0; }
