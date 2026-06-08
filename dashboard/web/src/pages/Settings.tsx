@@ -71,6 +71,7 @@ export default function Settings() {
       accent: data.accent,
       radius: data.radius,
       animations: data.animations ?? "on",
+      overlayOpacity: (data as unknown as Record<string, unknown>).overlay_opacity as number ?? 78,
     });
     setRemoteOn(!!data.remote_enabled);
     setDirty(false);
@@ -212,6 +213,9 @@ export default function Settings() {
         </Row>
         <Row label={`${t("settings.rounding")}: ${appearance.radius}px`} info={t("settings.info.rounding")}>
           <input className="range" type="range" min={8} max={24} value={appearance.radius} onChange={(e) => setAppr({ radius: Number(e.target.value) })} />
+        </Row>
+        <Row label={`${t("settings.overlay")}: ${appearance.overlayOpacity}%`} info={t("settings.info.overlay")}>
+          <input className="range" type="range" min={0} max={100} value={appearance.overlayOpacity} onChange={(e) => setAppr({ overlayOpacity: Number(e.target.value) })} />
         </Row>
       </Card>
 

@@ -3,6 +3,7 @@ export interface Appearance {
   accent: string;
   radius: number;
   animations: "on" | "off";
+  overlayOpacity: number;
 }
 
 const KEY = "autovibe.appearance";
@@ -12,6 +13,7 @@ export const DEFAULT_APPEARANCE: Appearance = {
   accent: "#FFDD2D",
   radius: 18,
   animations: "on",
+  overlayOpacity: 78,
 };
 
 export function loadAppearance(): Appearance {
@@ -56,5 +58,6 @@ export function applyAppearance(a: Appearance): void {
   root.style.setProperty("--accent-soft", withAlpha(a.accent, 0.22));
   root.style.setProperty("--accent-wash", withAlpha(a.accent, 0.1));
   root.style.setProperty("--radius", `${a.radius}px`);
+  root.style.setProperty("--overlay-pct", `${a.overlayOpacity}%`);
   localStorage.setItem(KEY, JSON.stringify(a));
 }
