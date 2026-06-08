@@ -325,11 +325,9 @@ export default function Models() {
                 <div className="ds-stat"><span className="k">Output limit</span><span className="v">{m.maxTokens ? `${(m.maxTokens / 1024).toFixed(0)}k` : "—"}</span></div>
                 <div className={`ds-stat${(m.baseUrl || "").length > 35 ? " span-full" : ""}`}><span className="k">Base URL</span><span className="v" style={{ fontSize: 11.5 }}>{m.baseUrl || "—"}</span></div>
               </div>
-              {m.createdAt && (
-                <div className="ds-stats" style={{ marginTop: 8 }}>
-                  <div className="ds-stat span-full"><span className="k">Дата</span><span className="v" style={{ fontSize: 11.5 }}>{new Date(m.createdAt).toLocaleDateString()}</span></div>
-                </div>
-              )}
+              <div className="faint task-dates" style={{ marginTop: 10 }}>
+                {m.createdAt && <span>создана {new Date(m.createdAt).toLocaleString()}</span>}
+              </div>
             </Card>
           ))}
         </div>

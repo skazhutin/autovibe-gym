@@ -1,4 +1,4 @@
-"""Persistent set of archived dataset IDs stored in data/datasets_archive.json."""
+"""Persistent set of archived task IDs stored in data/tasks_archive.json."""
 from __future__ import annotations
 
 import json
@@ -8,7 +8,7 @@ from ..config import get_settings
 
 
 def _path() -> Path:
-    return get_settings().data_dir / "datasets_archive.json"
+    return get_settings().data_dir / "tasks_archive.json"
 
 
 def _load() -> set[str]:
@@ -25,19 +25,19 @@ def _save(ids: set[str]) -> None:
     _path().write_text(json.dumps(sorted(ids), indent=2), encoding="utf-8")
 
 
-def is_archived(dataset_id: str) -> bool:
-    return dataset_id in _load()
+def is_archived(task_id: str) -> bool:
+    return task_id in _load()
 
 
-def archive(dataset_ids: list[str]) -> None:
+def archive(task_ids: list[str]) -> None:
     ids = _load()
-    ids.update(dataset_ids)
+    ids.update(task_ids)
     _save(ids)
 
 
-def unarchive(dataset_ids: list[str]) -> None:
+def unarchive(task_ids: list[str]) -> None:
     ids = _load()
-    ids.difference_update(dataset_ids)
+    ids.difference_update(task_ids)
     _save(ids)
 
 

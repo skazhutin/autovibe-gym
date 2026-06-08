@@ -1,1 +1,1 @@
-"""Service layer: dataset discovery, model registry, MLflow run store, launcher."""
+"""Service layer: task discovery, model registry, MLflow run store, launcher."""

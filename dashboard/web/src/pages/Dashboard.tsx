@@ -35,7 +35,7 @@ function ActiveRunCard({ run }: { run: Run }) {
           <div className="model">{run.model}</div>
           <div className="chips" style={{ marginTop: 8 }}>
             <ModeTag mode={run.mode} />
-            <span className="tag">{run.dataset}</span>
+            <span className="tag">{run.task}</span>
           </div>
         </div>
         <StatusBadge status={run.status} />
@@ -90,7 +90,7 @@ export default function Dashboard() {
       <div className="grid-4">
         <MetricCard label="Всего прогонов" value={String(all.length)} icon="runs" spark={scoreSpark} delta={`${finished.length} завершено`} />
         <MetricCard dark label="Активных сейчас" value={String(active.length)} icon="play" delta={active.length ? "идут прямо сейчас" : "нет активных"} />
-        <MetricCard label="Последний test-скор" value={lastScored ? formatScore(lastScored.score, lastScored.metric) : "—"} icon="check2" spark={scoreSpark} delta={lastScored ? `${MODE_SHORT[lastScored.mode]} · ${lastScored.dataset}` : "нет данных"} />
+        <MetricCard label="Последний test-скор" value={lastScored ? formatScore(lastScored.score, lastScored.metric) : "—"} icon="check2" spark={scoreSpark} delta={lastScored ? `${MODE_SHORT[lastScored.mode]} · ${lastScored.task}` : "нет данных"} />
         <MetricCard label="Средний расход токенов" value={formatTokens(avgTokens)} icon="coins" delta="на прогон" />
       </div>
 
@@ -123,7 +123,7 @@ export default function Dashboard() {
                       <td className="mono faint">{r.shortId}</td>
                       <td className="mono">{r.model}</td>
                       <td><ModeTag mode={r.mode} /></td>
-                      <td>{r.dataset}</td>
+                      <td>{r.task}</td>
                       <td><ScoreCell run={r} /></td>
                       <td><StatusBadge status={r.status} /></td>
                       <td className="faint">{timeAgo(r.startedMs)}</td>

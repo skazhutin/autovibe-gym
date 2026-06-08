@@ -114,7 +114,7 @@ export default function Settings() {
         <Row label="MLflow tracking URI" info="Адрес MLflow-сервера, где хранятся прогоны. Обычно file:./mlruns или http://localhost:5000">
           <input className="input mono" value={form.mlflow_tracking_uri ?? ""} onChange={(e) => set("mlflow_tracking_uri", e.target.value)} />
         </Row>
-        <Row label="Каталог датасетов" info="Путь к папке datasets/ в корне проекта. Все датасеты читаются и сохраняются туда.">
+        <Row label="Каталог задач" info="Путь к папке tasks/ в корне проекта. Все задачи читаются и сохраняются туда.">
           <input className="input mono" value={form.datasets_dir ?? ""} onChange={(e) => set("datasets_dir", e.target.value)} />
         </Row>
       </Card>

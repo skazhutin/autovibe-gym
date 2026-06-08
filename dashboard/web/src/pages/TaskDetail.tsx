@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useParams } from "react-router-dom";
-import { api, type AgentNotes, type Dataset, type DatasetConfig, type DatasetSource } from "../lib/api";
+import { api, type AgentNotes, type Task, type TaskConfig, type TaskSource } from "../lib/api";
 import { useAsync } from "../lib/hooks";
 import { Button, Card, EmptyState, Field, Modal, SelectDropdown, Skeleton, Spinner, Tabs, Tag } from "../components/ui";
 import { Icon } from "../components/Icon";
@@ -76,13 +76,13 @@ function FieldInfo({ label, info, hint, children, required }: { label: ReactNode
   );
 }
 
-function sourceText(dataset: Dataset) {
-  const value = dataset.source && dataset.source !== "-" ? dataset.source : dataset.sources?.[0]?.name || dataset.sources?.[0]?.url || "-";
+function sourceText(task: Task) {
+  const value = task.source && task.source !== "-" ? task.source : task.sources?.[0]?.name || task.sources?.[0]?.url || "-";
   return !value || value === "source" ? "-" : value;
 }
 
-function SplitSelector({ split, onChange, dataset }: { split: Split; onChange: (s: Split) => void; dataset: Dataset }) {
-  const flags = { train: dataset.hasTrain, val: dataset.hasVal, test: dataset.hasTest };
+function SplitSelector({ split, onChange, task }: { split: Split; onChange: (s: Split) => void; task: Task }) {
+  const flags = { train: task.hasTrain, val: task.hasVal, test: task.hasTest };
   return (
     <div className="segmented small">
       {(["train", "val", "test"] as const).map((s) => (
@@ -94,46 +94,46 @@ function SplitSelector({ split, onChange, dataset }: { split: Split; onChange: (
   );
 }
 
-function OverviewTab({ dataset, config }: { dataset: Dataset; config: DatasetConfig | null }) {
-  const warnings = config?.warnings ?? dataset.warnings ?? [];
+function OverviewTab({ task, config }: { task: Task; config: TaskConfig | null }) {
+  const warnings = config?.warnings ?? task.warnings ?? [];
   return (
     <div className="stack" style={{ gap: 16 }}>
       <div className="grid-4">
-        <Card className="metric-card"><span className="metric-label">Статус</span><span className="metric-num" style={{ fontSize: 24 }}>{STATUS_LABEL[dataset.status ?? (dataset.prepared ? "prepared" : "partial")]}</span></Card>
-        <Card className="metric-card"><span className="metric-label">Строки</span><span className="metric-num">{dataset.rows?.toLocaleString() ?? "-"}</span></Card>
-        <Card className="metric-card"><span className="metric-label">Признаки</span><span className="metric-num">{dataset.cols || "-"}</span></Card>
-        <Card className="metric-card"><span className="metric-label">Seed</span><span className="metric-num">{dataset.seed ?? 42}</span></Card>
+        <Card className="metric-card"><span className="metric-label">Статус</span><span className="metric-num" style={{ fontSize: 24 }}>{STATUS_LABEL[task.status ?? (task.prepared ? "prepared" : "partial")]}</span></Card>
+        <Card className="metric-card"><span className="metric-label">Строки</span><span className="metric-num">{task.rows?.toLocaleString() ?? "-"}</span></Card>
+        <Card className="metric-card"><span className="metric-label">Признаки</span><span className="metric-num">{task.cols || "-"}</span></Card>
+        <Card className="metric-card"><span className="metric-label">Seed</span><span className="metric-num">{task.seed ?? 42}</span></Card>
       </div>
       <Card>
-        <div className="dataset-overview-grid">
-          <div><span className="k">ID</span><span className="v mono">{dataset.id}</span></div>
-          <div><span className="k">задача</span><span className="v">{TASK_LABEL[dataset.taskType ?? dataset.task] ?? dataset.task}</span></div>
-          <div><span className="k">target</span><span className="v mono">{dataset.target}</span></div>
-          <div><span className="k">метрика</span><span className="v mono">{dataset.metric} ({METRIC_GOAL_LABEL[dataset.metricGoal ?? "max"] ?? dataset.metricGoal})</span></div>
-          <div><span className="k">источник</span><span className="v">{sourceText(dataset)}</span></div>
-          <div><span className="k">создан</span><span className="v">{dataset.createdAt ? new Date(dataset.createdAt).toLocaleString() : "-"}</span></div>
-          <div><span className="k">обновлен</span><span className="v">{dataset.updatedAt ? new Date(dataset.updatedAt).toLocaleString() : "-"}</span></div>
+        <div className="task-overview-grid">
+          <div><span className="k">ID</span><span className="v mono">{task.id}</span></div>
+          <div><span className="k">задача</span><span className="v">{TASK_LABEL[task.taskType ?? task.task] ?? task.task}</span></div>
+          <div><span className="k">target</span><span className="v mono">{task.target}</span></div>
+          <div><span className="k">метрика</span><span className="v mono">{task.metric} ({METRIC_GOAL_LABEL[task.metricGoal ?? "max"] ?? task.metricGoal})</span></div>
+          <div><span className="k">источник</span><span className="v">{sourceText(task)}</span></div>
+          <div><span className="k">создана</span><span className="v">{task.createdAt ? new Date(task.createdAt).toLocaleString() : "-"}</span></div>
+          <div><span className="k">обновлен</span><span className="v">{task.updatedAt ? new Date(task.updatedAt).toLocaleString() : "-"}</span></div>
         </div>
         <div className="split-pills" style={{ marginTop: 16 }}>
-          <Tag tone={dataset.hasTrain ? "green" : "neutral"}>train</Tag>
-          <Tag tone={dataset.hasVal ? "green" : "neutral"}>val</Tag>
-          <Tag tone={dataset.hasTest ? "green" : "neutral"}>test</Tag>
-          {(dataset.tags ?? []).map((tag) => <Tag key={tag}>{tag}</Tag>)}
+          <Tag tone={task.hasTrain ? "green" : "neutral"}>train</Tag>
+          <Tag tone={task.hasVal ? "green" : "neutral"}>val</Tag>
+          <Tag tone={task.hasTest ? "green" : "neutral"}>test</Tag>
+          {(task.tags ?? []).map((tag) => <Tag key={tag}>{tag}</Tag>)}
         </div>
       </Card>
       {warnings.length > 0 && <div className="warn-box">{warnings.join(" ")}</div>}
-      {dataset.desc && <Card><div className="metric-label">Описание</div><p style={{ marginBottom: 0 }}>{dataset.desc}</p></Card>}
+      {task.desc && <Card><div className="metric-label">Описание</div><p style={{ marginBottom: 0 }}>{task.desc}</p></Card>}
     </div>
   );
 }
 
-function PreviewTab({ id, dataset }: { id: string; dataset: Dataset }) {
+function PreviewTab({ id, task }: { id: string; task: Task }) {
   const [split, setSplit] = useState<Split>("train");
-  const { data, loading } = useAsync(() => api.datasetPreview(id, split, 50), [id, split]);
+  const { data, loading } = useAsync(() => api.taskPreview(id, split, 50), [id, split]);
   if (loading && !data) return <Skeleton h={240} />;
   return (
     <div className="stack" style={{ gap: 12 }}>
-      <SplitSelector split={split} onChange={setSplit} dataset={dataset} />
+      <SplitSelector split={split} onChange={setSplit} task={task} />
       {!data || !data.columns.length ? (
         <EmptyState icon="table" title={`Нет данных ${split}`} text={`${split}.csv недоступен.`} />
       ) : (
@@ -142,14 +142,14 @@ function PreviewTab({ id, dataset }: { id: string; dataset: Dataset }) {
             <table className="data">
               <thead>
                 <tr>
-                  {data.columns.map((c) => <th key={c} className={c === dataset.target ? "target-col" : undefined}>{c}</th>)}
+                  {data.columns.map((c) => <th key={c} className={c === task.target ? "target-col" : undefined}>{c}</th>)}
                 </tr>
               </thead>
               <tbody>
                 {data.rows.map((row, i) => (
                   <tr key={i}>
                     {row.map((v, j) => (
-                      <td key={j} className={`mono${data.columns[j] === dataset.target ? " target-col" : ""}`} style={{ fontSize: 12.5 }}>
+                      <td key={j} className={`mono${data.columns[j] === task.target ? " target-col" : ""}`} style={{ fontSize: 12.5 }}>
                         {v === null ? <span className="faint">пусто</span> : String(v)}
                       </td>
                     ))}
@@ -167,15 +167,15 @@ function PreviewTab({ id, dataset }: { id: string; dataset: Dataset }) {
   );
 }
 
-function ColumnsTab({ id, dataset, config }: { id: string; dataset: Dataset; config: DatasetConfig | null }) {
+function ColumnsTab({ id, task, config }: { id: string; task: Task; config: TaskConfig | null }) {
   const [split, setSplit] = useState<Split>("train");
-  const { data, loading } = useAsync(() => api.datasetColumns(id, split), [id, split]);
+  const { data, loading } = useAsync(() => api.taskColumns(id, split), [id, split]);
   const ignored = new Set(config?.task.ignore_columns ?? []);
   const idCols = new Set(config?.task.id_columns ?? []);
   if (loading && !data) return <Skeleton h={240} />;
   return (
     <div className="stack" style={{ gap: 12 }}>
-      <SplitSelector split={split} onChange={setSplit} dataset={dataset} />
+      <SplitSelector split={split} onChange={setSplit} task={task} />
       {!data || !data.length ? (
         <EmptyState icon="sliders" title={`Нет статистики колонок для ${split}`} />
       ) : (
@@ -193,7 +193,7 @@ function ColumnsTab({ id, dataset, config }: { id: string; dataset: Dataset; con
                     <td className="mono faint">{c.unique}</td>
                     <td>
                       <div className="split-pills">
-                        {c.name === dataset.target && <Tag tone="accent">цель</Tag>}
+                        {c.name === task.target && <Tag tone="accent">цель</Tag>}
                         {(c.ignored || ignored.has(c.name)) && <Tag tone="red">игнор</Tag>}
                         {(c.idColumn || idCols.has(c.name)) && <Tag tone="blue">id</Tag>}
                       </div>
@@ -210,7 +210,7 @@ function ColumnsTab({ id, dataset, config }: { id: string; dataset: Dataset; con
   );
 }
 
-function SplitsTab({ config }: { config: DatasetConfig | null }) {
+function SplitsTab({ config }: { config: TaskConfig | null }) {
   if (!config) return <Skeleton h={220} />;
   const splits = config.splits;
   return (
@@ -234,7 +234,7 @@ function SplitsTab({ config }: { config: DatasetConfig | null }) {
           </tbody>
         </table>
       </div>
-      <div className="dataset-split-meta">
+      <div className="task-split-meta">
         <Tag mono>{SPLIT_MODE_LABEL[splits.mode] ?? splits.mode}</Tag>
         <span>seed: <span className="mono">{splits.seed}</span></span>
         <span>перемешивание: <span className="mono">{splits.shuffle ?? true ? "да" : "нет"}</span></span>
@@ -245,9 +245,9 @@ function SplitsTab({ config }: { config: DatasetConfig | null }) {
   );
 }
 
-function ConfigTab({ id, config, onSaved }: { id: string; config: DatasetConfig | null; onSaved: () => void }) {
+function ConfigTab({ id, config, onSaved }: { id: string; config: TaskConfig | null; onSaved: () => void }) {
   const nav = useNavigate();
-  const [form, setForm] = useState<DatasetConfig | null>(config);
+  const [form, setForm] = useState<TaskConfig | null>(config);
   const [tagsStr, setTagsStr] = useState((config?.tags ?? []).join(", "));
   const [busy, setBusy] = useState(false);
   const [ok, setOk] = useState(false);
@@ -258,7 +258,7 @@ function ConfigTab({ id, config, onSaved }: { id: string; config: DatasetConfig 
   async function doDelete() {
     setDeleting(true);
     try {
-      await api.deleteDataset(id);
+      await api.deleteTask(id);
       nav("/problems");
     } finally {
       setDeleting(false);
@@ -283,7 +283,7 @@ function ConfigTab({ id, config, onSaved }: { id: string; config: DatasetConfig 
     if (!current) return;
     setBusy(true); setOk(false); setErr(null);
     try {
-      await api.updateDatasetConfig(id, {
+      await api.updateTaskConfig(id, {
         ...current,
         tags: tagsStr.split(",").map((s) => s.trim()).filter(Boolean),
       });
@@ -369,16 +369,16 @@ function ConfigTab({ id, config, onSaved }: { id: string; config: DatasetConfig 
   );
 }
 
-function SourcesTab({ id, config, onSaved }: { id: string; config: DatasetConfig | null; onSaved: () => void }) {
-  const [sources, setSources] = useState<DatasetSource[]>(config?.sources ?? []);
+function SourcesTab({ id, config, onSaved }: { id: string; config: TaskConfig | null; onSaved: () => void }) {
+  const [sources, setSources] = useState<TaskSource[]>(config?.sources ?? []);
   const [busy, setBusy] = useState(false);
   useEffect(() => setSources(config?.sources ?? []), [config]);
   if (!config) return <Skeleton h={200} />;
-  const update = (idx: number, patch: DatasetSource) => setSources((all) => all.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
+  const update = (idx: number, patch: TaskSource) => setSources((all) => all.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
   async function save() {
     setBusy(true);
     try {
-      await api.updateDatasetConfig(id, { sources } as Partial<DatasetConfig>);
+      await api.updateTaskConfig(id, { sources } as Partial<TaskConfig>);
       onSaved();
     } finally {
       setBusy(false);
@@ -411,7 +411,7 @@ function SourcesTab({ id, config, onSaved }: { id: string; config: DatasetConfig
   );
 }
 
-function AgentNotesTab({ id, config, onSaved }: { id: string; config: DatasetConfig | null; onSaved: () => void }) {
+function AgentNotesTab({ id, config, onSaved }: { id: string; config: TaskConfig | null; onSaved: () => void }) {
   const [notes, setNotes] = useState<AgentNotes | null>(config?.agent_notes ?? null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -424,7 +424,7 @@ function AgentNotesTab({ id, config, onSaved }: { id: string; config: DatasetCon
     setBusy(true);
     setErr(null);
     try {
-      await api.updateDatasetConfig(id, { agent_notes: notes } as Partial<DatasetConfig>);
+      await api.updateTaskConfig(id, { agent_notes: notes } as Partial<TaskConfig>);
       onSaved();
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
@@ -462,8 +462,8 @@ export default function DatasetDetail() {
   const { id = "" } = useParams();
   const nav = useNavigate();
   const [tab, setTab] = useState("overview");
-  const { data, loading, reload } = useAsync(() => api.getDataset(id), [id]);
-  const { data: config, loading: configLoading, reload: reloadConfig } = useAsync(() => api.getDatasetConfig(id), [id]);
+  const { data, loading, reload } = useAsync(() => api.getTask(id), [id]);
+  const { data: config, loading: configLoading, reload: reloadConfig } = useAsync(() => api.getTaskConfig(id), [id]);
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName] = useState("");
   const titleInputRef = useRef<HTMLInputElement>(null);
@@ -485,7 +485,7 @@ export default function DatasetDetail() {
     setEditingName(false);
     if (!trimmed || trimmed === data?.name) return;
     try {
-      await api.updateDatasetConfig(id, { name: trimmed } as Partial<DatasetConfig>);
+      await api.updateTaskConfig(id, { name: trimmed } as Partial<TaskConfig>);
       refresh();
     } catch {}
   }
@@ -521,7 +521,7 @@ export default function DatasetDetail() {
             <div className="stack" style={{ gap: 4 }}>
               <span className="mono faint" style={{ fontSize: 13 }}>metric: <strong className="mono" style={{ color: "var(--text)" }}>{data.metric}</strong></span>
               <span className="mono faint" style={{ fontSize: 13 }}>target: <strong className="mono" style={{ color: "var(--text)" }}>{data.target}</strong></span>
-              <span className="mono faint" style={{ fontSize: 13 }}>path: {data.datasetDir}</span>
+              <span className="mono faint" style={{ fontSize: 13 }}>path: {data.taskDir}</span>
             </div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 12 }}>
@@ -536,9 +536,9 @@ export default function DatasetDetail() {
       </Card>
 
       <Tabs tabs={TABS} active={tab} onChange={setTab} />
-      {tab === "overview" && <OverviewTab dataset={data} config={config} />}
-      {tab === "preview" && <PreviewTab id={id} dataset={data} />}
-      {tab === "columns" && <ColumnsTab id={id} dataset={data} config={config} />}
+      {tab === "overview" && <OverviewTab task={data} config={config} />}
+      {tab === "preview" && <PreviewTab id={id} task={data} />}
+      {tab === "columns" && <ColumnsTab id={id} task={data} config={config} />}
       {tab === "splits" && (configLoading ? <Skeleton h={220} /> : <SplitsTab config={config} />)}
       {tab === "config" && <ConfigTab id={id} config={config} onSaved={refresh} />}
       {tab === "sources" && <SourcesTab id={id} config={config} onSaved={refresh} />}

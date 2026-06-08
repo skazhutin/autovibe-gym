@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { api, type Dataset, type DatasetConfig, type LaunchRunMode, type ModelRec } from "../lib/api";
+import { api, type Task, type TaskConfig, type LaunchRunMode, type ModelRec } from "../lib/api";
 import { useAsync } from "../lib/hooks";
 import { MODE_LABELS } from "../lib/format";
 import { Button, Card, Dot, Field, Spinner, Tag } from "../components/ui";
@@ -9,7 +9,7 @@ import { Icon } from "../components/Icon";
 
 const MAX_SELECTED_MODES = 5;
 const STORAGE_MODEL = "newrun_modelId";
-const STORAGE_DATASET = "newrun_datasetId";
+const STORAGE_DATASET = "newrun_taskId";
 
 const MODE_INFO: {
   id: LaunchRunMode; desc: string; env: boolean;
@@ -116,15 +116,15 @@ function ModelPickerModal({ models, current, onSelect, onClose }: {
   );
 }
 
-// ── Dataset (Problem) Picker Modal ───────────────────────────────────────────
-function DatasetPickerModal({ datasets, current, onSelect, onClose }: {
-  datasets: Dataset[]; current: string; onSelect: (id: string) => void; onClose: () => void;
+// ── Task Picker Modal ───────────────────────────────────────────
+function TaskPickerModal({ tasks, current, onSelect, onClose }: {
+  tasks: Task[]; current: string; onSelect: (id: string) => void; onClose: () => void;
 }) {
   const [q, setQ] = useState("");
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
-    return datasets.filter(d => !term || `${d.name} ${d.task} ${d.metric}`.toLowerCase().includes(term));
-  }, [datasets, q]);
+    return tasks.filter(d => !term || `${d.name} ${d.task} ${d.metric}`.toLowerCase().includes(term));
+  }, [tasks, q]);
 
   return createPortal(
     <div className="modal-backdrop" onClick={onClose}>
@@ -161,7 +161,7 @@ function DatasetPickerModal({ datasets, current, onSelect, onClose }: {
 export default function NewRun() {
   const nav = useNavigate();
   const { data: models } = useAsync(() => api.listModels(), []);
-  const { data: datasets } = useAsync(() => api.listDatasets(), []);
+  const { data: tasks } = useAsync(() => api.listTasks(), []);
   const { data: settings } = useAsync(() => api.getSettings(), []);
   const serverAvailable = !!(settings?.remote_ssh && settings?.remote_repo);
   const [execution, setExecution] = useState<"local" | "server">("local");
@@ -177,13 +177,13 @@ export default function NewRun() {
   const [expandedModes, setExpandedModes] = useState<Set<LaunchRunMode>>(new Set(["gym"] as LaunchRunMode[]));
   const [modeParams, setModeParams] = useState<Partial<Record<LaunchRunMode, ModeParams>>>({});
 
-  // ── Dataset / Problem ──
-  const [datasetId, setDatasetId] = useState<string>(() => localStorage.getItem(STORAGE_DATASET) ?? "");
-  const [datasetPickerOpen, setDatasetPickerOpen] = useState(false);
+  // ── Task ──
+  const [taskId, setTaskId] = useState<string>(() => localStorage.getItem(STORAGE_DATASET) ?? "");
+  const [taskPickerOpen, setTaskPickerOpen] = useState(false);
   const [datasetSettingsOpen, setDatasetSettingsOpen] = useState(false);
-  const [datasetConfig, setDatasetConfig] = useState<DatasetConfig | null>(null);
-  const [datasetConfigLoading, setDatasetConfigLoading] = useState(false);
-  const [datasetConfigSaving, setDatasetConfigSaving] = useState(false);
+  const [datasetConfig, setTaskConfig] = useState<TaskConfig | null>(null);
+  const [datasetConfigLoading, setTaskConfigLoading] = useState(false);
+  const [datasetConfigSaving, setTaskConfigSaving] = useState(false);
   const [dsSection, setDsSection] = useState<"config" | "notes" | null>(null);
 
   // ── Other ──
@@ -193,7 +193,7 @@ export default function NewRun() {
 
   // Persist selections
   useEffect(() => { if (modelId) localStorage.setItem(STORAGE_MODEL, modelId); }, [modelId]);
-  useEffect(() => { if (datasetId) localStorage.setItem(STORAGE_DATASET, datasetId); }, [datasetId]);
+  useEffect(() => { if (taskId) localStorage.setItem(STORAGE_DATASET, taskId); }, [taskId]);
 
   useEffect(() => {
     if (settings) setExecution(settings.remote_enabled && serverAvailable ? "server" : "local");
@@ -207,24 +207,24 @@ export default function NewRun() {
   }, [models]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (datasets && (!datasetId || !datasets.find(d => d.id === datasetId))) {
-      const first = datasets.find(d => d.prepared);
-      if (first) setDatasetId(first.id);
+    if (tasks && (!taskId || !tasks.find(d => d.id === taskId))) {
+      const first = tasks.find(d => d.prepared);
+      if (first) setTaskId(first.id);
     }
-  }, [datasets]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tasks]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load dataset config when settings panel is opened
+  // Load task config when settings panel is opened
   useEffect(() => {
-    if (datasetSettingsOpen && datasetId && !datasetConfig) {
-      setDatasetConfigLoading(true);
-      api.getDatasetConfig(datasetId).then(cfg => {
-        setDatasetConfig(cfg);
-        setDatasetConfigLoading(false);
-      }).catch(() => setDatasetConfigLoading(false));
+    if (datasetSettingsOpen && taskId && !datasetConfig) {
+      setTaskConfigLoading(true);
+      api.getTaskConfig(taskId).then(cfg => {
+        setTaskConfig(cfg);
+        setTaskConfigLoading(false);
+      }).catch(() => setTaskConfigLoading(false));
     }
-  }, [datasetSettingsOpen, datasetId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [datasetSettingsOpen, taskId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { setDatasetConfig(null); }, [datasetId]);
+  useEffect(() => { setTaskConfig(null); }, [taskId]);
 
   // Per-mode params helpers
   function getModeParams(mode: LaunchRunMode): ModeParams {
@@ -235,7 +235,7 @@ export default function NewRun() {
   }
 
   const model = models?.find(m => m.id === modelId);
-  const dataset = datasets?.find(d => d.id === datasetId);
+  const task = tasks?.find(d => d.id === taskId);
   const selectedCount = selectedModes.length;
   const primaryMode = selectedModes[0] ?? "gym";
   const multiMode = selectedCount > 1;
@@ -243,7 +243,7 @@ export default function NewRun() {
   const repeatedLike = selectedModes.includes("repeated");
   const checklistMode = selectedModes.includes("gym");
   const thoughtsSupported = selectedModes.some(m => m === "gym" || m === "iterative" || m === "fixed");
-  const canLaunch = selectedCount > 0 && !!modelId && !!dataset?.prepared && !launching;
+  const canLaunch = selectedCount > 0 && !!modelId && !!task?.prepared && !launching;
 
   function toggleMode(id: LaunchRunMode) {
     setSelectedModes(prev => {
@@ -266,15 +266,15 @@ export default function NewRun() {
     });
   }
 
-  async function saveDatasetConfig() {
-    if (!datasetConfig || !datasetId) return;
-    setDatasetConfigSaving(true);
+  async function saveTaskConfig() {
+    if (!datasetConfig || !taskId) return;
+    setTaskConfigSaving(true);
     try {
-      await api.updateDatasetConfig(datasetId, {
+      await api.updateTaskConfig(taskId, {
         agent_notes: datasetConfig.agent_notes,
         task: datasetConfig.task,
       });
-    } finally { setDatasetConfigSaving(false); }
+    } finally { setTaskConfigSaving(false); }
   }
 
   async function launch() {
@@ -287,7 +287,7 @@ export default function NewRun() {
         modelId,
         mode: multiMode ? "batch" : primaryMode,
         modes: selectedModes,
-        datasetId,
+        taskId,
         maxSteps: stepBased ? p.maxSteps : undefined,
         maxTokens, temp: p.temp, seed,
         shots: repeatedLike ? getModeParams("repeated").shots : undefined,
@@ -432,36 +432,36 @@ export default function NewRun() {
           </div>
         </Card>
 
-        {/* 3. Problem (Dataset) */}
+        {/* 3. Task */}
         <Card>
           <div className="step-head"><span className="step-num">3</span><span className="step-title">Задача</span></div>
-          {dataset ? (
+          {task ? (
             <>
               <div className="ds-picker-card">
                 <div className="spread" style={{ marginBottom: 6 }}>
-                  <div className="ds-title" style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{dataset.name}</div>
+                  <div className="ds-title" style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.name}</div>
                   <div className="row" style={{ gap: 6, flexShrink: 0 }}>
-                    <Button variant="ghost" onClick={() => setDatasetPickerOpen(true)}>Изменить</Button>
+                    <Button variant="ghost" onClick={() => setTaskPickerOpen(true)}>Изменить</Button>
                     <button className={`icon-btn${datasetSettingsOpen ? " icon-btn-active" : ""}`}
                       title="Настройки задачи" onClick={() => setDatasetSettingsOpen(v => !v)}>
                       <Icon name="settings" size={16} />
                     </button>
                   </div>
                 </div>
-                {dataset.desc && <div className="muted clamp-2" style={{ fontSize: 12.5, marginBottom: 8 }}>{dataset.desc}</div>}
+                {task.desc && <div className="muted clamp-2" style={{ fontSize: 12.5, marginBottom: 8 }}>{task.desc}</div>}
                 <div className="run-meta-line" style={{ margin: "0 0 10px" }}>
-                  <Tag tone={dataset.taskType === "regression" ? "blue" : dataset.taskType === "classification" ? "accent" : "neutral"}>
-                    {dataset.taskType ?? dataset.task}
+                  <Tag tone={task.taskType === "regression" ? "blue" : task.taskType === "classification" ? "accent" : "neutral"}>
+                    {task.taskType ?? task.task}
                   </Tag>
-                  <Tag mono>{dataset.metricGoal === "min" ? "minimize" : "maximize"}</Tag>
-                  {(dataset.tags ?? []).slice(0, 3).map(t => <Tag key={t} tone="neutral">{t}</Tag>)}
-                  {!dataset.prepared && <Tag tone="red">не подготовлен</Tag>}
+                  <Tag mono>{task.metricGoal === "min" ? "minimize" : "maximize"}</Tag>
+                  {(task.tags ?? []).slice(0, 3).map(t => <Tag key={t} tone="neutral">{t}</Tag>)}
+                  {!task.prepared && <Tag tone="red">не подготовлен</Tag>}
                 </div>
                 <div className="ds-stats rich" style={{ fontSize: 12 }}>
-                  <div className="ds-stat"><span className="k">rows</span><span className="v">{dataset.rows ? dataset.rows.toLocaleString() : "—"}</span></div>
-                  <div className="ds-stat"><span className="k">features</span><span className="v">{dataset.cols || "—"}</span></div>
-                  <div className="ds-stat"><span className="k">target</span><span className="v">{dataset.target}</span></div>
-                  <div className="ds-stat"><span className="k">metric</span><span className="v">{dataset.metric}</span></div>
+                  <div className="ds-stat"><span className="k">rows</span><span className="v">{task.rows ? task.rows.toLocaleString() : "—"}</span></div>
+                  <div className="ds-stat"><span className="k">features</span><span className="v">{task.cols || "—"}</span></div>
+                  <div className="ds-stat"><span className="k">target</span><span className="v">{task.target}</span></div>
+                  <div className="ds-stat"><span className="k">metric</span><span className="v">{task.metric}</span></div>
                 </div>
               </div>
               {datasetSettingsOpen && (
@@ -485,7 +485,7 @@ export default function NewRun() {
                                   {TASK_TYPES.map(tt => (
                                     <button key={tt.value}
                                       className={`sort-tab${datasetConfig.task.task_type === tt.value ? " active" : ""}`}
-                                      onClick={() => setDatasetConfig(c => c ? { ...c, task: { ...c.task, task_type: tt.value } } : c)}>
+                                      onClick={() => setTaskConfig(c => c ? { ...c, task: { ...c.task, task_type: tt.value } } : c)}>
                                       {tt.label}
                                     </button>
                                   ))}
@@ -493,15 +493,15 @@ export default function NewRun() {
                               </FI>
                               <FI label={<>Метрика <a className="docs-link" href="https://scikit-learn.org/stable/modules/model_evaluation.html" target="_blank" rel="noopener noreferrer">sklearn ↗</a></>} info="Название метрики sklearn, считается на test после submit. Агент видит только val. Напр. f1_macro, accuracy, neg_rmse, roc_auc.">
                                 <input className="input mono" value={datasetConfig.task.metric_name}
-                                  onChange={e => setDatasetConfig(c => c ? { ...c, task: { ...c.task, metric_name: e.target.value } } : c)} />
+                                  onChange={e => setTaskConfig(c => c ? { ...c, task: { ...c.task, metric_name: e.target.value } } : c)} />
                               </FI>
                               <FI label="Target column" info="Колонка с целевой переменной — то, что агент должен предсказывать. Эта колонка никогда не включается в признаки.">
                                 <input className="input mono" value={datasetConfig.task.target_col}
-                                  onChange={e => setDatasetConfig(c => c ? { ...c, task: { ...c.task, target_col: e.target.value } } : c)} />
+                                  onChange={e => setTaskConfig(c => c ? { ...c, task: { ...c.task, target_col: e.target.value } } : c)} />
                               </FI>
                             </div>
                             <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
-                              <Button variant="primary" onClick={saveDatasetConfig} disabled={datasetConfigSaving}>
+                              <Button variant="primary" onClick={saveTaskConfig} disabled={datasetConfigSaving}>
                                 {datasetConfigSaving ? <Spinner /> : "Сохранить"}
                               </Button>
                             </div>
@@ -521,15 +521,15 @@ export default function NewRun() {
                               <FI label="Описание задачи" info="Текст, который агент получит как описание задачи в начале прогона. Объясните что нужно предсказать и почему.">
                                 <textarea className="input" rows={3} style={{ resize: "vertical" }}
                                   value={datasetConfig.agent_notes.task_description}
-                                  onChange={e => setDatasetConfig(c => c ? { ...c, agent_notes: { ...c.agent_notes, task_description: e.target.value } } : c)} />
+                                  onChange={e => setTaskConfig(c => c ? { ...c, agent_notes: { ...c.agent_notes, task_description: e.target.value } } : c)} />
                               </FI>
                               <FI label="Дополнительные комментарии" info="Дополнительные подсказки агенту: особенности данных, известные ограничения, запреты. Агент видит это в каждом шаге.">
                                 <textarea className="input" rows={2} style={{ resize: "vertical" }}
                                   value={datasetConfig.agent_notes.additional_comments}
-                                  onChange={e => setDatasetConfig(c => c ? { ...c, agent_notes: { ...c.agent_notes, additional_comments: e.target.value } } : c)} />
+                                  onChange={e => setTaskConfig(c => c ? { ...c, agent_notes: { ...c.agent_notes, additional_comments: e.target.value } } : c)} />
                               </FI>
                               <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                                <Button variant="primary" onClick={saveDatasetConfig} disabled={datasetConfigSaving}>
+                                <Button variant="primary" onClick={saveTaskConfig} disabled={datasetConfigSaving}>
                                   {datasetConfigSaving ? <Spinner /> : "Сохранить"}
                                 </Button>
                               </div>
@@ -543,7 +543,7 @@ export default function NewRun() {
               )}
             </>
           ) : (
-            <Button variant="secondary" onClick={() => setDatasetPickerOpen(true)}>
+            <Button variant="secondary" onClick={() => setTaskPickerOpen(true)}>
               <Icon name="plus" size={15} /> Выбрать задачу
             </Button>
           )}
@@ -568,8 +568,8 @@ export default function NewRun() {
         <div className="preview-row"><span className="k">Модель</span><span className="v mono" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{model?.name ?? "—"}</span></div>
         <div className="preview-row"><span className="k">Провайдер</span><span className="v">{model?.provider ?? "—"}</span></div>
         <div className="preview-row"><span className="k">Режим</span><span className={`v${selectedModes.includes("gym") ? " acc" : ""}`}>{multiMode ? `${selectedCount} режима` : MODE_LABELS[primaryMode]}</span></div>
-        <div className="preview-row"><span className="k">Задача</span><span className="v">{dataset?.name ?? "—"}</span></div>
-        <div className="preview-row"><span className="k">Задача</span><span className="v">{dataset?.task ?? "—"}</span></div>
+        <div className="preview-row"><span className="k">Задача</span><span className="v">{task?.name ?? "—"}</span></div>
+        <div className="preview-row"><span className="k">Задача</span><span className="v">{task?.task ?? "—"}</span></div>
         {multiMode && <div className="preview-row"><span className="k">Прогонов</span><span className="v acc">{selectedCount} отдельных</span></div>}
         {stepBased && <div className="preview-row"><span className="k">Шагов</span><span className="v">{getModeParams(primaryMode).maxSteps}</span></div>}
         {repeatedLike && <div className="preview-row"><span className="k">Попыток</span><span className="v">{getModeParams("repeated").shots}</span></div>}
@@ -582,16 +582,16 @@ export default function NewRun() {
             {launching ? "Запуск…" : multiMode ? `Запустить ${selectedCount} прогона` : "Запустить прогон"}
           </Button>
         </div>
-        {!dataset && <div className="preview-est">Выберите задачу</div>}
-        {dataset && !dataset.prepared && <div className="preview-est">Задача не подготовлена</div>}
+        {!task && <div className="preview-est">Выберите задачу</div>}
+        {task && !task.prepared && <div className="preview-est">Задача не подготовлена</div>}
         {error && <div className="preview-est" style={{ color: "var(--red)" }}>{error}</div>}
       </div>
 
       {modelPickerOpen && models && (
         <ModelPickerModal models={models} current={modelId} onSelect={setModelId} onClose={() => setModelPickerOpen(false)} />
       )}
-      {datasetPickerOpen && datasets && (
-        <DatasetPickerModal datasets={datasets} current={datasetId} onSelect={setDatasetId} onClose={() => setDatasetPickerOpen(false)} />
+      {taskPickerOpen && tasks && (
+        <TaskPickerModal tasks={tasks} current={taskId} onSelect={setTaskId} onClose={() => setTaskPickerOpen(false)} />
       )}
     </div>
   );

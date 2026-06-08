@@ -1,6 +1,6 @@
-"""Dataset discovery, upload staging, preparation, and metadata management.
+"""Task discovery, upload staging, preparation, and metadata management.
 
-The runner contract stays intentionally small: a runnable dataset has
+The runner contract stays intentionally small: a runnable task has
 ``prepared/train.csv``, ``prepared/val.csv``, ``prepared/test.csv``, and
 ``prepared/meta.json``. The dashboard can store richer raw files and
 ``dataset_config.json`` beside that prepared form.
@@ -52,18 +52,18 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
-def sanitize_dataset_id(value: str) -> str:
-    """Return a stable, path-safe dataset slug."""
+def sanitize_task_id(value: str) -> str:
+    """Return a stable, path-safe task slug."""
     original = (value or "").strip()
     original_parts = PurePosixPath(original.replace("\\", "/")).parts
     if any(part in {"..", "."} for part in original_parts) or "/" in original or "\\" in original:
-        raise ValueError("Dataset id must not contain path separators or relative path segments.")
+        raise ValueError("Task id must not contain path separators or relative path segments.")
     raw = original.lower()
     raw = re.sub(r"\s+", "-", raw)
     safe = "".join(ch for ch in raw if ch.isalnum() or ch in "-_")
     safe = re.sub(r"-{2,}", "-", safe).strip("-_")
     if not safe or not _SLUG_RE.match(safe):
-        raise ValueError("Dataset id must start with a letter/number and use only a-z, 0-9, '-' or '_'.")
+        raise ValueError("Task id must start with a letter/number and use only a-z, 0-9, '-' or '_'.")
     return safe
 
 
@@ -190,8 +190,8 @@ def _split_paths(root: Path) -> dict[str, Path]:
     return {split: meta_dir / f"{split}.csv" for split in ("train", "val", "test")}
 
 
-def _dataset_fingerprint(root: Path) -> tuple[tuple[str, int, int], ...]:
-    """Fingerprint files that affect the dataset card/detail summary."""
+def _task_fingerprint(root: Path) -> tuple[tuple[str, int, int], ...]:
+    """Fingerprint files that affect the task card/detail summary."""
     paths = [
         _config_path(root),
         _meta_dir(root) / "meta.json",
@@ -209,11 +209,11 @@ def _dataset_fingerprint(root: Path) -> tuple[tuple[str, int, int], ...]:
     return tuple(out)
 
 
-def _invalidate_dataset_cache(dataset_id: str | None = None) -> None:
-    if dataset_id is None:
+def _invalidate_task_cache(task_id: str | None = None) -> None:
+    if task_id is None:
         _DATASET_CACHE.clear()
         return
-    for key in [key for key in _DATASET_CACHE if key[0] == dataset_id]:
+    for key in [key for key in _DATASET_CACHE if key[0] == task_id]:
         _DATASET_CACHE.pop(key, None)
 
 
@@ -301,8 +301,8 @@ def _config_from_legacy(dataset_root: Path, meta: dict[str, Any], deep: bool) ->
     }
 
 
-def describe_dataset(dataset_root: Path, *, deep: bool = False) -> dict[str, Any]:
-    """Build the UI Dataset record. ``deep`` reads prepared CSV row counts."""
+def describe_task(dataset_root: Path, *, deep: bool = False) -> dict[str, Any]:
+    """Build the UI Task record. ``deep`` reads prepared CSV row counts."""
     meta_dir = _meta_dir(dataset_root)
     meta = _read_json(meta_dir / "meta.json")
     config = _read_json(_config_path(dataset_root))
@@ -390,39 +390,39 @@ def describe_dataset(dataset_root: Path, *, deep: bool = False) -> dict[str, Any
     }
 
 
-def list_datasets(deep: bool = True) -> list[dict[str, Any]]:
+def list_tasks(deep: bool = True) -> list[dict[str, Any]]:
     root = get_settings().datasets_dir
     if not root.exists():
         return []
-    datasets: list[dict[str, Any]] = []
+    tasks: list[dict[str, Any]] = []
     for child in sorted(root.iterdir()):
         if not child.is_dir():
             continue
-        fingerprint = _dataset_fingerprint(child)
+        fingerprint = _task_fingerprint(child)
         key = (child.name, deep)
         cached = _DATASET_CACHE.get(key)
         if cached and cached[0] == fingerprint:
-            datasets.append(dict(cached[1]))
+            tasks.append(dict(cached[1]))
             continue
-        described = describe_dataset(child, deep=deep)
+        described = describe_task(child, deep=deep)
         _DATASET_CACHE[key] = (fingerprint, described)
-        datasets.append(dict(described))
-    return datasets
+        tasks.append(dict(described))
+    return tasks
 
 
-def _dataset_root(dataset_id: str) -> Path:
-    safe = sanitize_dataset_id(dataset_id)
+def _task_root(task_id: str) -> Path:
+    safe = sanitize_task_id(task_id)
     return _safe_child(get_settings().datasets_dir, safe)
 
 
-def get_dataset(dataset_id: str) -> dict[str, Any] | None:
+def get_task(task_id: str) -> dict[str, Any] | None:
     try:
-        root = _dataset_root(dataset_id)
+        root = _task_root(task_id)
     except ValueError:
         return None
     if not root.is_dir():
         return None
-    return describe_dataset(root, deep=True)
+    return describe_task(root, deep=True)
 
 
 def _format_from_path(path: Path) -> str:
@@ -499,10 +499,10 @@ def _preview_table(path: Path, *, limit: int = 50) -> dict[str, Any]:
     }
 
 
-def preview_rows(dataset_id: str, split: str = "train", limit: int = 50) -> dict[str, Any]:
+def preview_rows(task_id: str, split: str = "train", limit: int = 50) -> dict[str, Any]:
     if split not in {"train", "val", "test"}:
         raise ValueError("split must be train, val, or test")
-    root = _dataset_root(dataset_id)
+    root = _task_root(task_id)
     path = _split_paths(root)[split]
     if not path.exists():
         return {"columns": [], "rows": [], "total": 0, "shown": 0, "dtypes": {}, "missing": {}, "warnings": []}
@@ -512,15 +512,15 @@ def preview_rows(dataset_id: str, split: str = "train", limit: int = 50) -> dict
     return out
 
 
-def column_stats(dataset_id: str, split: str = "train") -> list[dict[str, Any]]:
+def column_stats(task_id: str, split: str = "train") -> list[dict[str, Any]]:
     if split not in {"train", "val", "test"}:
         raise ValueError("split must be train, val, or test")
-    root = _dataset_root(dataset_id)
+    root = _task_root(task_id)
     path = _split_paths(root)[split]
     if not path.exists():
         return []
     df = pd.read_csv(path)
-    cfg = get_dataset_config(dataset_id) or {}
+    cfg = get_task_config(task_id) or {}
     task = dict(cfg.get("task") or {})
     target = task.get("target_col")
     id_cols = set(task.get("id_columns") or [])
@@ -985,10 +985,10 @@ def _status_from_prepared(frames: dict[str, pd.DataFrame]) -> str:
 
 
 def create_from_config(payload: dict[str, Any]) -> dict[str, Any]:
-    dataset_id = sanitize_dataset_id(str(payload.get("id") or payload.get("name") or "dataset"))
-    final_root = _dataset_root(dataset_id)
+    task_id = sanitize_task_id(str(payload.get("id") or payload.get("name") or "dataset"))
+    final_root = _task_root(task_id)
     if final_root.exists():
-        raise ValueError(f"Dataset '{dataset_id}' already exists.")
+        raise ValueError(f"Task '{task_id}' already exists.")
     upload_id = payload.get("upload_id") or payload.get("uploadId")
     task = dict(payload.get("task") or {})
     splits = dict(payload.get("splits") or {})
@@ -998,18 +998,18 @@ def create_from_config(payload: dict[str, Any]) -> dict[str, Any]:
     task_type = str(task.get("task_type") or "auto")
     seed = int(splits.get("seed") or task.get("seed") or payload.get("seed") or 42)
     if not payload.get("name"):
-        raise ValueError("Dataset name is required.")
+        raise ValueError("Task name is required.")
     if not target:
         raise ValueError("Target column is required.")
     if not metric:
         raise ValueError("Metric is required.")
 
-    dataset_root = _safe_child(get_settings().datasets_dir, f".{dataset_id}-{uuid.uuid4().hex[:8]}")
+    dataset_root = _safe_child(get_settings().datasets_dir, f".{task_id}-{uuid.uuid4().hex[:8]}")
     dataset_root.mkdir(parents=True)
     try:
         return _create_from_config_in_root(
             payload=payload,
-            dataset_id=dataset_id,
+            task_id=task_id,
             dataset_root=dataset_root,
             final_root=final_root,
             upload_id=str(upload_id) if upload_id else None,
@@ -1030,7 +1030,7 @@ def create_from_config(payload: dict[str, Any]) -> dict[str, Any]:
 def _create_from_config_in_root(
     *,
     payload: dict[str, Any],
-    dataset_id: str,
+    task_id: str,
     dataset_root: Path,
     final_root: Path,
     upload_id: str | None,
@@ -1107,7 +1107,7 @@ def _create_from_config_in_root(
     status = _status_from_prepared(frames)
     created = _now_iso()
     final_config = {
-        "id": dataset_id,
+        "id": task_id,
         "name": str(payload.get("name")),
         "created_at": created,
         "updated_at": created,
@@ -1156,15 +1156,15 @@ def _create_from_config_in_root(
     _write_json(_config_path(dataset_root), final_config)
     _write_json(dataset_root / "prepared" / "meta.json", _compatible_meta(final_config))
     if final_root.exists():
-        raise ValueError(f"Dataset '{dataset_id}' already exists.")
+        raise ValueError(f"Task '{task_id}' already exists.")
     dataset_root.rename(final_root)
-    _invalidate_dataset_cache(dataset_id)
-    return describe_dataset(final_root, deep=True)
+    _invalidate_task_cache(task_id)
+    return describe_task(final_root, deep=True)
 
 
-def get_dataset_config(dataset_id: str) -> dict[str, Any] | None:
+def get_task_config(task_id: str) -> dict[str, Any] | None:
     try:
-        root = _dataset_root(dataset_id)
+        root = _task_root(task_id)
     except ValueError:
         return None
     if not root.is_dir():
@@ -1174,11 +1174,11 @@ def get_dataset_config(dataset_id: str) -> dict[str, Any] | None:
     return config or _config_from_legacy(root, meta, deep=True)
 
 
-def update_dataset_config(dataset_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
-    root = _dataset_root(dataset_id)
+def update_task_config(task_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
+    root = _task_root(task_id)
     if not root.is_dir():
         return None
-    current = get_dataset_config(dataset_id) or {}
+    current = get_task_config(task_id) or {}
     merged = {**current, **updates}
     if "task" in updates:
         merged["task"] = {**dict(current.get("task") or {}), **dict(updates.get("task") or {})}
@@ -1191,13 +1191,13 @@ def update_dataset_config(dataset_id: str, updates: dict[str, Any]) -> dict[str,
     merged["status"] = _status_from_files(root, _read_json(_meta_dir(root) / "meta.json"))
     _write_json(_config_path(root), merged)
     _write_json(_meta_dir(root) / "meta.json", _compatible_meta(merged))
-    _invalidate_dataset_cache(dataset_id)
-    return describe_dataset(root, deep=True)
+    _invalidate_task_cache(task_id)
+    return describe_task(root, deep=True)
 
 
-def update_meta(dataset_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
+def update_meta(task_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
     """Backward-compatible shallow metadata edit endpoint."""
-    config = get_dataset_config(dataset_id)
+    config = get_task_config(task_id)
     if config is None:
         return None
     task = dict(config.get("task") or {})
@@ -1217,10 +1217,10 @@ def update_meta(dataset_id: str, updates: dict[str, Any]) -> dict[str, Any] | No
         notes["task_description"] = updates["desc"]
     config["task"] = task
     config["agent_notes"] = notes
-    return update_dataset_config(dataset_id, config)
+    return update_task_config(task_id, config)
 
 
-def create_dataset(name: str, files: dict[str, bytes], meta: dict[str, Any]) -> dict[str, Any]:
+def create_task(name: str, files: dict[str, bytes], meta: dict[str, Any]) -> dict[str, Any]:
     """Backward-compatible multipart CSV upload wrapper."""
     upload = None
     upload_id = None
@@ -1237,7 +1237,7 @@ def create_dataset(name: str, files: dict[str, bytes], meta: dict[str, Any]) -> 
         mapping["test"] = "uploaded/test.csv"
     return create_from_config(
         {
-            "id": sanitize_dataset_id(name),
+            "id": sanitize_task_id(name),
             "name": meta.get("name") or name,
             "upload_id": upload_id,
             "task": {
@@ -1251,12 +1251,12 @@ def create_dataset(name: str, files: dict[str, bytes], meta: dict[str, Any]) -> 
     )
 
 
-def prepare_dataset(dataset_id: str) -> dict[str, Any] | None:
+def prepare_task(task_id: str) -> dict[str, Any] | None:
     """Rebuild prepared files from the saved config when raw files are present."""
-    config = get_dataset_config(dataset_id)
+    config = get_task_config(task_id)
     if config is None:
         return None
-    root = _dataset_root(dataset_id)
+    root = _task_root(task_id)
     task = dict(config.get("task") or {})
     splits = dict(config.get("splits") or {})
     warnings = list(config.get("warnings") or [])
@@ -1265,7 +1265,7 @@ def prepare_dataset(dataset_id: str) -> dict[str, Any] | None:
     task_type = str(task.get("task_type") or "auto")
     seed = int(splits.get("seed") or 42)
     if not target or not metric:
-        raise ValueError("Dataset config must define target_col and metric_name before prepare.")
+        raise ValueError("Task config must define target_col and metric_name before prepare.")
 
     frames: dict[str, pd.DataFrame] = {}
     source_paths: dict[str, str | None] = {}
@@ -1318,17 +1318,17 @@ def prepare_dataset(dataset_id: str) -> dict[str, Any] | None:
     config["status"] = _status_from_prepared(frames)
     _write_json(_config_path(root), config)
     _write_json(root / "prepared" / "meta.json", _compatible_meta(config))
-    _invalidate_dataset_cache(dataset_id)
-    return describe_dataset(root, deep=True)
+    _invalidate_task_cache(task_id)
+    return describe_task(root, deep=True)
 
 
-def delete_dataset(dataset_id: str) -> bool:
+def delete_task(task_id: str) -> bool:
     try:
-        root = _dataset_root(dataset_id)
+        root = _task_root(task_id)
     except ValueError:
         return False
     if not root.is_dir():
         return False
     shutil.rmtree(root)
-    _invalidate_dataset_cache(dataset_id)
+    _invalidate_task_cache(task_id)
     return True
