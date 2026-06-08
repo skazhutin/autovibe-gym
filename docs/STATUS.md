@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-08 (gym now beats single-shot: validation-improvement nudge + unknown-cell-id robustness guard, both experiment-validated; run summary polish; model registry is source of truth for LLM config; ML toolbox deps added; dashboard/product-mode keys remapped: free=Free gym, directive=Directive gym, fixed=Fixed gym; dashboard detail metric goal label aligned to maximize/minimize; task cards now use title-case labels and inline grid dates; task detail page now exposes bottom prepare action; return action icon refreshed across archive screens; prepared task rebuild now accepts existing prepared split paths; task cards now omit updated date in list views; settings now include dashboard language preference; task cards no longer show metric-goal badge; dashboard now supports animation preference)
+**Last updated:** 2026-06-08 (gym now beats single-shot: validation-improvement nudge + unknown-cell-id robustness guard, both experiment-validated; run summary polish; model registry is source of truth for LLM config; ML toolbox deps added; dashboard/product-mode keys remapped: free=Free gym, directive=Directive gym, fixed=Fixed gym; dashboard detail metric goal label aligned to maximize/minimize; task cards now use title-case labels and inline grid dates; task detail page now exposes bottom prepare action; return action icon refreshed across archive screens; prepared task rebuild now accepts existing prepared split paths; task cards now omit updated date in list views; settings now include dashboard language preference; task cards no longer show metric-goal badge; dashboard now supports animation preference; dashboard checklist accuracy fix)
 **Phase:** Hardening after first full H200 recon + building the local control-panel dashboard for configuring/launching/inspecting runs.
 
 ---
@@ -197,6 +197,16 @@ Current dashboard motion cycle:
   existing inline motion styles.
 - When enabled, buttons, cards, toggles, and a few core interactive surfaces
   use a more consistent motion curve and timing set.
+Current dashboard checklist accuracy cycle:
+
+- Checklist APIs now prefer finished-run private checklist artifacts for exact
+  item identity instead of filling green checks from coverage count alone.
+- Source-only successful executions now count behavioral checklist evidence, so
+  single-shot / legacy generated-solution artifacts are not stuck at `0/12`
+  when stdout is empty.
+- Verified the two latest local runs through `http://127.0.0.1:5173/api`:
+  fixed gym `live_ea854e50` shows exact `9/12`; single-shot `live_2c5d0475`
+  shows `4/12` from generated code replay.
 Current dashboard logo cycle:
 
 - Replaced the old H-like sidebar logo mark with a diagonal dumbbell mark
@@ -372,8 +382,12 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 
 | Date | Change |
 |------|--------|
+<<<<<<< HEAD
 | 2026-06-08 | Gym now beats single-shot (experiment-validated, gemma-4-26b): (1) validation-improvement nudge — after `validate`, NotebookGymEnv reports best-so-far + remaining budget and pushes the agent to beat its own baseline (honest, val-split only, feedback modes only); flips student_dropout from −0.004 (gym lost) to +0.013 over single-shot. (1b) unknown-cell-id guard — targeting a non-existent cell is now a recoverable blocker instead of a KeyError that crashed the whole episode, restoring valid-submit rate to 1.0. Measured-but-rejected: per-class-recall diagnostic and candidate-list nudge both hurt (extra feedback verbosity inflates the trajectory → more clean-run failures) |
 | 2026-06-06 | Tightened run-summary UX: the prompt remains English-only, normalization no longer chops already-short section bodies mid-sentence, and the Run Detail «Саммари решения» card now renders parsed summary sections (plus inline code) as a structured two-column report instead of raw markdown paragraphs |
+=======
+| 2026-06-08 | Dashboard checklist accuracy: finished MLflow runs use `private_episode/checklist_private.json` for exact closed-item identity; public replay/source-only generated solutions are used before stale fallback metrics, fixing the latest fixed-gym `9/12` item mismatch and single-shot `0/12` undercount |
+>>>>>>> 8177b01 (fix(dashboard): improve checklist accuracy (#61))
 | 2026-06-06 | Post-run self-summary: once the model solved the task (reached a final submit for gym/fixed — even if the hidden test rejected it — or produced a usable candidate for single/repeated) one extra best-effort LLM call asks the model to summarize its own solution; saved as `run_summary.json` (`gym/run_summary.py`), served via `GET /runs/{id}/summary` + `hasSummary` on `get_run`, and rendered as a standalone report card (accent side-stripe, neutral surface — deliberately not styled like a step thought) above a «Ход рассуждений по шагам» section on the «Мысли» tab, which now shows for any run with a summary even when thoughts mode is off (old/unsolved runs without either stay hidden). Privacy preserved: the summarizer only sees the conversation it already had, never the hidden test score |
 | 2026-06-08 | Remapped user-facing product-mode labels: free gym is `Free gym`, checklist gym is `Directive gym`, and fixed gym remains `Fixed gym`; added matching CLI aliases for the new labels |
 | 2026-06-06 | Dashboard launcher now passes explicit `LLM_PROVIDER` from the selected model provider, preventing OpenAI-compatible models from inheriting a Gemini `.env` default |
