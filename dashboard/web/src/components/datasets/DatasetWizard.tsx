@@ -519,7 +519,7 @@ export function DatasetWizard({ onClose, onCreated }: { onClose: () => void; onC
 
   return (
     <Modal
-      title="Новая проблема"
+      title="Новая задача"
       width={980}
       onClose={onClose}
       footer={
@@ -601,12 +601,12 @@ export function DatasetWizard({ onClose, onCreated }: { onClose: () => void; onC
                 <FieldInfo label="Metric goal" info="Направление оптимизации: maximize — чем больше, тем лучше (accuracy, f1); minimize — чем меньше, тем лучше (rmse, mae). Выводится автоматически из имени метрики.">
                   <SelectDropdown value={metricGoal} options={[{ value: "max", label: "maximize" }, { value: "min", label: "minimize" }]} onChange={(v) => setMetricGoal(v as MetricGoal)} />
                 </FieldInfo>
-                <FieldInfo label="Теги" info="Ключевые слова через запятую — используются для поиска и фильтрации на странице Проблем. Пример: tabular, benchmark, uci">
+                <FieldInfo label="Теги" info="Ключевые слова через запятую — используются для поиска и фильтрации на странице Задач. Пример: tabular, benchmark, uci">
                   <input className="input" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="tabular, benchmark" />
                 </FieldInfo>
               </div>
 
-              <FieldInfo label="Описание" info="Короткое описание для карточки проблемы. Не влияет ни на что — только отображается в интерфейсе.">
+              <FieldInfo label="Описание" info="Короткое описание для карточки задачи. Не влияет ни на что — только отображается в интерфейсе.">
                 <textarea className="input" rows={2} value={desc} onChange={(e) => setDesc(e.target.value)} />
               </FieldInfo>
 
@@ -795,10 +795,10 @@ export function DatasetWizard({ onClose, onCreated }: { onClose: () => void; onC
               <FieldInfo label="Структура данных" info="Описание колонок: типы, форматы, особенности (пропуски, выбросы). Помогает агенту быстрее разобраться с данными.">
                 <textarea className="input" rows={3} value={agentNotes.data_structure} onChange={(e) => setAgentNotes((n) => ({ ...n, data_structure: e.target.value }))} />
               </FieldInfo>
-              <FieldInfo label="Дополнительные комментарии" info="Любые пояснения для агента: известные проблемы в данных, советы по feature engineering, особенности задачи.">
+              <FieldInfo label="Дополнительные комментарии" info="Любые пояснения для агента: известные задачи в данных, советы по feature engineering, особенности задачи.">
                 <textarea className="input" rows={3} value={agentNotes.additional_comments} onChange={(e) => setAgentNotes((n) => ({ ...n, additional_comments: e.target.value }))} />
               </FieldInfo>
-              <FieldInfo label="Предупреждения" info="Потенциальные источники data leakage или других проблем, о которых должен знать агент. Не указывайте тестовые ответы.">
+              <FieldInfo label="Предупреждения" info="Потенциальные источники data leakage или других нюансов, о которых должен знать агент. Не указывайте тестовые ответы.">
                 <textarea className="input" rows={2} value={agentNotes.leakage_warning} onChange={(e) => setAgentNotes((n) => ({ ...n, leakage_warning: e.target.value }))} />
               </FieldInfo>
             </div>

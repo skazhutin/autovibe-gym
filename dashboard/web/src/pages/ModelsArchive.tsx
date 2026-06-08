@@ -2,11 +2,10 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { api, type ModelRec } from "../lib/api";
+import { ModelModal } from "./Models";
 import { useAsync } from "../lib/hooks";
-import { Button, Card, Dot, EmptyState, Skeleton, Spinner, Tag } from "../components/ui";
+import { Button, Card, Dot, EmptyState, Skeleton, Tag } from "../components/ui";
 import { Icon } from "../components/Icon";
-
-const PROVIDERS = ["OpenAI-совместимый", "vLLM", "Gemini", "LiteLLM"];
 
 function ConfirmModal({ count, onConfirm, onCancel, busy }: { count: number; onConfirm: () => void; onCancel: () => void; busy: boolean }) {
   return createPortal(
@@ -30,8 +29,9 @@ export default function ModelsArchive() {
   const nav = useNavigate();
   const { data: models, loading, reload } = useAsync(() => api.listArchivedModels(), []);
   const [q, setQ] = useState("");
-  const [providerFilter, setProviderFilter] = useState("all");
+  const [providerFilter] = useState("all");
 
+  const [edit, setEdit] = useState<ModelRec | null>(null);
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirm, setConfirm] = useState(false);
@@ -104,23 +104,21 @@ export default function ModelsArchive() {
         <div className="model-grid">
           {filtered.map((m) => (
             <Card key={m.id} className={`model-card${selecting && selected.has(m.id) ? " row-selected" : ""}`}
-              onClick={() => selecting && toggleSelect(m.id)} style={{ cursor: selecting ? "pointer" : undefined }}>
-              <div className="spread" style={{ marginBottom: 6 }}>
+              onClick={() => selecting ? toggleSelect(m.id) : setEdit(m)} style={{ cursor: "pointer" }} hover={!selecting}>
+              <div className="spread" style={{ marginBottom: 5 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: 1 }}>
-                  {selecting && <input type="checkbox" className="row-checkbox" checked={selected.has(m.id)} onChange={() => toggleSelect(m.id)} onClick={(e) => e.stopPropagation()} />}
                   <div className="ds-title" style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.name}</div>
                 </div>
+                <Tag><Dot tone="gray" />не проверено</Tag>
               </div>
-              <div className="run-meta-line" style={{ margin: "0 0 10px" }}>
+              <div className="run-meta-line" style={{ margin: "0 0 8px" }}>
                 <Tag>{m.provider}</Tag>
-                <span className="row" style={{ gap: 5 }}>
-                  <Dot tone={m.online === false ? "red" : m.online ? "green" : "gray"} />
-                  <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{m.online === false ? "офлайн" : m.online ? "онлайн" : "не проверено"}</span>
-                </span>
+                {m.hasApiKey && <Tag>API key</Tag>}
               </div>
               <div className="ds-stats">
                 <div className="ds-stat"><span className="k">Input limit</span><span className="v">{(m.ctx / 1024).toFixed(0)}k</span></div>
                 <div className="ds-stat"><span className="k">Output limit</span><span className="v">{m.maxTokens ? `${(m.maxTokens / 1024).toFixed(0)}k` : "—"}</span></div>
+                <div className={`ds-stat${(m.baseUrl || "").length > 35 ? " span-full" : ""}`}><span className="k">Base URL</span><span className="v" style={{ fontSize: 11.5 }}>{m.baseUrl || "—"}</span></div>
               </div>
             </Card>
           ))}
@@ -143,6 +141,8 @@ export default function ModelsArchive() {
       )}
 
       {confirm && <ConfirmModal count={selected.size} onConfirm={doRestore} onCancel={() => setConfirm(false)} busy={restoring} />}
+      {edit && <ModelModal initial={edit} onClose={() => setEdit(null)} onDone={() => { setEdit(null); reload(); }}
+        onUnarchive={async () => { await api.unarchiveModels([edit.id]); setEdit(null); reload(); }} />}
     </div>
   );
 }

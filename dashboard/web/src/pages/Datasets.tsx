@@ -3,6 +3,7 @@ import { useNavigate, useOutletContext } from "react-router-dom";
 import type { SetHeaderAction } from "../components/Layout";
 import { api, type Dataset, type DatasetStatus } from "../lib/api";
 import { useAsync } from "../lib/hooks";
+import { createPortal } from "react-dom";
 import { Button, Card, EmptyState, Field, Modal, SelectDropdown, Skeleton, Spinner, Tag } from "../components/ui";
 import { Icon } from "../components/Icon";
 import { DatasetWizard } from "../components/datasets/DatasetWizard";
@@ -16,9 +17,9 @@ const STATUS_TONE: Record<DatasetStatus, "green" | "blue" | "red"> = {
   unprepared: "red",
 };
 const STATUS_LABEL: Record<DatasetStatus, string> = {
-  prepared: "prepared",
-  partial: "partial",
-  unprepared: "unprepared",
+  prepared: "подготовлен",
+  partial: "частичный",
+  unprepared: "не подготовлен",
 };
 const TASK_LABEL: Record<string, string> = {
   classification: "classification",
@@ -61,21 +62,16 @@ function textBlob(d: Dataset) {
     .toLowerCase();
 }
 
-function DatasetCard({ d, onOpen, onArchive }: { d: Dataset; onOpen: () => void; onArchive: () => void }) {
+function DatasetCard({ d, onOpen, selecting, isSelected, onToggle }: { d: Dataset; onOpen: () => void; selecting: boolean; isSelected: boolean; onToggle: () => void }) {
   const status = statusOf(d);
   const taskLabel = TASK_LABEL[d.taskType ?? d.task] ?? d.task;
   return (
-    <Card className="ds-card dataset-card-rich" hover onClick={onOpen}>
+    <Card className={`ds-card dataset-card-rich${selecting && isSelected ? " row-selected" : ""}`} hover onClick={() => selecting ? onToggle() : onOpen()}>
       <div className="spread">
         <div style={{ minWidth: 0 }}>
           <div className="ds-title">{d.name}</div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <Tag tone={STATUS_TONE[status]}>{STATUS_LABEL[status]}</Tag>
-          <button className="icon-btn ds-delete-btn" title="Архивировать" onClick={(e) => { e.stopPropagation(); onArchive(); }}>
-            <Icon name="archive" size={15} />
-          </button>
-        </div>
+        <Tag tone={STATUS_TONE[status]}>{STATUS_LABEL[status]}</Tag>
       </div>
       {d.desc && <div className="muted clamp-2">{d.desc}</div>}
       <div className="run-meta-line" style={{ margin: 0 }}>
@@ -112,13 +108,18 @@ export default function Datasets() {
   const [wizardOpen, setWizardOpen] = useState(false);
 
   useEffect(() => {
-    setHeaderAction({ label: "Новая проблема", icon: "plus", onClick: () => setWizardOpen(true) });
+    setHeaderAction({ label: "Новая задача", icon: "plus", onClick: () => setWizardOpen(true) });
     return () => setHeaderAction(null);
   }, [setHeaderAction]);
   const [toArchive, setToArchive] = useState<Dataset | null>(null);
   const [busyArchive, setBusyArchive] = useState(false);
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmBulk, setConfirmBulk] = useState(false);
+  const [busyBulk, setBusyBulk] = useState(false);
   const [query, setQuery] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [sortOpen, setSortOpen] = useState(false);
   const [taskFilter, setTaskFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [metricFilter, setMetricFilter] = useState("all");
@@ -146,12 +147,23 @@ export default function Datasets() {
     });
   }, [data, metricFilter, query, sortField, sortDir, statusFilter, taskFilter]);
 
+  const allFilteredSelected = filtered.length > 0 && filtered.every((d) => selected.has(d.id));
+  function toggleSelect(id: string) { setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; }); }
+  function toggleSelectAll() { setSelected((s) => { const n = new Set(s); if (allFilteredSelected) filtered.forEach((d) => n.delete(d.id)); else filtered.forEach((d) => n.add(d.id)); return n; }); }
+  function cancelSelect() { setSelecting(false); setSelected(new Set()); }
+
+  async function doBulkArchive() {
+    setBusyBulk(true);
+    try { await api.archiveDatasets([...selected]); setConfirmBulk(false); cancelSelect(); reload(); }
+    finally { setBusyBulk(false); }
+  }
+
   async function doArchive() {
     if (!toArchive) return;
     setBusyArchive(true);
     try {
       await api.archiveDatasets([toArchive.id]);
-      setNotice(`Проблема ${toArchive.name} перемещена в архив.`);
+      setNotice(`Задача ${toArchive.name} перемещена в архив.`);
       setToArchive(null);
       reload();
     } finally {
@@ -175,35 +187,42 @@ export default function Datasets() {
       {notice && <div className="success-line"><Icon name="check" size={15} /> {notice}</div>}
 
       <Card className="dataset-toolbar">
-        <div className="filters" style={{ marginBottom: 0 }}>
-          <div className="search">
+        <div className="filters datasets-toolbar" style={{ marginBottom: 0 }}>
+          <div className="search datasets-toolbar-search">
             <Icon name="search" size={16} />
-            <input className="input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Поиск по проблемам..." />
+            <input className="input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Поиск по задачам..." />
           </div>
-          <div className="sort-tabs">
-            {(["updated", "created", "az"] as SortField[]).map((f) => (
-              <button
-                key={f}
-                className={`sort-tab${sortField === f ? " active" : ""}`}
-                onClick={() => { if (sortField === f) setSortDir((d) => d === "asc" ? "desc" : "asc"); else { setSortField(f); setSortDir("desc"); } }}
-              >
-                {f === "updated" ? "Обновление" : f === "created" ? "Создание" : "Алфавит"}
-                {sortField === f && <Icon name={sortDir === "desc" ? "arrowDown" : "arrowUp"} size={13} />}
-              </button>
-            ))}
+          <div className="datasets-toolbar-controls">
+            <Button variant={sortOpen ? "primary" : "ghost"} icon="arrowUpDown" onClick={() => { setSortOpen((v) => !v); setFiltersOpen(false); }}>Сортировка</Button>
+            <Button variant={filtersOpen ? "primary" : "ghost"} icon="sliders" onClick={() => { setFiltersOpen((v) => !v); setSortOpen(false); }}>Фильтры</Button>
+            <Button variant={selecting ? "primary" : "secondary"} onClick={() => setSelecting((v) => !v)} style={{ width: 96 }}>{selecting ? "Готово" : "Выбрать"}</Button>
           </div>
-          <Button variant="ghost" icon="sliders" onClick={() => setFiltersOpen((v) => !v)}>Фильтры</Button>
         </div>
+        {sortOpen && (
+          <div className="dataset-filters-grid">
+            <div style={{ gridColumn: "1 / -1" }}><Field label="Сортировать по:">
+              <div className="sort-tabs" style={{ width: "100%" }}>
+                {(["updated", "created", "az"] as SortField[]).map((f) => (
+                  <button key={f} className={`sort-tab${sortField === f ? " active" : ""}`} style={{ flex: 1, justifyContent: "center" }}
+                    onClick={() => { if (sortField === f) setSortDir((d) => d === "asc" ? "desc" : "asc"); else { setSortField(f); setSortDir("desc"); } }}>
+                    {f === "updated" ? "Обновление" : f === "created" ? "Создание" : "Алфавит"}
+                    {sortField === f && <Icon name={sortDir === "desc" ? "arrowDown" : "arrowUp"} size={13} />}
+                  </button>
+                ))}
+              </div>
+            </Field></div>
+          </div>
+        )}
         {filtersOpen && (
           <div className="dataset-filters-grid">
             <Field label="Задача">
               <SelectDropdown
                 value={taskFilter}
                 options={[
-                  { value: "all", label: "все" },
-                  { value: "classification", label: "classification" },
-                  { value: "regression", label: "regression" },
-                  { value: "unknown", label: "unknown" },
+                  { value: "all", label: "Все" },
+                  { value: "classification", label: "Classification" },
+                  { value: "regression", label: "Regression" },
+                  { value: "unknown", label: "Unknown" },
                 ]}
                 onChange={setTaskFilter}
               />
@@ -212,10 +231,10 @@ export default function Datasets() {
               <SelectDropdown
                 value={statusFilter}
                 options={[
-                  { value: "all", label: "все" },
-                  { value: "prepared", label: "подготовлен" },
-                  { value: "partial", label: "частичный" },
-                  { value: "unprepared", label: "не подготовлен" },
+                  { value: "all", label: "Все" },
+                  { value: "prepared", label: "Подготовлен" },
+                  { value: "partial", label: "Частичный" },
+                  { value: "unprepared", label: "Не подготовлен" },
                 ]}
                 onChange={setStatusFilter}
               />
@@ -223,10 +242,19 @@ export default function Datasets() {
             <Field label="Метрика">
               <SelectDropdown
                 value={metricFilter}
-                options={[{ value: "all", label: "все" }, ...metrics.map((m) => ({ value: m, label: m }))]}
+                options={[{ value: "all", label: "Все" }, ...metrics.map((m) => ({ value: m, label: m }))]}
                 onChange={setMetricFilter}
               />
             </Field>
+          </div>
+        )}
+        {selecting && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingTop: 12, borderTop: "1px solid var(--border)", marginTop: 12 }}>
+            <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text-dim)", letterSpacing: "0.04em", textTransform: "uppercase" }}>Режим редактирования</div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <Button variant="secondary" onClick={toggleSelectAll}>{allFilteredSelected ? "Снять выделение" : "Выбрать все"}</Button>
+              <Button variant="secondary" onClick={() => setSelected(new Set())}>Сбросить все</Button>
+            </div>
           </div>
         )}
       </Card>
@@ -241,7 +269,7 @@ export default function Datasets() {
       ) : (
         <div className="dataset-grid">
           {filtered.map((d) => (
-            <DatasetCard key={d.id} d={d} onOpen={() => nav(`/problems/${d.id}`)} onArchive={() => setToArchive(d)} />
+            <DatasetCard key={d.id} d={d} onOpen={() => nav(`/problems/${d.id}`)} selecting={selecting} isSelected={selected.has(d.id)} onToggle={() => toggleSelect(d.id)} />
           ))}
         </div>
       )}
@@ -252,10 +280,38 @@ export default function Datasets() {
         </button>
       </div>
 
+      {selecting && createPortal(
+        <div className="selection-bar">
+          <span className="selection-bar-label">Выбрано {selected.size} задач{selected.size === 1 ? "а" : selected.size < 5 ? "и" : ""}</span>
+          <Button variant="primary" onClick={() => setConfirmBulk(true)} disabled={selected.size === 0}>
+            <Icon name="archive" size={15} /> Архивировать
+          </Button>
+          <Button variant="secondary" onClick={cancelSelect}>Отменить</Button>
+        </div>,
+        document.body
+      )}
+
+      {confirmBulk && createPortal(
+        <div className="modal-backdrop" onClick={() => setConfirmBulk(false)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <h3 className="modal-title">Архивировать задачи?</h3>
+            <p className="modal-desc">
+              {selected.size === 1 ? "1 задача будет перемещена в архив." : `${selected.size} задач будут перемещены в архив.`}
+              {" "}Вернуть их можно из раздела «Архив».
+            </p>
+            <div className="modal-actions">
+              <Button variant="secondary" onClick={() => setConfirmBulk(false)} disabled={busyBulk}>Отменить</Button>
+              <Button variant="primary" onClick={doBulkArchive} disabled={busyBulk}>{busyBulk ? "Архивирование…" : "Архивировать"}</Button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
       {wizardOpen && <DatasetWizard onClose={() => setWizardOpen(false)} onCreated={created} />}
       {toArchive && (
         <Modal
-          title="Архивировать проблему?"
+          title="Архивировать задачу?"
           width={420}
           onClose={() => setToArchive(null)}
           footer={

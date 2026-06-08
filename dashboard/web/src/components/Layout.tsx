@@ -10,7 +10,7 @@ const NAV = [
   { to: "/new", label: "Новый прогон", icon: "play" },
   { to: "/runs", label: "Прогоны", icon: "runs" },
   { to: "/compare", label: "Сравнение", icon: "compare" },
-  { to: "/problems", label: "Проблемы", icon: "database" },
+  { to: "/problems", label: "Задачи", icon: "check2" },
   { to: "/models", label: "Модели", icon: "cpu" },
   { to: "/settings", label: "Настройки", icon: "settings" },
 ];
@@ -23,8 +23,8 @@ const META: { match: (p: string) => boolean; title: string; sub: string }[] = [
   { match: (p) => p.startsWith("/runs/"), title: "Прогон", sub: "Решение агента, метрики и диагностика" },
   { match: (p) => p.startsWith("/runs"), title: "Прогоны", sub: "История всех запусков" },
   { match: (p) => p.startsWith("/compare"), title: "Сравнение", sub: "Сопоставление прогонов по метрикам" },
-  { match: (p) => p.startsWith("/problems/"), title: "Проблема", sub: "Датасет, статистика и метаданные" },
-  { match: (p) => p.startsWith("/problems"), title: "Проблемы", sub: "Датасеты для экспериментов LLM-агента" },
+  { match: (p) => p.startsWith("/problems/"), title: "Задача", sub: "Задача, статистика и метаданные" },
+  { match: (p) => p.startsWith("/problems"), title: "Задачи", sub: "Задачи для экспериментов LLM-агента" },
   { match: (p) => p.startsWith("/models"), title: "Модели", sub: "Реестр LLM-эндпоинтов" },
   { match: (p) => p.startsWith("/settings"), title: "Настройки", sub: "Подключения и внешний вид" },
 ];

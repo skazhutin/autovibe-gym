@@ -56,6 +56,7 @@ export interface ModelRec {
   online: boolean | null;
   hasApiKey?: boolean;
   apiKeyEnv?: string;
+  createdAt?: string | null;
 }
 
 export interface Dataset {

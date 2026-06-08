@@ -10,7 +10,7 @@ const STATUS_TONE: Record<DatasetStatus, "green" | "blue" | "red"> = {
   prepared: "green", partial: "blue", unprepared: "red",
 };
 const STATUS_LABEL: Record<DatasetStatus, string> = {
-  prepared: "prepared", partial: "partial", unprepared: "unprepared",
+  prepared: "подготовлен", partial: "частичный", unprepared: "не подготовлен",
 };
 const TASK_LABEL: Record<string, string> = {
   classification: "classification", regression: "regression", auto: "auto", unknown: "unknown",
@@ -28,9 +28,9 @@ function ConfirmModal({ count, onConfirm, onCancel, busy }: { count: number; onC
   return createPortal(
     <div className="modal-backdrop" onClick={onCancel}>
       <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-        <h3 className="modal-title">Вернуть проблемы?</h3>
+        <h3 className="modal-title">Вернуть задачи?</h3>
         <p className="modal-desc">
-          {count === 1 ? "1 проблема будет возвращена из архива." : `${count} проблем будут возвращены из архива.`}
+          {count === 1 ? "1 задача будет возвращена из архива." : `${count} задач будут возвращены из архива.`}
         </p>
         <div className="modal-actions">
           <Button variant="secondary" onClick={onCancel} disabled={busy}>Отменить</Button>
@@ -89,7 +89,7 @@ export default function DatasetsArchive() {
     <div className="stack" style={{ gap: 18 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <button className="archive-link" onClick={() => nav("/problems")}>
-          <Icon name="chevronLeft" size={15} /> Назад к проблемам
+          <Icon name="chevronLeft" size={15} /> Назад к задачам
         </button>
       </div>
 
@@ -150,13 +150,13 @@ export default function DatasetsArchive() {
         </div>
       ) : (
         <Card>
-          <EmptyState icon="archive" title="Архив пуст" text="Архивированные проблемы появятся здесь." />
+          <EmptyState icon="archive" title="Архив пуст" text="Архивированные задачи появятся здесь." />
         </Card>
       )}
 
       {selecting && selected.size > 0 && createPortal(
         <div className="selection-bar">
-          <span className="selection-bar-label">Выбрано {selected.size} проблем{selected.size === 1 ? "а" : "ы"}</span>
+          <span className="selection-bar-label">Выбрано {selected.size} задач{selected.size === 1 ? "а" : selected.size < 5 ? "и" : ""}</span>
           <Button variant="primary" onClick={() => setConfirm(true)}>
             <Icon name="undo" size={15} /> Вернуть
           </Button>
