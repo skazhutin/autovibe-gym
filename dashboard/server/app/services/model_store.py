@@ -6,6 +6,7 @@ import os
 import urllib.error
 import urllib.request
 import uuid
+from datetime import datetime, timezone
 from typing import Any
 
 from ..config import get_settings
@@ -79,6 +80,7 @@ def create_model(payload: dict[str, Any]) -> dict[str, Any]:
         "temp": payload.get("temp", 0.4),
         "maxTokens": payload.get("maxTokens") or 8192,
         "online": None,
+        "createdAt": datetime.now(timezone.utc).isoformat(),
     }
     models.append(record)
     _save(models)

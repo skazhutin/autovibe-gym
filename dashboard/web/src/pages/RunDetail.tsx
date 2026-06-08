@@ -373,7 +373,7 @@ export default function RunDetail() {
             <span className="mono">{run.model}</span>
             <Tag tone={run.mode === "gym" || run.mode === "batch" ? "accent" : "neutral"}>{MODE_LABELS[run.mode]}</Tag>
             <span>·</span>
-            <span>{run.dataset}</span>
+            <span>{run.task}</span>
           </div>
           <div className="chip-metrics">
             <ChipMetric label="чеклист" value={`${run.checklist}/${run.checklistTotal}`}

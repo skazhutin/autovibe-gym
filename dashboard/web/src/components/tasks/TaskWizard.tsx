@@ -3,11 +3,11 @@ import { createPortal } from "react-dom";
 import {
   api,
   type AgentNotes,
-  type Dataset,
-  type DatasetCreatePayload,
-  type DatasetPreview,
-  type DatasetSource,
-  type DatasetTaskConfig,
+  type Task,
+  type TaskCreatePayload,
+  type TaskPreview,
+  type TaskSource,
+  type TaskConfig,
   type UploadedFileNode,
 } from "../../lib/api";
 import { Button, Card, Field, Modal, SelectDropdown, Spinner, Tag } from "../ui";
@@ -145,7 +145,7 @@ function FileRows({
   if (!rows.length) return <div className="empty-inline">Файлы ещё не загружены.</div>;
   return (
     <div className="table-wrap">
-      <table className="data dataset-file-table">
+      <table className="data task-file-table">
         <thead>
           <tr>
             <th>Файл</th><th>Формат</th><th>Размер</th><th>Форма</th><th />
@@ -176,7 +176,7 @@ function FileRows({
   );
 }
 
-function PreviewBox({ preview, target }: { preview: DatasetPreview | null; target: string }) {
+function PreviewBox({ preview, target }: { preview: TaskPreview | null; target: string }) {
   if (!preview) return null;
   return (
     <Card style={{ padding: 0 }}>
@@ -205,8 +205,8 @@ function PreviewBox({ preview, target }: { preview: DatasetPreview | null; targe
   );
 }
 
-function SourceEditor({ sources, onChange }: { sources: DatasetSource[]; onChange: (v: DatasetSource[]) => void }) {
-  const update = (idx: number, patch: DatasetSource) => onChange(sources.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
+function SourceEditor({ sources, onChange }: { sources: TaskSource[]; onChange: (v: TaskSource[]) => void }) {
+  const update = (idx: number, patch: TaskSource) => onChange(sources.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
   return (
     <div className="stack" style={{ gap: 12 }}>
       {sources.map((source, idx) => (
@@ -246,7 +246,7 @@ function clearDraft() {
   try { localStorage.removeItem(DRAFT_KEY); } catch {}
 }
 
-export function DatasetWizard({ onClose, onCreated }: { onClose: () => void; onCreated: (dataset: Dataset) => void }) {
+export function TaskWizard({ onClose, onCreated }: { onClose: () => void; onCreated: (task: Task) => void }) {
   const fileInput = useRef<HTMLInputElement>(null);
 
   // Restore from draft on first mount
@@ -271,7 +271,7 @@ export function DatasetWizard({ onClose, onCreated }: { onClose: () => void; onC
   const [uploadUrl, setUploadUrl] = useState("");
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [previewPath, setPreviewPath] = useState<string | null>(null);
-  const [preview, setPreview] = useState<DatasetPreview | null>(null);
+  const [preview, setPreview] = useState<TaskPreview | null>(null);
 
   // Step 2 — Splits
   const [splitMode, setSplitMode] = useState<SplitMode>((d?.splitMode as SplitMode) ?? "raw_split");
@@ -307,7 +307,7 @@ export function DatasetWizard({ onClose, onCreated }: { onClose: () => void; onC
   );
 
   // Step 5 — Sources
-  const [sources, setSources] = useState<DatasetSource[]>((d?.sources as DatasetSource[]) ?? []);
+  const [sources, setSources] = useState<TaskSource[]>((d?.sources as TaskSource[]) ?? []);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -357,7 +357,7 @@ export function DatasetWizard({ onClose, onCreated }: { onClose: () => void; onC
       const dupes: string[] = [];
       for (const file of Array.from(picked)) {
         if (existingNames.has(file.name)) { dupes.push(file.name); continue; }
-        const res = await api.uploadDatasetFile(file, current);
+        const res = await api.uploadTaskFile(file, current);
         current = res.upload_id;
         latestFiles = res.files;
         existingNames.add(file.name);
@@ -373,7 +373,7 @@ export function DatasetWizard({ onClose, onCreated }: { onClose: () => void; onC
     if (!uploadUrl.trim()) return;
     setBusy(true); setError(null);
     try {
-      const res = await api.uploadDatasetFromUrl(uploadUrl.trim(), uploadId);
+      const res = await api.uploadTaskFromUrl(uploadUrl.trim(), uploadId);
       setUploadId(res.upload_id);
       setFiles(res.files);
       setUploadUrl("");
@@ -442,7 +442,7 @@ export function DatasetWizard({ onClose, onCreated }: { onClose: () => void; onC
     setMetricGoal(inferGoal(nextMetric));
   }
 
-  function taskConfig(): DatasetTaskConfig {
+  function taskConfig(): TaskConfig {
     return {
       task_type: taskType,
       target_col: target.trim(),
@@ -462,7 +462,7 @@ export function DatasetWizard({ onClose, onCreated }: { onClose: () => void; onC
     };
   }
 
-  function buildPayload(): DatasetCreatePayload {
+  function buildPayload(): TaskCreatePayload {
     const notes = { ...agentNotes, column_descriptions: {} };
     return {
       id: finalSlug,
@@ -487,12 +487,12 @@ export function DatasetWizard({ onClose, onCreated }: { onClose: () => void; onC
     };
   }
 
-  async function createDataset() {
+  async function createTask() {
     const stepError = [0, 1, 2].map((idx) => validateStep(idx)).find(Boolean);
     if (stepError) { setError(stepError); return; }
     setBusy(true); setError(null);
     try {
-      const created = await api.createDatasetFromConfig(buildPayload());
+      const created = await api.createTaskFromConfig(buildPayload());
       clearDraft(); // success → clear saved draft
       onCreated(created);
     }
@@ -530,7 +530,7 @@ export function DatasetWizard({ onClose, onCreated }: { onClose: () => void; onC
           {step < STEPS.length - 1 ? (
             <Button variant="primary" onClick={next} disabled={busy}>Далее</Button>
           ) : (
-            <Button variant="primary" onClick={createDataset} disabled={busy}>
+            <Button variant="primary" onClick={createTask} disabled={busy}>
               {busy ? <Spinner /> : "Создать"}
             </Button>
           )}
@@ -610,7 +610,7 @@ export function DatasetWizard({ onClose, onCreated }: { onClose: () => void; onC
                 <textarea className="input" rows={2} value={desc} onChange={(e) => setDesc(e.target.value)} />
               </FieldInfo>
 
-              <div className="path-preview">Папка: <span className="mono">datasets/{finalSlug || "dataset_id"}</span></div>
+              <div className="path-preview">Папка: <span className="mono">tasks/{finalSlug || "task_id"}</span></div>
             </div>
           )}
 

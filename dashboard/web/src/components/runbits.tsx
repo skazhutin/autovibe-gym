@@ -27,7 +27,7 @@ export function RunRow({ run }: { run: Run }) {
       <td className="mono faint">{run.shortId}</td>
       <td className="mono">{run.model}</td>
       <td><ModeTag mode={run.mode} /></td>
-      <td>{run.dataset}</td>
+      <td>{run.task}</td>
       <td><ScoreCell run={run} /></td>
       <td><StatusBadge status={run.status} /></td>
     </tr>

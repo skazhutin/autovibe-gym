@@ -16,7 +16,7 @@ router = APIRouter(tags=["settings"])
 
 DEFAULTS = {
     "mlflow_tracking_uri": "",
-    "datasets_dir": "",
+    "tasks_dir": "",
     "default_mode": "local",
     "default_episode": "gym_with_checklist",
     "theme": "light",
@@ -35,7 +35,7 @@ DEFAULTS = {
 
 class SettingsPayload(BaseModel):
     mlflow_tracking_uri: str | None = None
-    datasets_dir: str | None = None
+    tasks_dir: str | None = None
     default_mode: str | None = None
     default_episode: str | None = None
     theme: str | None = None
@@ -60,7 +60,7 @@ def _load() -> dict:
             pass
     # Fill resolved live defaults if user has not overridden them.
     data["mlflow_tracking_uri"] = data["mlflow_tracking_uri"] or s.mlflow_tracking_uri
-    data["datasets_dir"] = data["datasets_dir"] or str(s.datasets_dir)
+    data["tasks_dir"] = data["tasks_dir"] or str(s.tasks_dir)
     return data
 
 

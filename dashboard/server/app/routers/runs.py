@@ -13,7 +13,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from ..services import archive_store, dataset_store, mlflow_store, run_launcher
+from ..services import archive_store, task_store, mlflow_store, run_launcher
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 
@@ -23,7 +23,7 @@ class LaunchPayload(BaseModel):
     model: str | None = None
     mode: str  # single | repeated | iterative | gym | fixed | batch
     modes: list[str] | None = None
-    datasetId: str
+    taskId: str
     budgetMode: str = "local"  # local | cloud
     maxSteps: int | None = None
     maxTokens: int | None = None
@@ -35,10 +35,10 @@ class LaunchPayload(BaseModel):
     hintCooldown: int | None = None  # steps between checklist hints (gym only)
 
 
-def _target_col(dataset_id: str | None) -> str:
-    if not dataset_id:
+def _target_col(task_id: str | None) -> str:
+    if not task_id:
         return ""
-    ds = dataset_store.get_dataset(dataset_id)
+    ds = task_store.get_task(task_id)
     if ds and ds.get("target") and ds["target"] != "вЂ”":
         return ds["target"]
     return ""
@@ -130,11 +130,11 @@ def bulk_unarchive(payload: BulkPayload) -> dict:
 
 @router.post("")
 def launch(payload: LaunchPayload) -> dict:
-    ds = dataset_store.get_dataset(payload.datasetId)
+    ds = task_store.get_task(payload.taskId)
     if ds is None:
-        raise HTTPException(404, f"Dataset '{payload.datasetId}' not found")
+        raise HTTPException(404, f"Task '{payload.taskId}' not found")
     if not ds.get("prepared"):
-        raise HTTPException(400, f"Dataset '{payload.datasetId}' is not prepared (no train/val/test).")
+        raise HTTPException(400, f"Task '{payload.taskId}' is not prepared (no train/val/test).")
     base = payload.model_dump()
     selected_modes = [m for m in (base.get("modes") or [base["mode"]]) if m and m != "batch"]
     if not selected_modes:

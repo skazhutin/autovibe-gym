@@ -48,7 +48,7 @@ export default function RunsArchive() {
     return (runs ?? []).filter((r) => {
       if (mode !== "any" && r.mode !== mode) return false;
       if (status !== "all" && r.status !== status) return false;
-      if (term && !`${r.shortId} ${r.model} ${r.dataset} ${r.batchId ?? ""}`.toLowerCase().includes(term)) return false;
+      if (term && !`${r.shortId} ${r.model} ${r.task} ${r.batchId ?? ""}`.toLowerCase().includes(term)) return false;
       return true;
     });
   }, [runs, q, mode, status]);
@@ -154,7 +154,7 @@ export default function RunsArchive() {
                     <td className="mono faint">{r.shortId}</td>
                     <td className="mono">{r.model}</td>
                     <td><ModeTag mode={r.mode} /></td>
-                    <td>{r.dataset}</td>
+                    <td>{r.task}</td>
                     <td><ScoreCell run={r} /></td>
                     <td><StatusBadge status={r.status} /></td>
                     <td className="mono faint">{r.step}{r.steps ? `/${r.steps}` : ""}</td>

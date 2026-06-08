@@ -8,7 +8,7 @@ import { Icon } from "../components/Icon";
 import { BarChart } from "../components/charts";
 import { ModeTag } from "../components/runbits";
 
-type GroupBy = "none" | "mode" | "model" | "dataset";
+type GroupBy = "none" | "mode" | "model" | "task";
 type ModeFilter = RunMode | "any";
 const MAX_PICK = 10;
 const RUN_MODE_OPTIONS = (Object.keys(MODE_LABELS) as RunMode[]).filter((m) => m !== "batch");
@@ -25,7 +25,7 @@ function RunPickerModal({ successful, selected, onDone }: {
     const term = q.trim().toLowerCase();
     return successful.filter((r) => {
       if (mode !== "any" && r.mode !== mode) return false;
-      if (term && !`${r.shortId} ${r.model} ${r.dataset}`.toLowerCase().includes(term)) return false;
+      if (term && !`${r.shortId} ${r.model} ${r.task}`.toLowerCase().includes(term)) return false;
       return true;
     });
   }, [successful, q, mode]);
@@ -74,7 +74,7 @@ function RunPickerModal({ successful, selected, onDone }: {
                 <span className="mono faint" style={{ fontSize: 12, width: 80, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.shortId}</span>
                 <span className="mono" style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.model}</span>
                 <ModeTag mode={r.mode} />
-                <span className="faint" style={{ fontSize: 12 }}>{r.dataset}</span>
+                <span className="faint" style={{ fontSize: 12 }}>{r.task}</span>
                 <StatusBadge status={r.status} />
                 <span className="mono faint" style={{ fontSize: 12 }}>{formatScore(r.score, r.metric)}</span>
                 <span className="faint" style={{ fontSize: 12 }}>{timeAgo(r.startedMs)}</span>
@@ -107,14 +107,14 @@ export default function Compare() {
   const fewestErrors = Math.min(...picked.map((r) => r.errors));
   const fewestTokens = Math.min(...picked.map((r) => r.tokIn + r.tokOut));
 
-  const datasets = new Set(picked.map((r) => r.dataset));
+  const uniqueTasks = new Set(picked.map((r) => r.task));
   const scoredPicked = picked.filter((r) => r.score !== null && r.score !== undefined);
   const goalMin = (m?: string | null) =>
     !!(m && /rmse|rmsle|mae|mse|logloss/.test(m.toLowerCase()) && !m.toLowerCase().startsWith("neg_"));
 
   const sortedPicked = [...picked].sort((a, b) => {
     if (groupBy === "none") return 0;
-    const key = (r: Run) => (groupBy === "mode" ? r.mode : groupBy === "model" ? r.model : r.dataset);
+    const key = (r: Run) => (groupBy === "mode" ? r.mode : groupBy === "model" ? r.model : r.task);
     return key(a).localeCompare(key(b));
   });
 
@@ -136,7 +136,7 @@ export default function Compare() {
               <div className="nm">{r.model}</div>
               <div className="row" style={{ gap: 6, marginTop: 4 }}>
                 <ModeTag mode={r.mode} />
-                <span className="faint" style={{ fontSize: 11 }}>{r.dataset}</span>
+                <span className="faint" style={{ fontSize: 11 }}>{r.task}</span>
               </div>
             </div>
             <button className="icon-btn" style={{ flexShrink: 0 }} onClick={() => setSelected((s) => { const n = new Set(s); n.delete(r.id); return n; })}>
@@ -163,7 +163,7 @@ export default function Compare() {
                     { value: "none", label: "Без группировки" },
                     { value: "mode", label: "По режиму" },
                     { value: "model", label: "По модели" },
-                    { value: "dataset", label: "По датасету" },
+                    { value: "task", label: "По задаче" },
                   ]}
                   onChange={(v) => setGroupBy(v as GroupBy)}
                 />
@@ -177,7 +177,7 @@ export default function Compare() {
                         <td className="mono faint">{r.shortId}</td>
                         <td className="mono">{r.model}</td>
                         <td><ModeTag mode={r.mode} /></td>
-                        <td>{r.dataset}</td>
+                        <td>{r.task}</td>
                         <td>{r.score === bestScore ? <span className="best-pill">{formatScore(r.score, r.metric)}</span> : <span className="mono">{formatScore(r.score, r.metric)}</span>}</td>
                         <td>{r.checklist === bestChecklist ? <span className="best-pill">{r.checklist}/{r.checklistTotal}</span> : <span className="mono">{r.checklist}/{r.checklistTotal}</span>}</td>
                         <td>{r.errors === fewestErrors ? <span className="best-pill">{r.errors}</span> : <span className="mono">{r.errors}</span>}</td>
@@ -193,7 +193,7 @@ export default function Compare() {
 
             <Card>
               <strong>Test-метрика</strong>
-              <div className="faint" style={{ fontSize: 12, marginBottom: 12 }}>{datasets.size === 1 ? `датасет: ${[...datasets][0]}` : "выберите прогоны одного датасета для сопоставимой метрики"}</div>
+              <div className="faint" style={{ fontSize: 12, marginBottom: 12 }}>{uniqueTasks.size === 1 ? `задача: ${[...uniqueTasks][0]}` : "выберите прогоны одной задачи для сопоставимой метрики"}</div>
               {scoredPicked.length ? (
                 <div className="table-wrap">
                   <table className="data">
@@ -204,7 +204,7 @@ export default function Compare() {
                           <td className="mono faint">{r.shortId}</td>
                           <td className="mono">{r.model}</td>
                           <td><ModeTag mode={r.mode} /></td>
-                          <td>{r.dataset}</td>
+                          <td>{r.task}</td>
                           <td>{r.score === bestScore ? <span className="best-pill">{formatScore(r.score, r.metric)}</span> : <span className="mono">{formatScore(r.score, r.metric)}</span>}</td>
                           <td className="mono faint">{r.metric ?? "—"}</td>
                         </tr>

@@ -1,22 +1,22 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
-import { api, type Dataset, type DatasetStatus } from "../lib/api";
+import { api, type Task, type TaskStatus } from "../lib/api";
 import { useAsync } from "../lib/hooks";
 import { Button, Card, EmptyState, Skeleton, Tag } from "../components/ui";
 import { Icon } from "../components/Icon";
 
-const STATUS_TONE: Record<DatasetStatus, "green" | "blue" | "red"> = {
+const STATUS_TONE: Record<TaskStatus, "green" | "blue" | "red"> = {
   prepared: "green", partial: "blue", unprepared: "red",
 };
-const STATUS_LABEL: Record<DatasetStatus, string> = {
+const STATUS_LABEL: Record<TaskStatus, string> = {
   prepared: "подготовлен", partial: "частичный", unprepared: "не подготовлен",
 };
 const TASK_LABEL: Record<string, string> = {
   classification: "classification", regression: "regression", auto: "auto", unknown: "unknown",
 };
 
-function statusOf(d: Dataset): DatasetStatus {
+function statusOf(d: Task): TaskStatus {
   return d.status ?? (d.prepared ? "prepared" : d.hasTrain ? "partial" : "unprepared");
 }
 
@@ -44,7 +44,7 @@ function ConfirmModal({ count, onConfirm, onCancel, busy }: { count: number; onC
 
 export default function DatasetsArchive() {
   const nav = useNavigate();
-  const { data: datasets, loading, reload } = useAsync(() => api.listArchivedDatasets(), []);
+  const { data: tasks, loading, reload } = useAsync(() => api.listArchivedTasks(), []);
   const [q, setQ] = useState("");
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -53,10 +53,10 @@ export default function DatasetsArchive() {
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
-    return (datasets ?? []).filter((d) =>
+    return (tasks ?? []).filter((d) =>
       !term || `${d.name} ${d.task} ${d.metric}`.toLowerCase().includes(term)
     );
-  }, [datasets, q]);
+  }, [tasks, q]);
 
   function toggleSelect(id: string) {
     setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -78,7 +78,7 @@ export default function DatasetsArchive() {
   async function doRestore() {
     setRestoring(true);
     try {
-      await api.unarchiveDatasets([...selected]);
+      await api.unarchiveTasks([...selected]);
       setConfirm(false);
       cancelSelect();
       reload();
@@ -110,15 +110,15 @@ export default function DatasetsArchive() {
         </div>
       </Card>
 
-      {loading && !datasets ? (
+      {loading && !tasks ? (
         <Skeleton h={200} />
       ) : filtered.length ? (
-        <div className="dataset-grid">
+        <div className="task-grid">
           {filtered.map((d) => {
             const status = statusOf(d);
             const taskLabel = TASK_LABEL[d.taskType ?? d.task] ?? d.task;
             return (
-              <Card key={d.id} className={`ds-card dataset-card-rich${selecting && selected.has(d.id) ? " row-selected" : ""}`}
+              <Card key={d.id} className={`ds-card task-card-rich${selecting && selected.has(d.id) ? " row-selected" : ""}`}
                 onClick={() => selecting ? toggleSelect(d.id) : nav(`/problems/${d.id}`)}>
                 <div className="spread">
                   <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: 1 }}>

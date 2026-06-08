@@ -1,22 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import type { SetHeaderAction } from "../components/Layout";
-import { api, type Dataset, type DatasetStatus } from "../lib/api";
+import { api, type Task, type TaskStatus } from "../lib/api";
 import { useAsync } from "../lib/hooks";
 import { createPortal } from "react-dom";
 import { Button, Card, EmptyState, Field, Modal, SelectDropdown, Skeleton, Spinner, Tag } from "../components/ui";
 import { Icon } from "../components/Icon";
-import { DatasetWizard } from "../components/datasets/DatasetWizard";
+import { TaskWizard } from "../components/tasks/TaskWizard";
 
 type SortField = "updated" | "created" | "az";
 type SortDir = "asc" | "desc";
 
-const STATUS_TONE: Record<DatasetStatus, "green" | "blue" | "red"> = {
+const STATUS_TONE: Record<TaskStatus, "green" | "blue" | "red"> = {
   prepared: "green",
   partial: "blue",
   unprepared: "red",
 };
-const STATUS_LABEL: Record<DatasetStatus, string> = {
+const STATUS_LABEL: Record<TaskStatus, string> = {
   prepared: "подготовлен",
   partial: "частичный",
   unprepared: "не подготовлен",
@@ -32,7 +32,7 @@ const METRIC_GOAL_LABEL: Record<string, string> = {
   min: "minimize",
 };
 
-function statusOf(d: Dataset): DatasetStatus {
+function statusOf(d: Task): TaskStatus {
   return d.status ?? (d.prepared ? "prepared" : d.hasTrain ? "partial" : "unprepared");
 }
 
@@ -40,12 +40,12 @@ function splitTag(ok?: boolean, label?: string) {
   return <Tag tone={ok ? "green" : "neutral"} mono>{label}</Tag>;
 }
 
-function sourceText(d: Dataset) {
+function sourceText(d: Task) {
   const value = d.source && d.source !== "-" ? d.source : d.sources?.[0]?.name || d.sources?.[0]?.url || "-";
   return !value || value === "source" ? "-" : value;
 }
 
-function textBlob(d: Dataset) {
+function textBlob(d: Task) {
   return [
     d.name,
     d.id,
@@ -62,11 +62,11 @@ function textBlob(d: Dataset) {
     .toLowerCase();
 }
 
-function DatasetCard({ d, onOpen, selecting, isSelected, onToggle }: { d: Dataset; onOpen: () => void; selecting: boolean; isSelected: boolean; onToggle: () => void }) {
+function TaskCard({ d, onOpen, selecting, isSelected, onToggle }: { d: Task; onOpen: () => void; selecting: boolean; isSelected: boolean; onToggle: () => void }) {
   const status = statusOf(d);
   const taskLabel = TASK_LABEL[d.taskType ?? d.task] ?? d.task;
   return (
-    <Card className={`ds-card dataset-card-rich${selecting && isSelected ? " row-selected" : ""}`} hover onClick={() => selecting ? onToggle() : onOpen()}>
+    <Card className={`ds-card task-card-rich${selecting && isSelected ? " row-selected" : ""}`} hover onClick={() => selecting ? onToggle() : onOpen()}>
       <div className="spread">
         <div style={{ minWidth: 0 }}>
           <div className="ds-title">{d.name}</div>
@@ -76,7 +76,7 @@ function DatasetCard({ d, onOpen, selecting, isSelected, onToggle }: { d: Datase
       {d.desc && <div className="muted clamp-2">{d.desc}</div>}
       <div className="run-meta-line" style={{ margin: 0 }}>
         <Tag tone={d.taskType === "regression" ? "blue" : d.taskType === "classification" ? "accent" : "neutral"}>{taskLabel}</Tag>
-        <Tag mono>{METRIC_GOAL_LABEL[d.metricGoal ?? "max"] ?? d.metricGoal}</Tag>
+        <Tag>{METRIC_GOAL_LABEL[d.metricGoal ?? "max"] ?? d.metricGoal}</Tag>
         {(d.tags ?? []).slice(0, 3).map((tag) => <Tag key={tag} tone="neutral">{tag}</Tag>)}
         {d.warningsCount ? <Tag tone="red">{d.warningsCount} warnings</Tag> : null}
       </div>
@@ -93,25 +93,25 @@ function DatasetCard({ d, onOpen, selecting, isSelected, onToggle }: { d: Datase
         {splitTag(d.hasVal, "val")}
         {splitTag(d.hasTest, "test")}
       </div>
-      <div className="faint dataset-dates">
-        {d.createdAt && <span>создан {new Date(d.createdAt).toLocaleString()}</span>}
-        {d.updatedAt && <span>обновлен {new Date(d.updatedAt).toLocaleString()}</span>}
+      <div className="faint task-dates">
+        {d.createdAt && <span>создана {new Date(d.createdAt).toLocaleString()}</span>}
+        {d.updatedAt && <span>обновлена {new Date(d.updatedAt).toLocaleString()}</span>}
       </div>
     </Card>
   );
 }
 
-export default function Datasets() {
+export default function Tasks() {
   const setHeaderAction = useOutletContext<SetHeaderAction>();
   const nav = useNavigate();
-  const { data, loading, reload } = useAsync(() => api.listDatasets(), []);
+  const { data, loading, reload } = useAsync(() => api.listTasks(), []);
   const [wizardOpen, setWizardOpen] = useState(false);
 
   useEffect(() => {
     setHeaderAction({ label: "Новая задача", icon: "plus", onClick: () => setWizardOpen(true) });
     return () => setHeaderAction(null);
   }, [setHeaderAction]);
-  const [toArchive, setToArchive] = useState<Dataset | null>(null);
+  const [toArchive, setToArchive] = useState<Task | null>(null);
   const [busyArchive, setBusyArchive] = useState(false);
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -154,7 +154,7 @@ export default function Datasets() {
 
   async function doBulkArchive() {
     setBusyBulk(true);
-    try { await api.archiveDatasets([...selected]); setConfirmBulk(false); cancelSelect(); reload(); }
+    try { await api.archiveTasks([...selected]); setConfirmBulk(false); cancelSelect(); reload(); }
     finally { setBusyBulk(false); }
   }
 
@@ -162,7 +162,7 @@ export default function Datasets() {
     if (!toArchive) return;
     setBusyArchive(true);
     try {
-      await api.archiveDatasets([toArchive.id]);
+      await api.archiveTasks([toArchive.id]);
       setNotice(`Задача ${toArchive.name} перемещена в архив.`);
       setToArchive(null);
       reload();
@@ -171,7 +171,7 @@ export default function Datasets() {
     }
   }
 
-  function created(ds: Dataset) {
+  function created(ds: Task) {
     setWizardOpen(false);
     setNotice(`Датасет ${ds.name} создан.`);
     reload();
@@ -187,12 +187,12 @@ export default function Datasets() {
       {notice && <div className="success-line"><Icon name="check" size={15} /> {notice}</div>}
 
       <Card className="dataset-toolbar">
-        <div className="filters datasets-toolbar" style={{ marginBottom: 0 }}>
-          <div className="search datasets-toolbar-search">
+        <div className="filters tasks-toolbar" style={{ marginBottom: 0 }}>
+          <div className="search tasks-toolbar-search">
             <Icon name="search" size={16} />
             <input className="input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Поиск по задачам..." />
           </div>
-          <div className="datasets-toolbar-controls">
+          <div className="tasks-toolbar-controls">
             <Button variant={sortOpen ? "primary" : "ghost"} icon="arrowUpDown" onClick={() => { setSortOpen((v) => !v); setFiltersOpen(false); }}>Сортировка</Button>
             <Button variant={filtersOpen ? "primary" : "ghost"} icon="sliders" onClick={() => { setFiltersOpen((v) => !v); setSortOpen(false); }}>Фильтры</Button>
             <Button variant={selecting ? "primary" : "secondary"} onClick={() => setSelecting((v) => !v)} style={{ width: 96 }}>{selecting ? "Готово" : "Выбрать"}</Button>
@@ -267,9 +267,9 @@ export default function Datasets() {
           action={<Button variant="primary" icon="plus" onClick={() => setWizardOpen(true)}>Добавить датасет</Button>}
         />
       ) : (
-        <div className="dataset-grid">
+        <div className="task-grid">
           {filtered.map((d) => (
-            <DatasetCard key={d.id} d={d} onOpen={() => nav(`/problems/${d.id}`)} selecting={selecting} isSelected={selected.has(d.id)} onToggle={() => toggleSelect(d.id)} />
+            <TaskCard key={d.id} d={d} onOpen={() => nav(`/problems/${d.id}`)} selecting={selecting} isSelected={selected.has(d.id)} onToggle={() => toggleSelect(d.id)} />
           ))}
         </div>
       )}
@@ -308,7 +308,7 @@ export default function Datasets() {
         document.body
       )}
 
-      {wizardOpen && <DatasetWizard onClose={() => setWizardOpen(false)} onCreated={created} />}
+      {wizardOpen && <TaskWizard onClose={() => setWizardOpen(false)} onCreated={created} />}
       {toArchive && (
         <Modal
           title="Архивировать задачу?"
