@@ -241,6 +241,54 @@ def test_create_dataset_can_split_validation_from_train(isolated_store):
     assert pd.read_csv(root / "prepared" / "val.csv").shape[0] == 5
 
 
+def test_prepare_task_accepts_existing_prepared_paths_without_raw_sources(isolated_store):
+    root = isolated_store.datasets_dir / "prepared-rebuild"
+    prepared = root / "prepared"
+    prepared.mkdir(parents=True)
+    for split in ("train", "val", "test"):
+        pd.DataFrame({"x": [1, 2], "target": [0, 1]}).to_csv(prepared / f"{split}.csv", index=False)
+
+    config = {
+        "id": "prepared-rebuild",
+        "name": "Prepared Rebuild",
+        "created_at": "2026-06-08T00:00:00Z",
+        "updated_at": "2026-06-08T00:00:00Z",
+        "version": 1,
+        "status": "prepared",
+        "task": {
+            "task_type": "classification",
+            "target_col": "target",
+            "metric_name": "f1_macro",
+            "metric_goal": "max",
+        },
+        "splits": {
+            "mode": "prepared_files",
+            "seed": 42,
+            "train": {"path": "prepared/train.csv", "rows": 2, "cols": 2},
+            "val": {"path": "prepared/val.csv", "rows": 2, "cols": 2},
+            "test": {"path": "prepared/test.csv", "rows": 2, "cols": 2},
+        },
+        "raw_files": [],
+        "agent_notes": {},
+        "sources": [],
+        "tags": [],
+        "warnings": [],
+    }
+    (root / "dataset_config.json").write_text(json.dumps(config), encoding="utf-8")
+    (prepared / "meta.json").write_text(
+        json.dumps({"name": "Prepared Rebuild", "target_col": "target", "metric_name": "f1_macro", "seed": 42}),
+        encoding="utf-8",
+    )
+
+    ds = dataset_store.prepare_task("prepared-rebuild")
+
+    assert ds is not None
+    assert ds["prepared"] is True
+    cfg = dataset_store.get_dataset_config("prepared-rebuild")
+    assert cfg is not None
+    assert cfg["splits"]["train"]["path"] == "prepared/train.csv"
+
+
 def test_old_prepared_meta_dataset_still_describes_correctly(isolated_store):
     root = isolated_store.datasets_dir / "legacy"
     prepared = root / "prepared"
