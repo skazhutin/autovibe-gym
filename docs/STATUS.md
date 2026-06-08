@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-08 (dashboard/product-mode keys remapped: free=Free gym, directive=Directive gym, fixed=Fixed gym)
+**Last updated:** 2026-06-08 (dashboard detail metric goal label aligned to maximize/minimize)
 **Phase:** Hardening after first full H200 recon + building the local control-panel dashboard for configuring/launching/inspecting runs.
 
 ---
@@ -161,6 +161,10 @@ Current dashboard sidebar cleanup cycle:
 - Removed the bottom sidebar team/local-mode block from the dashboard shell.
 - Moved the sidebar collapse toggle down to the bottom edge of the simplified
   sidebar.
+Current task-detail metric-label cycle:
+
+- Task overview now shows `maximize` / `minimize` for metric direction labels,
+  matching the task lists and editor controls.
 Current dashboard logo cycle:
 
 - Replaced the old H-like sidebar logo mark with a diagonal dumbbell mark

@@ -30,7 +30,7 @@ const TASK_LABEL: Record<string, string> = {
   unknown: "unknown",
 };
 const METRIC_GOAL_LABEL: Record<string, string> = {
-  max: "больше лучше",
+  max: "maximize",
   min: "меньше лучше",
 };
 const SPLIT_MODE_LABEL: Record<string, string> = {
