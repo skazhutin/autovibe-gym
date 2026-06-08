@@ -170,7 +170,7 @@
   top: 0;
   z-index: 20;
   background: color-mix(in srgb, var(--bg) var(--overlay-pct, 78%), transparent);
-  backdrop-filter: blur(10px);
+  backdrop-filter: var(--overlay-blur, blur(10px));
 }
 .header {
   display: flex;

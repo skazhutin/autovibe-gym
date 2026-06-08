@@ -59,5 +59,6 @@ export function applyAppearance(a: Appearance): void {
   root.style.setProperty("--accent-wash", withAlpha(a.accent, 0.1));
   root.style.setProperty("--radius", `${a.radius}px`);
   root.style.setProperty("--overlay-pct", `${a.overlayOpacity}%`);
+  root.style.setProperty("--overlay-blur", a.overlayOpacity >= 100 ? "none" : "blur(10px)");
   localStorage.setItem(KEY, JSON.stringify(a));
 }
