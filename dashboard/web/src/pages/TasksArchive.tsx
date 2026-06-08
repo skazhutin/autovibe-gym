@@ -15,13 +15,61 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
 const TASK_LABEL: Record<string, string> = {
   classification: "classification", regression: "regression", auto: "auto", unknown: "unknown",
 };
+const METRIC_GOAL_LABEL: Record<string, string> = {
+  max: "maximize",
+  min: "minimize",
+};
 
 function statusOf(d: Task): TaskStatus {
   return d.status ?? (d.prepared ? "prepared" : d.hasTrain ? "partial" : "unprepared");
 }
 
 function splitTag(ok?: boolean, label?: string) {
-  return <Tag tone={ok ? "green" : "neutral"} mono>{label}</Tag>;
+  return <Tag tone={ok ? "green" : "neutral"}>{label}</Tag>;
+}
+
+function sourceText(d: Task) {
+  const value = d.source && d.source !== "-" ? d.source : d.sources?.[0]?.name || d.sources?.[0]?.url || "-";
+  return !value || value === "source" ? "-" : value;
+}
+
+function TaskCard({ d, onOpen, selecting, isSelected, onToggle }: { d: Task; onOpen: () => void; selecting: boolean; isSelected: boolean; onToggle: () => void }) {
+  const status = statusOf(d);
+  const taskLabel = TASK_LABEL[d.taskType ?? d.task] ?? d.task;
+  return (
+    <Card className={`ds-card task-card-rich${selecting && isSelected ? " row-selected" : ""}`} hover onClick={() => selecting ? onToggle() : onOpen()}>
+      <div className="spread">
+        <div style={{ minWidth: 0 }}>
+          <div className="ds-title">{d.name}</div>
+        </div>
+        <Tag tone={STATUS_TONE[status]}>{STATUS_LABEL[status]}</Tag>
+      </div>
+      {d.desc && <div className="muted clamp-2">{d.desc}</div>}
+      <div className="run-meta-line" style={{ margin: 0 }}>
+        <Tag tone={d.taskType === "regression" ? "blue" : d.taskType === "classification" ? "accent" : "neutral"}>{taskLabel}</Tag>
+        <Tag>{METRIC_GOAL_LABEL[d.metricGoal ?? "max"] ?? d.metricGoal}</Tag>
+        {(d.tags ?? []).slice(0, 3).map((tag) => <Tag key={tag} tone="neutral">{tag}</Tag>)}
+        {d.warningsCount ? <Tag tone="red">{d.warningsCount} warnings</Tag> : null}
+      </div>
+      <div className="ds-stats rich">
+        <div className="ds-stat"><span className="k">rows</span><span className="v">{d.rows ? d.rows.toLocaleString() : "-"}</span></div>
+        <div className="ds-stat"><span className="k">features</span><span className="v">{d.cols || "-"}</span></div>
+        <div className="ds-stat"><span className="k">target</span><span className="v">{d.target}</span></div>
+        <div className="ds-stat"><span className="k">metric</span><span className="v">{d.metric}</span></div>
+        <div className="ds-stat"><span className="k">seed</span><span className="v">{d.seed ?? 42}</span></div>
+        <div className="ds-stat"><span className="k">source</span><span className="v">{sourceText(d)}</span></div>
+      </div>
+      <div className="split-pills">
+        {splitTag(d.hasTrain, "train")}
+        {splitTag(d.hasVal, "val")}
+        {splitTag(d.hasTest, "test")}
+      </div>
+      <div className="faint task-dates">
+        {d.createdAt && <span>создана {new Date(d.createdAt).toLocaleString()}</span>}
+        {d.updatedAt && <span>обновлена {new Date(d.updatedAt).toLocaleString()}</span>}
+      </div>
+    </Card>
+  );
 }
 
 function ConfirmModal({ count, onConfirm, onCancel, busy }: { count: number; onConfirm: () => void; onCancel: () => void; busy: boolean }) {
@@ -114,39 +162,16 @@ export default function DatasetsArchive() {
         <Skeleton h={200} />
       ) : filtered.length ? (
         <div className="task-grid">
-          {filtered.map((d) => {
-            const status = statusOf(d);
-            const taskLabel = TASK_LABEL[d.taskType ?? d.task] ?? d.task;
-            return (
-              <Card key={d.id} className={`ds-card task-card-rich${selecting && selected.has(d.id) ? " row-selected" : ""}`}
-                onClick={() => selecting ? toggleSelect(d.id) : nav(`/problems/${d.id}`)}>
-                <div className="spread">
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: 1 }}>
-                    {selecting && <input type="checkbox" className="row-checkbox" checked={selected.has(d.id)} onChange={() => toggleSelect(d.id)} onClick={(e) => e.stopPropagation()} />}
-                    <div className="ds-title">{d.name}</div>
-                  </div>
-                  <Tag tone={STATUS_TONE[status]}>{STATUS_LABEL[status]}</Tag>
-                </div>
-                {d.desc && <div className="muted clamp-2">{d.desc}</div>}
-                <div className="run-meta-line" style={{ margin: 0 }}>
-                  <Tag tone={d.taskType === "regression" ? "blue" : d.taskType === "classification" ? "accent" : "neutral"}>{taskLabel}</Tag>
-                  <Tag mono>{d.metricGoal === "min" ? "minimize" : "maximize"}</Tag>
-                  {(d.tags ?? []).slice(0, 3).map((t) => <Tag key={t} tone="neutral">{t}</Tag>)}
-                </div>
-                <div className="ds-stats rich">
-                  <div className="ds-stat"><span className="k">rows</span><span className="v">{d.rows ? d.rows.toLocaleString() : "—"}</span></div>
-                  <div className="ds-stat"><span className="k">features</span><span className="v">{d.cols || "—"}</span></div>
-                  <div className="ds-stat"><span className="k">target</span><span className="v">{d.target}</span></div>
-                  <div className="ds-stat"><span className="k">metric</span><span className="v">{d.metric}</span></div>
-                </div>
-                <div className="split-pills">
-                  {splitTag(d.hasTrain, "train")}
-                  {splitTag(d.hasVal, "val")}
-                  {splitTag(d.hasTest, "test")}
-                </div>
-              </Card>
-            );
-          })}
+          {filtered.map((d) => (
+            <TaskCard
+              key={d.id}
+              d={d}
+              onOpen={() => nav(`/problems/${d.id}`)}
+              selecting={selecting}
+              isSelected={selected.has(d.id)}
+              onToggle={() => toggleSelect(d.id)}
+            />
+          ))}
         </div>
       ) : (
         <Card>
