@@ -386,7 +386,7 @@
   width: 34px;
   height: 34px;
   border-radius: var(--r-sm);
-  border: none;
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
   background: transparent;
   color: var(--text-dim);
   cursor: pointer;
@@ -394,6 +394,7 @@
 .icon-btn:hover {
   background: var(--surface-2);
   color: var(--text);
+  border-color: var(--border);
 }
 
 /* ============ Card ============ */
