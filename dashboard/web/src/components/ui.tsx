@@ -235,6 +235,11 @@ export function Modal({
   footer?: ReactNode;
   width?: number;
 }) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape") e.stopImmediatePropagation(); }
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, []);
   return createPortal(
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" style={{ width }} onClick={(e) => e.stopPropagation()}>
