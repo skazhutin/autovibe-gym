@@ -515,7 +515,7 @@ export default function NewRun() {
                         <button className={`sort-tab${dsSection === "notes" ? " active" : ""}`} onClick={() => setDsSection("notes")}>Комментарии для LLM</button>
                       </div>
                       {dsSection !== "notes" ? (
-                        <div className="grid-3" style={{ gap: 14 }}>
+                        <div className="stack" style={{ gap: 14 }}>
                           <FI label="Тип задачи" info="classification — предсказание категорий. regression — предсказание числа. auto — определится автоматически по данным.">
                             <div className="sort-tabs">
                               {TASK_TYPES.map(tt => (
@@ -538,15 +538,30 @@ export default function NewRun() {
                         </div>
                       ) : (
                         <div className="stack" style={{ gap: 12 }}>
+                          <label className="check-row">
+                            <input type="checkbox" checked={datasetConfig.agent_notes.visible_to_agent}
+                              onChange={e => setTaskConfig(c => c ? { ...c, agent_notes: { ...c.agent_notes, visible_to_agent: e.target.checked } } : c)} />
+                            Передавать заметки агенту
+                          </label>
                           <FI label="Описание задачи" info="Текст, который агент получит как описание задачи в начале прогона. Объясните что нужно предсказать и почему.">
                             <textarea className="input" rows={3} style={{ resize: "vertical", width: "100%" }}
                               value={datasetConfig.agent_notes.task_description}
                               onChange={e => setTaskConfig(c => c ? { ...c, agent_notes: { ...c.agent_notes, task_description: e.target.value } } : c)} />
                           </FI>
+                          <FI label="Структура данных" info="Описание колонок и их смысла. Агент использует это для интерпретации признаков.">
+                            <textarea className="input" rows={3} style={{ resize: "vertical", width: "100%" }}
+                              value={datasetConfig.agent_notes.data_structure}
+                              onChange={e => setTaskConfig(c => c ? { ...c, agent_notes: { ...c.agent_notes, data_structure: e.target.value } } : c)} />
+                          </FI>
                           <FI label="Дополнительные комментарии" info="Дополнительные подсказки агенту: особенности данных, известные ограничения, запреты. Агент видит это в каждом шаге.">
                             <textarea className="input" rows={2} style={{ resize: "vertical", width: "100%" }}
                               value={datasetConfig.agent_notes.additional_comments}
                               onChange={e => setTaskConfig(c => c ? { ...c, agent_notes: { ...c.agent_notes, additional_comments: e.target.value } } : c)} />
+                          </FI>
+                          <FI label="Предупреждение об утечках" info="Колонки или паттерны, которые нельзя использовать как признаки — они уже содержат target или производные от него.">
+                            <textarea className="input" rows={2} style={{ resize: "vertical", width: "100%" }}
+                              value={datasetConfig.agent_notes.leakage_warning}
+                              onChange={e => setTaskConfig(c => c ? { ...c, agent_notes: { ...c.agent_notes, leakage_warning: e.target.value } } : c)} />
                           </FI>
                         </div>
                       )}
