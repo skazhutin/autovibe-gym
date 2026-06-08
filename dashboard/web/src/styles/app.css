@@ -144,6 +144,9 @@
   color: var(--text);
   transform: translateX(2px);
 }
+.nav-item.active:hover {
+  transform: none;
+}
 .nav-item.active {
   background: var(--accent-soft);
   color: var(--text);
