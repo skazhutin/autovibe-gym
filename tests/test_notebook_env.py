@@ -79,6 +79,28 @@ def test_legacy_code_action_creates_and_executes_code_cell(tmp_path):
         assert env.notebook.list_cells()[0]["cell_type"] == "code"
     finally:
         env.close()
+def test_unknown_cell_id_is_recoverable_blocker_not_a_crash(tmp_path):
+    """Targeting a non-existent cell must not crash the episode; the agent gets a
+    blocker naming the real cell ids and can keep going (robustness)."""
+    env = _make_env(tmp_path)
+    try:
+        for action in ("update_cell", "delete_cell", "run_cell", "move_cell"):
+            obs = env.step({
+                "type": action,
+                "stage": "feature_pipeline_building",
+                "cell_id": "cell_99",
+                "source": "x = 1",
+                "new_position": 0,
+            })
+            assert obs.stderr  # contract blocker, not an exception
+            assert "does not exist" in obs.stderr
+            assert not obs.done
+        ok = env.step({"type": "code", "stage": "feature_pipeline_building", "code": "print(1 + 1)"})
+        assert "2" in ok.stdout
+    finally:
+        env.close()
+
+
 def test_notebook_env_rejects_missing_unknown_stage_and_unknown_type(tmp_path):
     env = _make_env(tmp_path)
     try:
