@@ -5,7 +5,7 @@ import { api, type Task, type TaskConfig, type LaunchRunMode, type ModelRec } fr
 import { ModelModal } from "./Models";
 import { useAsync } from "../lib/hooks";
 import { MODE_LABELS } from "../lib/format";
-import { Button, Card, Dot, Field, Spinner, Tag } from "../components/ui";
+import { Button, Card, Dot, Field, Modal, Spinner, Tag } from "../components/ui";
 import { Icon } from "../components/Icon";
 
 const MAX_SELECTED_MODES = 5;
@@ -469,7 +469,7 @@ export default function NewRun() {
                 <div className="spread" style={{ marginBottom: 6 }}>
                   <div className="ds-title" style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.name}</div>
                   <button className={`icon-btn${datasetSettingsOpen ? " icon-btn-active" : ""}`}
-                    title="Настройки задачи" onClick={() => setDatasetSettingsOpen(v => !v)}>
+                    title="Настройки задачи" onClick={() => { setDsSection("config"); setDatasetSettingsOpen(true); }}>
                     <Icon name="settings" size={16} />
                   </button>
                 </div>
@@ -493,81 +493,66 @@ export default function NewRun() {
                 <Button variant="ghost" onClick={() => setTaskPickerOpen(true)}>Изменить</Button>
               </div>
               {datasetSettingsOpen && (
-                <div className="picker-settings">
+                <Modal
+                  title="Настройки задачи"
+                  width={560}
+                  onClose={() => setDatasetSettingsOpen(false)}
+                  footer={
+                    <>
+                      <Button variant="ghost" onClick={() => setDatasetSettingsOpen(false)}>Закрыть</Button>
+                      <Button variant="primary" onClick={saveTaskConfig} disabled={datasetConfigSaving}>
+                        {datasetConfigSaving ? <Spinner /> : "Сохранить"}
+                      </Button>
+                    </>
+                  }
+                >
                   {datasetConfigLoading ? (
                     <div style={{ display: "flex", justifyContent: "center", padding: 24 }}><Spinner /></div>
                   ) : datasetConfig ? (
-                    <div className="stack" style={{ gap: 8 }}>
-                      {/* Accordion: Конфиг */}
-                      <div className="ds-accordion-item">
-                        <button className="ds-accordion-head" onClick={() => setDsSection(s => s === "config" ? null : "config")}>
-                          <Icon name="settings" size={14} />
-                          <span>Конфиг</span>
-                          <Icon name="chevronDown" size={14} style={{ marginLeft: "auto", transform: dsSection === "config" ? "rotate(180deg)" : undefined, transition: "transform .15s" }} />
-                        </button>
-                        {dsSection === "config" && (
-                          <div className="ds-accordion-body">
-                            <div className="grid-3" style={{ gap: 14 }}>
-                              <FI label="Тип задачи" info="classification — предсказание категорий. regression — предсказание числа. auto — определится автоматически по данным.">
-                                <div className="sort-tabs">
-                                  {TASK_TYPES.map(tt => (
-                                    <button key={tt.value}
-                                      className={`sort-tab${datasetConfig.task.task_type === tt.value ? " active" : ""}`}
-                                      onClick={() => setTaskConfig(c => c ? { ...c, task: { ...c.task, task_type: tt.value } } : c)}>
-                                      {tt.label}
-                                    </button>
-                                  ))}
-                                </div>
-                              </FI>
-                              <FI label={<>Метрика <a className="docs-link" href="https://scikit-learn.org/stable/modules/model_evaluation.html" target="_blank" rel="noopener noreferrer">sklearn ↗</a></>} info="Название метрики sklearn, считается на test после submit. Агент видит только val. Напр. f1_macro, accuracy, neg_rmse, roc_auc.">
-                                <input className="input mono" value={datasetConfig.task.metric_name}
-                                  onChange={e => setTaskConfig(c => c ? { ...c, task: { ...c.task, metric_name: e.target.value } } : c)} />
-                              </FI>
-                              <FI label="Target column" info="Колонка с целевой переменной — то, что агент должен предсказывать. Эта колонка никогда не включается в признаки.">
-                                <input className="input mono" value={datasetConfig.task.target_col}
-                                  onChange={e => setTaskConfig(c => c ? { ...c, task: { ...c.task, target_col: e.target.value } } : c)} />
-                              </FI>
-                            </div>
-                            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
-                              <Button variant="primary" onClick={saveTaskConfig} disabled={datasetConfigSaving}>
-                                {datasetConfigSaving ? <Spinner /> : "Сохранить"}
-                              </Button>
-                            </div>
-                          </div>
-                        )}
+                    <div className="stack" style={{ gap: 16 }}>
+                      <div className="sort-tabs" style={{ alignSelf: "flex-start" }}>
+                        <button className={`sort-tab${dsSection !== "notes" ? " active" : ""}`} onClick={() => setDsSection("config")}>Параметры задачи</button>
+                        <button className={`sort-tab${dsSection === "notes" ? " active" : ""}`} onClick={() => setDsSection("notes")}>Комментарии для LLM</button>
                       </div>
-                      {/* Accordion: Комментарии */}
-                      <div className="ds-accordion-item">
-                        <button className="ds-accordion-head" onClick={() => setDsSection(s => s === "notes" ? null : "notes")}>
-                          <Icon name="edit" size={14} />
-                          <span>Комментарии для LLM</span>
-                          <Icon name="chevronDown" size={14} style={{ marginLeft: "auto", transform: dsSection === "notes" ? "rotate(180deg)" : undefined, transition: "transform .15s" }} />
-                        </button>
-                        {dsSection === "notes" && (
-                          <div className="ds-accordion-body">
-                            <div className="stack" style={{ gap: 12 }}>
-                              <FI label="Описание задачи" info="Текст, который агент получит как описание задачи в начале прогона. Объясните что нужно предсказать и почему.">
-                                <textarea className="input" rows={3} style={{ resize: "vertical" }}
-                                  value={datasetConfig.agent_notes.task_description}
-                                  onChange={e => setTaskConfig(c => c ? { ...c, agent_notes: { ...c.agent_notes, task_description: e.target.value } } : c)} />
-                              </FI>
-                              <FI label="Дополнительные комментарии" info="Дополнительные подсказки агенту: особенности данных, известные ограничения, запреты. Агент видит это в каждом шаге.">
-                                <textarea className="input" rows={2} style={{ resize: "vertical" }}
-                                  value={datasetConfig.agent_notes.additional_comments}
-                                  onChange={e => setTaskConfig(c => c ? { ...c, agent_notes: { ...c.agent_notes, additional_comments: e.target.value } } : c)} />
-                              </FI>
-                              <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                                <Button variant="primary" onClick={saveTaskConfig} disabled={datasetConfigSaving}>
-                                  {datasetConfigSaving ? <Spinner /> : "Сохранить"}
-                                </Button>
-                              </div>
+                      {dsSection !== "notes" ? (
+                        <div className="grid-3" style={{ gap: 14 }}>
+                          <FI label="Тип задачи" info="classification — предсказание категорий. regression — предсказание числа. auto — определится автоматически по данным.">
+                            <div className="sort-tabs">
+                              {TASK_TYPES.map(tt => (
+                                <button key={tt.value}
+                                  className={`sort-tab${datasetConfig.task.task_type === tt.value ? " active" : ""}`}
+                                  onClick={() => setTaskConfig(c => c ? { ...c, task: { ...c.task, task_type: tt.value } } : c)}>
+                                  {tt.label}
+                                </button>
+                              ))}
                             </div>
-                          </div>
-                        )}
-                      </div>
+                          </FI>
+                          <FI label={<>Метрика <a className="docs-link" href="https://scikit-learn.org/stable/modules/model_evaluation.html" target="_blank" rel="noopener noreferrer">sklearn ↗</a></>} info="Название метрики sklearn, считается на test после submit. Агент видит только val. Напр. f1_macro, accuracy, neg_rmse, roc_auc.">
+                            <input className="input mono" style={{ width: "100%" }} value={datasetConfig.task.metric_name}
+                              onChange={e => setTaskConfig(c => c ? { ...c, task: { ...c.task, metric_name: e.target.value } } : c)} />
+                          </FI>
+                          <FI label="Target column" info="Колонка с целевой переменной — то, что агент должен предсказывать. Эта колонка никогда не включается в признаки.">
+                            <input className="input mono" style={{ width: "100%" }} value={datasetConfig.task.target_col}
+                              onChange={e => setTaskConfig(c => c ? { ...c, task: { ...c.task, target_col: e.target.value } } : c)} />
+                          </FI>
+                        </div>
+                      ) : (
+                        <div className="stack" style={{ gap: 12 }}>
+                          <FI label="Описание задачи" info="Текст, который агент получит как описание задачи в начале прогона. Объясните что нужно предсказать и почему.">
+                            <textarea className="input" rows={3} style={{ resize: "vertical", width: "100%" }}
+                              value={datasetConfig.agent_notes.task_description}
+                              onChange={e => setTaskConfig(c => c ? { ...c, agent_notes: { ...c.agent_notes, task_description: e.target.value } } : c)} />
+                          </FI>
+                          <FI label="Дополнительные комментарии" info="Дополнительные подсказки агенту: особенности данных, известные ограничения, запреты. Агент видит это в каждом шаге.">
+                            <textarea className="input" rows={2} style={{ resize: "vertical", width: "100%" }}
+                              value={datasetConfig.agent_notes.additional_comments}
+                              onChange={e => setTaskConfig(c => c ? { ...c, agent_notes: { ...c.agent_notes, additional_comments: e.target.value } } : c)} />
+                          </FI>
+                        </div>
+                      )}
                     </div>
                   ) : null}
-                </div>
+                </Modal>
               )}
             </>
           ) : (
