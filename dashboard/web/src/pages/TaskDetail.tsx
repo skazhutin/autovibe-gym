@@ -245,7 +245,7 @@ function SplitsTab({ config }: { config: TaskConfig | null }) {
   );
 }
 
-function ConfigTab({ id, config, onSaved }: { id: string; config: TaskConfig | null; onSaved: () => void }) {
+function ConfigTab({ id, config, archived, onSaved }: { id: string; config: TaskConfig | null; archived: boolean; onSaved: () => void }) {
   const nav = useNavigate();
   const [form, setForm] = useState<TaskConfig | null>(config);
   const [tagsStr, setTagsStr] = useState((config?.tags ?? []).join(", "));
@@ -269,7 +269,8 @@ function ConfigTab({ id, config, onSaved }: { id: string; config: TaskConfig | n
   async function doArchive() {
     setArchiving(true);
     try {
-      await api.archiveTasks([id]);
+      if (archived) await api.unarchiveTasks([id]);
+      else await api.archiveTasks([id]);
       nav("/problems");
     } finally {
       setArchiving(false);
@@ -356,7 +357,7 @@ function ConfigTab({ id, config, onSaved }: { id: string; config: TaskConfig | n
             {err && <span className="error-inline">{err}</span>}
           </div>
           <div className="row" style={{ gap: 8 }}>
-            <Button variant="ghost" icon="archive" onClick={doArchive} disabled={archiving}>{archiving ? <Spinner /> : "Архивировать"}</Button>
+            <Button variant="ghost" icon="archive" onClick={doArchive} disabled={archiving}>{archiving ? <Spinner /> : archived ? "Разархивировать" : "Архивировать"}</Button>
             <Button variant="ghost" icon="trash" onClick={() => setConfirmDelete(true)}>Удалить датасет</Button>
           </div>
         </div>
@@ -478,9 +479,11 @@ export default function DatasetDetail() {
   const [tab, setTab] = useState("overview");
   const { data, loading, reload } = useAsync(() => api.getTask(id), [id]);
   const { data: config, loading: configLoading, reload: reloadConfig } = useAsync(() => api.getTaskConfig(id), [id]);
+  const { data: archivedTasks } = useAsync(() => api.listArchivedTasks(), [id]);
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName] = useState("");
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const archived = (archivedTasks ?? []).some((task) => task.id === id);
 
   function refresh() {
     reload();
@@ -513,7 +516,7 @@ export default function DatasetDetail() {
 
   return (
     <div>
-      <button className="back-link" onClick={() => nav("/problems")}><Icon name="chevronLeft" size={16} /> Все датасеты</button>
+      <button className="back-link" onClick={() => nav("/problems")}><Icon name="chevronLeft" size={16} /> Все задачи</button>
       <Card style={{ marginBottom: 20 }}>
         <div className="spread" style={{ alignItems: "flex-start" }}>
           <div style={{ flex: 1 }}>
@@ -554,7 +557,7 @@ export default function DatasetDetail() {
       {tab === "preview" && <PreviewTab id={id} task={data} />}
       {tab === "columns" && <ColumnsTab id={id} task={data} config={config} />}
       {tab === "splits" && (configLoading ? <Skeleton h={220} /> : <SplitsTab config={config} />)}
-      {tab === "config" && <ConfigTab id={id} config={config} onSaved={refresh} />}
+      {tab === "config" && <ConfigTab id={id} config={config} archived={archived} onSaved={refresh} />}
       {tab === "sources" && <SourcesTab id={id} config={config} onSaved={refresh} />}
       {tab === "notes" && <AgentNotesTab id={id} config={config} onSaved={refresh} />}
     </div>
