@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-08 (settings now include dashboard language preference)
+**Last updated:** 2026-06-08 (task cards no longer show metric-goal badge)
 **Phase:** Hardening after first full H200 recon + building the local control-panel dashboard for configuring/launching/inspecting runs.
 
 ---
@@ -168,8 +168,8 @@ Current task-detail metric-label cycle:
 Current task-card label cycle:
 
 - Task list and archive cards now use title-case parameter labels, with created
-  date moved into the main stats grid as the final item; `Updated` is omitted
-  from the list cards.
+  date moved into the main stats grid as the final item; `Updated` and the
+  `maximize` / `minimize` badge are omitted from the list cards.
 Current task-detail prepare-action cycle:
 
 - Unprepared task detail pages now show a bottom `Подготовить` action wired to
