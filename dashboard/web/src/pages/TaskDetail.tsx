@@ -254,6 +254,7 @@ function ConfigTab({ id, config, onSaved }: { id: string; config: TaskConfig | n
   const [err, setErr] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [archiving, setArchiving] = useState(false);
 
   async function doDelete() {
     setDeleting(true);
@@ -262,6 +263,16 @@ function ConfigTab({ id, config, onSaved }: { id: string; config: TaskConfig | n
       nav("/problems");
     } finally {
       setDeleting(false);
+    }
+  }
+
+  async function doArchive() {
+    setArchiving(true);
+    try {
+      await api.archiveTasks([id]);
+      nav("/problems");
+    } finally {
+      setArchiving(false);
     }
   }
   useEffect(() => {
@@ -344,7 +355,10 @@ function ConfigTab({ id, config, onSaved }: { id: string; config: TaskConfig | n
             {ok && <span className="success-inline"><Icon name="check" size={14} /> сохранено</span>}
             {err && <span className="error-inline">{err}</span>}
           </div>
-          <Button variant="ghost" icon="trash" onClick={() => setConfirmDelete(true)}>Удалить датасет</Button>
+          <div className="row" style={{ gap: 8 }}>
+            <Button variant="ghost" icon="archive" onClick={doArchive} disabled={archiving}>{archiving ? <Spinner /> : "Архивировать"}</Button>
+            <Button variant="ghost" icon="trash" onClick={() => setConfirmDelete(true)}>Удалить датасет</Button>
+          </div>
         </div>
       </div>
 
