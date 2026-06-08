@@ -426,20 +426,24 @@ export default function NewRun() {
                           <Stepper value={p.hintCooldown} onChange={v => setModeParam(mi.id, "hintCooldown", v)} min={1} max={20} />
                         </FI>
                       )}
-                      <FI label={`Температура: ${p.temp.toFixed(2)}`} info="Случайность ответов: 0 — всегда одинаково, 1 — очень вариативно. Рекомендуется 0.3–0.6 для кода.">
-                        <div className="stepper-height-wrap">
-                          <input className="range" type="range" min={0} max={1} step={0.05} value={p.temp}
-                            onChange={e => setModeParam(mi.id, "temp", parseFloat(e.target.value))} />
-                        </div>
-                      </FI>
-                      {mi.hasThoughts && (
-                        <FI label="Мысли LLM" info="Агент ведёт внутренние заметки между шагами. Улучшает качество решений за счёт рассуждений, но заметно увеличивает расход токенов.">
-                          <div className="wide-toggle" onClick={() => setModeParam(mi.id, "enableThoughts", !p.enableThoughts)}>
-                            <div className={`wide-toggle-thumb${p.enableThoughts ? " on" : ""}`} />
-                            <span className="wide-toggle-off">Выкл</span>
-                            <span className="wide-toggle-on">Вкл</span>
+                      <div style={{ gridColumn: "1 / -1" }}>
+                        <FI label={`Температура: ${p.temp.toFixed(2)}`} info="Случайность ответов: 0 — всегда одинаково, 1 — очень вариативно. Рекомендуется 0.3–0.6 для кода.">
+                          <div className="stepper-height-wrap">
+                            <input className="range" type="range" min={0} max={1} step={0.05} value={p.temp}
+                              onChange={e => setModeParam(mi.id, "temp", parseFloat(e.target.value))} />
                           </div>
                         </FI>
+                      </div>
+                      {mi.hasThoughts && (
+                        <div style={{ gridColumn: "1 / -1" }}>
+                          <FI label="Мысли LLM" info="Агент ведёт внутренние заметки между шагами. Улучшает качество решений за счёт рассуждений, но заметно увеличивает расход токенов.">
+                            <div className="wide-toggle" onClick={() => setModeParam(mi.id, "enableThoughts", !p.enableThoughts)}>
+                              <div className={`wide-toggle-thumb${p.enableThoughts ? " on" : ""}`} />
+                              <span className="wide-toggle-off">Выкл</span>
+                              <span className="wide-toggle-on">Вкл</span>
+                            </div>
+                          </FI>
+                        </div>
                       )}
                     </div>
                   )}
