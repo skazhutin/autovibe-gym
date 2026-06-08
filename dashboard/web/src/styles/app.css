@@ -1058,7 +1058,10 @@ table.data tbody tr.clickable:hover {
   margin-bottom: 18px;
 }
 #toolbar-portal:not(:empty) {
-  padding: 0 32px 18px;
+  padding: 28px 32px 18px;
+}
+.main:has(#toolbar-portal:not(:empty)) .content {
+  padding-top: 0;
 }
 .dataset-toolbar {
   position: sticky;
