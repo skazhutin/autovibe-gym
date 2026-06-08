@@ -412,21 +412,28 @@ export default function NewRun() {
                   {expanded && (
                     <div className="mode-row-params">
                       {mi.hasSteps && (
-                        <FI label="Макс. шагов" info="Сколько интерактивных шагов доступно режиму до финального submit.">
-                          <Stepper value={p.maxSteps} onChange={v => setModeParam(mi.id, "maxSteps", v)} min={1} max={200} />
-                        </FI>
+                        <div className="mode-param">
+                          <FI label="Макс. шагов" info="Сколько интерактивных шагов доступно режиму до финального submit.">
+                            <Stepper value={p.maxSteps} onChange={v => setModeParam(mi.id, "maxSteps", v)} min={1} max={200} />
+                          </FI>
+                        </div>
                       )}
                       {mi.hasShots && (
-                        <FI label="Число попыток" info="Количество независимых попыток. Каждая попытка независима, между ними только val-метрика.">
-                          <Stepper value={p.shots} onChange={v => setModeParam(mi.id, "shots", v)} min={2} max={50} />
-                        </FI>
+                        <div className="mode-param">
+                          <FI label="Число попыток" info="Количество независимых попыток. Каждая попытка независима, между ними только val-метрика.">
+                            <Stepper value={p.shots} onChange={v => setModeParam(mi.id, "shots", v)} min={2} max={50} />
+                          </FI>
+                        </div>
                       )}
                       {mi.hasHint && (
-                        <FI label="Подсказка каждые N шагов" info="Через сколько шагов агенту даётся следующая подсказка чеклиста DS-пайплайна. 1 — на каждом шаге, 3 — каждые три шага.">
-                          <Stepper value={p.hintCooldown} onChange={v => setModeParam(mi.id, "hintCooldown", v)} min={1} max={20} />
-                        </FI>
+                        <div className="mode-param">
+                          <FI label="Подсказка каждые N шагов" info="Через сколько шагов агенту даётся следующая подсказка чеклиста DS-пайплайна. 1 — на каждом шаге, 3 — каждые три шага.">
+                            <Stepper value={p.hintCooldown} onChange={v => setModeParam(mi.id, "hintCooldown", v)} min={1} max={20} />
+                          </FI>
+                        </div>
                       )}
-                      <div style={{ gridColumn: "1 / -1" }}>
+                      {mi.hasThoughts && mi.hasSteps && !mi.hasHint && !mi.hasShots && <div className="mode-param-spacer" aria-hidden="true" />}
+                      <div className="mode-param">
                         <FI label={`Температура: ${p.temp.toFixed(2)}`} info="Случайность ответов: 0 — всегда одинаково, 1 — очень вариативно. Рекомендуется 0.3–0.6 для кода.">
                           <div className="stepper-height-wrap">
                             <input className="range" type="range" min={0} max={1} step={0.05} value={p.temp}
@@ -435,7 +442,7 @@ export default function NewRun() {
                         </FI>
                       </div>
                       {mi.hasThoughts && (
-                        <div style={{ gridColumn: "1 / -1" }}>
+                        <div className="mode-param">
                           <FI label="Мысли LLM" info="Агент ведёт внутренние заметки между шагами. Улучшает качество решений за счёт рассуждений, но заметно увеличивает расход токенов.">
                             <div className="wide-toggle" onClick={() => setModeParam(mi.id, "enableThoughts", !p.enableThoughts)}>
                               <div className={`wide-toggle-thumb${p.enableThoughts ? " on" : ""}`} />
