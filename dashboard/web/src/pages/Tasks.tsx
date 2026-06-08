@@ -82,20 +82,18 @@ function TaskCard({ d, dateFormat, onOpen, selecting, isSelected, onToggle }: { 
         {d.warningsCount ? <Tag tone="red">{d.warningsCount} warnings</Tag> : null}
       </div>
       <div className="ds-stats rich">
-        <div className="ds-stat"><span className="k">rows</span><span className="v">{d.rows ? d.rows.toLocaleString() : "-"}</span></div>
-        <div className="ds-stat"><span className="k">features</span><span className="v">{d.cols || "-"}</span></div>
-        <div className="ds-stat"><span className="k">target</span><span className="v">{d.target}</span></div>
-        <div className="ds-stat"><span className="k">metric</span><span className="v">{d.metric}</span></div>
-        <div className="ds-stat"><span className="k">source</span><span className="v">{sourceText(d)}</span></div>
+        <div className="ds-stat"><span className="k">Rows</span><span className="v">{d.rows ? d.rows.toLocaleString() : "-"}</span></div>
+        <div className="ds-stat"><span className="k">Features</span><span className="v">{d.cols || "-"}</span></div>
+        <div className="ds-stat"><span className="k">Target</span><span className="v">{d.target}</span></div>
+        <div className="ds-stat"><span className="k">Metric</span><span className="v">{d.metric}</span></div>
+        <div className="ds-stat"><span className="k">Source</span><span className="v">{sourceText(d)}</span></div>
+        {d.createdAt && <div className="ds-stat"><span className="k">Created</span><span className="v">{formatDateOnly(d.createdAt, dateFormat)}</span></div>}
+        {d.updatedAt && <div className="ds-stat"><span className="k">Updated</span><span className="v">{formatDateOnly(d.updatedAt, dateFormat)}</span></div>}
       </div>
       <div className="split-pills">
-        {splitTag(d.hasTrain, "train")}
-        {splitTag(d.hasVal, "val")}
-        {splitTag(d.hasTest, "test")}
-      </div>
-      <div className="ds-stats task-dates">
-        {d.createdAt && <div className="ds-stat"><span className="k">создана</span><span className="v">{formatDateOnly(d.createdAt, dateFormat)}</span></div>}
-        {d.updatedAt && <div className="ds-stat"><span className="k">обновлена</span><span className="v">{formatDateOnly(d.updatedAt, dateFormat)}</span></div>}
+        {splitTag(d.hasTrain, "Train")}
+        {splitTag(d.hasVal, "Val")}
+        {splitTag(d.hasTest, "Test")}
       </div>
     </Card>
   );
