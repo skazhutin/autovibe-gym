@@ -254,6 +254,7 @@ def main():
                         {"role": "user", "content": task_prompt},
                         {"role": "assistant", "content": response.text},
                     ],
+                    solution_code=code,
                     max_tokens=min(max_tokens, 700),
                 )
 

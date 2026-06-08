@@ -379,6 +379,7 @@ def main():
                 model_name,
                 args.workspace_dir,
                 conversation=convo,
+                solution_code=best_code,
                 max_tokens=min(max_tokens, 700),
             )
         if best_val is not None:
