@@ -465,16 +465,13 @@ export default function NewRun() {
           <div className="step-head"><span className="step-num">3</span><span className="step-title">Задача</span></div>
           {task ? (
             <>
-              <div className="ds-picker-card">
+              <div className="ds-picker-card" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
                 <div className="spread" style={{ marginBottom: 6 }}>
                   <div className="ds-title" style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.name}</div>
-                  <div className="row" style={{ gap: 6, flexShrink: 0 }}>
-                    <Button variant="ghost" onClick={() => setTaskPickerOpen(true)}>Изменить</Button>
-                    <button className={`icon-btn${datasetSettingsOpen ? " icon-btn-active" : ""}`}
-                      title="Настройки задачи" onClick={() => setDatasetSettingsOpen(v => !v)}>
-                      <Icon name="settings" size={16} />
-                    </button>
-                  </div>
+                  <button className={`icon-btn${datasetSettingsOpen ? " icon-btn-active" : ""}`}
+                    title="Настройки задачи" onClick={() => setDatasetSettingsOpen(v => !v)}>
+                    <Icon name="settings" size={16} />
+                  </button>
                 </div>
                 {task.desc && <div className="muted clamp-2" style={{ fontSize: 12.5, marginBottom: 8 }}>{task.desc}</div>}
                 <div className="run-meta-line" style={{ margin: "0 0 10px" }}>
@@ -491,6 +488,9 @@ export default function NewRun() {
                   <div className="ds-stat"><span className="k">target</span><span className="v">{task.target}</span></div>
                   <div className="ds-stat"><span className="k">metric</span><span className="v">{task.metric}</span></div>
                 </div>
+              </div>
+              <div style={{ display: "flex", justifyContent: "center", marginTop: 10 }}>
+                <Button variant="ghost" onClick={() => setTaskPickerOpen(true)}>Изменить</Button>
               </div>
               {datasetSettingsOpen && (
                 <div className="picker-settings">
