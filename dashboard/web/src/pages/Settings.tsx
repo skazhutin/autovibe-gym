@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { api } from "../lib/api";
 import { useAsync } from "../lib/hooks";
-import { Button, Card, Spinner } from "../components/ui";
+import { Button, Card, SelectDropdown, Spinner } from "../components/ui";
 import { Icon } from "../components/Icon";
 import { applyAppearance, loadAppearance, type Appearance } from "../lib/theme";
 
@@ -57,6 +57,7 @@ export default function Settings() {
     if (!data) return;
     setForm({
       mlflow_tracking_uri: data.mlflow_tracking_uri, datasets_dir: data.datasets_dir,
+      date_format: data.date_format ?? "mdy",
       remote_ssh: data.remote_ssh ?? "", remote_ssh_opts: data.remote_ssh_opts ?? "",
       remote_repo: data.remote_repo ?? "", remote_python: data.remote_python ?? "",
       remote_runs_dir: data.remote_runs_dir ?? "",
@@ -162,6 +163,16 @@ export default function Settings() {
 
       <Card>
         <h2 className="section-title">Внешний вид</h2>
+        <Row label="Формат даты" info="Как показывать даты в интерфейсе. Влияет только на отображение, в базе хранится полная точная дата и время.">
+          <SelectDropdown
+            value={form.date_format ?? "mdy"}
+            options={[
+              { value: "mdy", label: "mm/dd/yyyy" },
+              { value: "dmy", label: "dd.mm.yyyy" },
+            ]}
+            onChange={(v) => set("date_format", v)}
+          />
+        </Row>
         <Row label="Тема" info="Светлая или тёмная тема интерфейса на базе цвета #333.">
           <div className="row" style={{ justifyContent: "flex-end" }}>
             <span className="faint" style={{ fontSize: 13 }}>{appearance.theme === "dark" ? "Тёмная" : "Светлая"}</span>

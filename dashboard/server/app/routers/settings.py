@@ -19,6 +19,7 @@ DEFAULTS = {
     "datasets_dir": "",
     "default_mode": "local",
     "default_episode": "directive_gym",
+    "date_format": "mdy",
     "theme": "light",
     "accent": "#FFDD2D",
     "radius": 18,
@@ -38,6 +39,7 @@ class SettingsPayload(BaseModel):
     datasets_dir: str | None = None
     default_mode: str | None = None
     default_episode: str | None = None
+    date_format: str | None = None
     theme: str | None = None
     accent: str | None = None
     radius: int | None = None
