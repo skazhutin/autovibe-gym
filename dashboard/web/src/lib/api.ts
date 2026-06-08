@@ -306,6 +306,7 @@ export interface Settings {
   mlflow_tracking_uri: string;
   datasets_dir: string;
   default_episode: string;
+  date_format: "mdy" | "dmy";
   theme: string;
   accent: string;
   radius: number;

@@ -6,6 +6,7 @@ import type { SetHeaderAction } from "../components/Layout";
 import { useAsync } from "../lib/hooks";
 import { Button, Card, Dot, EmptyState, Field, Modal, SelectDropdown, Skeleton, Spinner, Tag } from "../components/ui";
 import { Icon } from "../components/Icon";
+import { formatDateOnly } from "../lib/date";
 
 const PROVIDERS = ["OpenAI-совместимый", "vLLM", "Gemini", "LiteLLM"];
 const needsBaseUrl = (provider: string) => provider === "OpenAI-совместимый" || provider === "vLLM";
@@ -158,6 +159,7 @@ export default function Models() {
   const nav = useNavigate();
   const setHeaderAction = useOutletContext<SetHeaderAction>();
   const { data, loading, reload } = useAsync(() => api.listModels(), []);
+  const { data: settings } = useAsync(() => api.getSettings(), []);
   const [edit, setEdit] = useState<ModelRec | null>(null);
   const [adding, setAdding] = useState(false);
   const [newDraft, setNewDraft] = useState<ModelDraft>(defaultDraft());
@@ -319,7 +321,7 @@ export default function Models() {
                 <div className="ds-stat"><span className="k">Input token limit</span><span className="v">{(m.ctx / 1024).toFixed(0)}k</span></div>
                 <div className="ds-stat"><span className="k">Output token limit</span><span className="v">{m.maxTokens ? `${(m.maxTokens / 1024).toFixed(0)}k` : "—"}</span></div>
                 <div className="ds-stat span-full"><span className="k">URL</span><span className="v" style={{ fontSize: 11.5 }}>{m.baseUrl || "—"}</span></div>
-                {m.createdAt && <div className="ds-stat span-full"><span className="k">Создана</span><span className="v">{new Date(m.createdAt).toLocaleString()}</span></div>}
+                {m.createdAt && <div className="ds-stat span-full"><span className="k">Создана</span><span className="v">{formatDateOnly(m.createdAt, settings?.date_format ?? "mdy")}</span></div>}
               </div>
             </Card>
           ))}
