@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-08 (gym now beats single-shot: validation-improvement nudge + unknown-cell-id robustness guard, both experiment-validated; run summary polish; model registry is source of truth for LLM config; ML toolbox deps added; dashboard/product-mode keys remapped: free=Free gym, directive=Directive gym, fixed=Fixed gym; dashboard detail metric goal label aligned to maximize/minimize; task cards now use title-case labels and inline grid dates; task detail page now exposes bottom prepare action; return action icon refreshed across archive screens; prepared task rebuild now accepts existing prepared split paths; task cards now omit updated date in list views)
+**Last updated:** 2026-06-08 (gym now beats single-shot: validation-improvement nudge + unknown-cell-id robustness guard, both experiment-validated; run summary polish; model registry is source of truth for LLM config; ML toolbox deps added; dashboard/product-mode keys remapped: free=Free gym, directive=Directive gym, fixed=Fixed gym; dashboard detail metric goal label aligned to maximize/minimize; task cards now use title-case labels and inline grid dates; task detail page now exposes bottom prepare action; return action icon refreshed across archive screens; prepared task rebuild now accepts existing prepared split paths; task cards now omit updated date in list views; settings now include dashboard language preference)
 **Phase:** Hardening after first full H200 recon + building the local control-panel dashboard for configuring/launching/inspecting runs.
 
 ---
@@ -183,6 +183,13 @@ Current prepared-task rebuild cycle:
 - Dataset prepare now accepts existing `prepared/*.csv` split paths when older
   task configs do not retain raw `source_path` entries, so previously prepared
   tasks can be rebuilt from their saved prepared files.
+Current settings localization cycle:
+
+- Dashboard settings now include a saved `language` preference (`ru` / `en`).
+- Layout shell and Settings screen consume the shared language context, and the
+  dashboard-preferences section title is now `Параметры дэшборда`.
+- Settings control width was tightened so dropdown fields match the other rows
+  more closely.
 Current dashboard logo cycle:
 
 - Replaced the old H-like sidebar logo mark with a diagonal dumbbell mark

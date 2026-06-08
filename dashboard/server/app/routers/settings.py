@@ -20,6 +20,7 @@ DEFAULTS = {
     "default_mode": "local",
     "default_episode": "directive_gym",
     "date_format": "mdy",
+    "language": "ru",
     "theme": "light",
     "accent": "#FFDD2D",
     "radius": 18,
@@ -40,6 +41,7 @@ class SettingsPayload(BaseModel):
     default_mode: str | None = None
     default_episode: str | None = None
     date_format: str | None = None
+    language: str | None = None
     theme: str | None = None
     accent: str | None = None
     radius: int | None = None
