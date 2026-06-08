@@ -106,6 +106,8 @@ export default function Compare() {
   const bestChecklist = Math.max(...picked.map((r) => r.checklist));
   const fewestErrors = Math.min(...picked.map((r) => r.errors));
   const fewestTokens = Math.min(...picked.map((r) => r.tokIn + r.tokOut));
+  const pickedWithDuration = picked.filter((r): r is Run & { dur: number } => r.dur !== null && r.dur !== undefined);
+  const shortestDuration = Math.min(...pickedWithDuration.map((r) => r.dur));
 
   const uniqueTasks = new Set(picked.map((r) => r.task));
   const scoredPicked = picked.filter((r) => r.score !== null && r.score !== undefined);
@@ -228,7 +230,7 @@ export default function Compare() {
               <strong>Время</strong>
               <div className="faint" style={{ fontSize: 12, marginBottom: 8 }}>длительность прогона</div>
               <BarChart
-                data={[...picked].filter((r) => r.dur).sort((a, b) => a.dur - b.dur).map((r) => ({ label: r.shortId, sub: r.model, value: r.dur, best: r.dur === Math.min(...picked.map((x) => x.dur)) }))}
+                data={[...pickedWithDuration].sort((a, b) => a.dur - b.dur).map((r) => ({ label: r.shortId, sub: r.model, value: r.dur, best: r.dur === shortestDuration }))}
                 fmt={formatDuration}
               />
             </Card>

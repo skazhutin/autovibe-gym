@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-06 (post-run model self-summary on «Мысли» tab; model registry is source of truth for LLM config; ML toolbox deps added; dashboard table polish)
+**Last updated:** 2026-06-08 (dashboard/product-mode labels remapped: iterative=Free gym, gym=Directive gym, fixed=Fixed gym)
 **Phase:** Hardening after first full H200 recon + building the local control-panel dashboard for configuring/launching/inspecting runs.
 
 ---
@@ -123,15 +123,15 @@ Current dashboard responsive-hardening cycle:
 Current dashboard five-mode selection cycle:
 
 - New Run includes Iterative again, allows selecting up to 5 run types, removes
-  the recommendation badge, and labels the interactive modes as Flexible gym and
-  Fixed gym.
+  the recommendation badge, and labels the environment-backed product modes as
+  Free gym, Directive gym, and Fixed gym.
 - Shared product-mode metadata, common `experiments.run --mode all`, dashboard
   batch launch validation, frontend types, and tests now use the same five-mode
   product set.
 Current dashboard environment-badge cycle:
 
-- New Run run-type cards now show only two badges: `Среда` for Iterative,
-  Flexible gym, and Fixed gym; `Без среды` for Single-shot and
+- New Run run-type cards now show only two badges: `Среда` for Free gym,
+  Directive gym, and Fixed gym; `Без среды` for Single-shot and
   Repeated single-shot.
 - dashboard TypeScript build + Vite production build via bundled Node runtime.
 Current dashboard budget-tooltip cycle:
@@ -150,10 +150,10 @@ Current dashboard run-detail tabs cycle:
 - Dashboard tab menus no longer have a 1px vertical overflow: the divider line is drawn inside the tab strip and tab buttons no longer use a negative bottom margin.
 Current dashboard/product-mode label cycle:
 
-- Dashboard mode labels now display `Flexible gym` wherever the gym product mode
-  was previously shortened to `Flexible`.
-- Fixed-transition product mode display text is shortened to `Fixed gym` in the
-  dashboard and shared experiment matrix labels.
+- Dashboard and shared experiment mode labels now map `iterative` to `Free gym`,
+  `gym` to `Directive gym`, and `fixed` to `Fixed gym`.
+- CLI mode aliases include `free-gym`, `directive-gym`, and `fixed-gym` while
+  preserving the older internal mode keys.
 - `dashboard/web`: TypeScript build + Vite production build passed.
 - `.venv/bin/python -m pytest tests/test_experiments.py` -> `27 passed`.
 Current dashboard sidebar cleanup cycle:
@@ -337,6 +337,7 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 | Date | Change |
 |------|--------|
 | 2026-06-06 | Post-run self-summary: once the model solved the task (reached a final submit for gym/fixed — even if the hidden test rejected it — or produced a usable candidate for single/repeated) one extra best-effort LLM call asks the model to summarize its own solution; saved as `run_summary.json` (`gym/run_summary.py`), served via `GET /runs/{id}/summary` + `hasSummary` on `get_run`, and rendered as a standalone report card (accent side-stripe, neutral surface — deliberately not styled like a step thought) above a «Ход рассуждений по шагам» section on the «Мысли» tab, which now shows for any run with a summary even when thoughts mode is off (old/unsolved runs without either stay hidden). Privacy preserved: the summarizer only sees the conversation it already had, never the hidden test score |
+| 2026-06-08 | Remapped user-facing product-mode labels: iterative/no-checklist is `Free gym`, checklist gym is `Directive gym`, and fixed transitions remains `Fixed gym`; added matching CLI aliases for the new labels |
 | 2026-06-06 | Dashboard launcher now passes explicit `LLM_PROVIDER` from the selected model provider, preventing OpenAI-compatible models from inheriting a Gemini `.env` default |
 | 2026-06-06 | LLM model configuration moved out of `.env` into the shared model registry with CLI management, required `--model` registry resolution, provider-specific Gemini/LiteLLM runtime env, and no LLM keys in `.env` |
 | 2026-06-06 | Deterministic action observability: agent JSON actions now use canonical `type`, required ordered `stage`, canonical `thoughts` in thoughts mode, and non-mutating `think`; NotebookGymEnv/GymEnv enforce the contract, artifacts/API/dashboard expose current stage and thoughts, docs/tests updated |
