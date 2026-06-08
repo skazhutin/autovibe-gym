@@ -51,7 +51,6 @@ export interface ModelRec {
   provider: string;
   baseUrl: string;
   ctx: number;
-  temp?: number;
   maxTokens?: number;
   online: boolean | null;
   hasApiKey?: boolean;

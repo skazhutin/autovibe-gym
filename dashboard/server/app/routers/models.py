@@ -16,7 +16,6 @@ class ModelPayload(BaseModel):
     apiKey: str | None = None
     apiKeyEnv: str | None = None
     ctx: int | None = None
-    temp: float | None = None
     maxTokens: int | None = None
 
 
@@ -27,6 +26,7 @@ class BulkPayload(BaseModel):
 def _public(model: dict) -> dict:
     """Never leak the raw API key to the frontend."""
     out = dict(model)
+    out.pop("temp", None)
     if out.get("apiKey"):
         out["apiKey"] = "********"
         out["hasApiKey"] = True
