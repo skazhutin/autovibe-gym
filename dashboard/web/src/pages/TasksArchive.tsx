@@ -125,6 +125,8 @@ export default function DatasetsArchive() {
     } finally { setRestoring(false); }
   }
 
+  const toolbarEl = document.getElementById("toolbar-portal");
+
   return (
     <div className="stack" style={{ gap: 18 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -133,7 +135,7 @@ export default function DatasetsArchive() {
         </button>
       </div>
 
-      <Card className="dataset-toolbar">
+      {toolbarEl && createPortal(<Card className="dataset-toolbar">
         <div className="filters" style={{ marginBottom: 0 }}>
           <div className="search">
             <Icon name="search" size={17} />
@@ -148,7 +150,7 @@ export default function DatasetsArchive() {
             <Button variant="secondary" onClick={() => setSelecting(true)}>Выбрать</Button>
           )}
         </div>
-      </Card>
+      </Card>, toolbarEl)}
 
       {loading && !tasks ? (
         <Skeleton h={200} />

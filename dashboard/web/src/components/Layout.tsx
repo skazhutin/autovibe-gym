@@ -112,23 +112,26 @@ export default function Layout() {
       </button>
 
       <div className="main">
-        <header className="header" ref={headerRef}>
-          <div>
-            <h1>{t(meta.titleKey)}</h1>
-            <div className="sub">{t(meta.subKey)}</div>
-          </div>
-          <div className="header-right">
-            <HeaderStatus />
-            {showNewRun && (
-              <Button variant="primary" icon="plus" onClick={() => nav("/new")}>{t("header.newRun")}</Button>
-            )}
-            {!showNewRun && headerAction && (
-              <Button variant="primary" icon={headerAction.icon ?? "plus"} onClick={headerAction.onClick}>
-                {headerAction.label}
-              </Button>
-            )}
-          </div>
-        </header>
+        <div className="sticky-top">
+          <header className="header" ref={headerRef}>
+            <div>
+              <h1>{t(meta.titleKey)}</h1>
+              <div className="sub">{t(meta.subKey)}</div>
+            </div>
+            <div className="header-right">
+              <HeaderStatus />
+              {showNewRun && (
+                <Button variant="primary" icon="plus" onClick={() => nav("/new")}>{t("header.newRun")}</Button>
+              )}
+              {!showNewRun && headerAction && (
+                <Button variant="primary" icon={headerAction.icon ?? "plus"} onClick={headerAction.onClick}>
+                  {headerAction.label}
+                </Button>
+              )}
+            </div>
+          </header>
+          <div id="toolbar-portal" />
+        </div>
         <main className="content">
           <Outlet context={setHeaderAction} />
         </main>
