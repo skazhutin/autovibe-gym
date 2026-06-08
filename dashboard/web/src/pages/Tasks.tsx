@@ -86,7 +86,6 @@ function TaskCard({ d, dateFormat, onOpen, selecting, isSelected, onToggle }: { 
         <div className="ds-stat"><span className="k">features</span><span className="v">{d.cols || "-"}</span></div>
         <div className="ds-stat"><span className="k">target</span><span className="v">{d.target}</span></div>
         <div className="ds-stat"><span className="k">metric</span><span className="v">{d.metric}</span></div>
-        <div className="ds-stat"><span className="k">seed</span><span className="v">{d.seed ?? 42}</span></div>
         <div className="ds-stat"><span className="k">source</span><span className="v">{sourceText(d)}</span></div>
       </div>
       <div className="split-pills">
