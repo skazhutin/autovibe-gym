@@ -770,7 +770,6 @@
   place-items: center;
   z-index: 100;
   padding: 20px;
-  animation: page-enter var(--dur-mid) var(--ease-soft) both;
 }
 .modal {
   background: var(--surface);
@@ -780,7 +779,6 @@
   max-height: 90vh;
   display: flex;
   flex-direction: column;
-  animation: modal-enter var(--dur-slow) var(--ease-standard) both;
 }
 .modal-head {
   display: flex;

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Icon } from "./Icon";
 import type { RunStatus } from "../lib/api";
 import { STATUS_LABELS, formatDuration } from "../lib/format";
@@ -234,7 +235,7 @@ export function Modal({
   footer?: ReactNode;
   width?: number;
 }) {
-  return (
+  return createPortal(
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" style={{ width }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
@@ -246,7 +247,8 @@ export function Modal({
         <div className="modal-body">{children}</div>
         {footer && <div className="modal-foot">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
