@@ -182,6 +182,14 @@ def _run_record(run) -> dict[str, Any]:
         "experimentId": info.experiment_id,
         "thoughtsEnabled": str(params.get("thoughts_enabled", "")).lower() == "true",
         "source": "mlflow",
+        # Dashboard-selected system-prompt preset. Old runs predate this and
+        # have neither tag — surface as null so the UI shows "—" rather than
+        # mislabeling them as the default preset (they used whatever
+        # SYSTEM_PROMPT was at the time, which may have shifted since).
+        "promptPresetId": tags.get("prompt_preset_id") or None,
+        "promptSha256": tags.get("prompt_sha256") or None,
+        "promptIsDefault": (tags.get("prompt_default") or "").lower() == "true"
+        if tags.get("prompt_preset_id") else None,
     }
 
 

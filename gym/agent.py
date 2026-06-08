@@ -113,6 +113,24 @@ class GymAgent:
             self._prompt_overrides.get("sha256") if isinstance(self._prompt_overrides.get("sha256"), str) else None
         )
 
+    def assembled_system_prompt(self, *, thoughts_on: bool) -> str:
+        """Return the exact system-prompt text this agent will hand to the LLM.
+
+        Useful for logging — run_gym/run_fixed dump this into MLflow as a
+        private artifact so the experiment record carries the actual prompt
+        the model saw, not just the preset id.
+        """
+        overrides = self._prompt_overrides
+        blocks_override = overrides.get("blocks") if isinstance(overrides.get("blocks"), dict) else None
+        thoughts_on_text = overrides.get("thoughts_on_text")
+        thoughts_off_text = overrides.get("thoughts_off_text")
+        return build_system_prompt(
+            blocks_override,
+            thoughts_on=thoughts_on,
+            thoughts_on_text=thoughts_on_text if isinstance(thoughts_on_text, str) else None,
+            thoughts_off_text=thoughts_off_text if isinstance(thoughts_off_text, str) else None,
+        )
+
     def run(self) -> dict:
         context = self.env.reset()
         self.messages = [{"role": "user", "content": context["task"]}]

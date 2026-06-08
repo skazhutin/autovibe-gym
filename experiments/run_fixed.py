@@ -19,10 +19,16 @@ import time
 
 from experiments.modes import add_mode_metadata_args, mode_metadata_params
 from gym import NotebookGymEnv
-from gym.agent import SYSTEM_PROMPT, THOUGHTS_DISABLED_PROMPT, THOUGHTS_ENABLED_PROMPT
+from gym.agent import (
+    SYSTEM_PROMPT,
+    THOUGHTS_DISABLED_PROMPT,
+    THOUGHTS_ENABLED_PROMPT,
+    _load_prompt_overrides,
+)
 from gym.datasets import DatasetSplits, load_dataset_splits, metric_from_name, resolve_metric
 from gym.llm import make_llm_client
 from gym.model_config import apply_model_reference
+from gym.prompts import build_system_prompt
 from gym.protocol import ACTION_JSON_SCHEMA, Action, ActionParseError
 
 try:
@@ -156,6 +162,27 @@ class FixedTransitionsAgent:
         self.messages: list[dict] = []
         self.total_input_tokens = 0
         self.total_output_tokens = 0
+        # Same dashboard-driven preset override path GymAgent uses. Empty
+        # when no env var is set (CLI / tests), in which case the canonical
+        # default prompt is assembled.
+        self._prompt_overrides: dict = _load_prompt_overrides()
+        self.prompt_preset_id: str = str(
+            self._prompt_overrides.get("preset_id", "default") or "default"
+        )
+        sha_val = self._prompt_overrides.get("sha256")
+        self.prompt_sha256: str | None = sha_val if isinstance(sha_val, str) else None
+
+    def assembled_system_prompt(self, *, thoughts_on: bool) -> str:
+        overrides = self._prompt_overrides
+        blocks_override = overrides.get("blocks") if isinstance(overrides.get("blocks"), dict) else None
+        thoughts_on_text = overrides.get("thoughts_on_text")
+        thoughts_off_text = overrides.get("thoughts_off_text")
+        return build_system_prompt(
+            blocks_override,
+            thoughts_on=thoughts_on,
+            thoughts_on_text=thoughts_on_text if isinstance(thoughts_on_text, str) else None,
+            thoughts_off_text=thoughts_off_text if isinstance(thoughts_off_text, str) else None,
+        )
         self.stage_log: list[dict] = []
         self._start_time = time.time()
 
@@ -216,9 +243,7 @@ class FixedTransitionsAgent:
             response = self.client.complete(
                 model=self.model,
                 max_tokens=self.max_tokens,
-                system=SYSTEM_PROMPT + (
-                    THOUGHTS_ENABLED_PROMPT if thoughts_on else THOUGHTS_DISABLED_PROMPT
-                ),
+                system=self.assembled_system_prompt(thoughts_on=bool(thoughts_on)),
                 messages=self.messages,
             )
             stage_turns += 1
@@ -513,6 +538,15 @@ def main():
             stages=stages,
             model=model_name,
             max_tokens=max_tokens,
+        )
+        mlflow.set_tags({
+            "prompt_preset_id": agent.prompt_preset_id,
+            "prompt_sha256": agent.prompt_sha256 or "default",
+            "prompt_default": "true" if agent.prompt_preset_id == "default" else "false",
+        })
+        mlflow.log_text(
+            agent.assembled_system_prompt(thoughts_on=bool(args.enable_thoughts)),
+            "episode_private/system_prompt.txt",
         )
         summary = agent.run()
         summary.update(mode_metadata_params(args, "fixed_transitions"))

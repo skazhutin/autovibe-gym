@@ -10,12 +10,15 @@ from dashboard.server.app.config import REPO_ROOT, default_python_bin
 from dashboard.server.app.services import mlflow_store, run_launcher
 
 
-def _fake_run(params: dict, metrics: dict, status: str = "FINISHED"):
+def _fake_run(params: dict, metrics: dict, status: str = "FINISHED", tags: dict | None = None):
+    merged_tags = {"mlflow.runName": "dash_unit"}
+    if tags:
+        merged_tags.update(tags)
     return SimpleNamespace(
         data=SimpleNamespace(
             params=params,
             metrics=metrics,
-            tags={"mlflow.runName": "dash_unit"},
+            tags=merged_tags,
         ),
         info=SimpleNamespace(
             run_id="1234567890abcdef",
@@ -537,3 +540,49 @@ def test_run_launcher_gemini_model_does_not_need_base_url(monkeypatch):
 def test_run_launcher_python_available_accepts_paths_and_rejects_missing(tmp_path):
     assert run_launcher._python_available(sys.executable)
     assert not run_launcher._python_available(str(tmp_path / "missing-python"))
+
+
+def test_run_record_exposes_prompt_preset_tags():
+    """run_gym/run_fixed log prompt_preset_id and prompt_sha256 as MLflow tags;
+    the dashboard surfaces them in the run record so the UI can show which
+    preset was used (and whether it was the controlled-default baseline)."""
+    record = mlflow_store._run_record(
+        _fake_run(
+            params={"experiment_type": "gym_with_checklist", "model": "m", "dataset": "d"},
+            metrics={},
+            tags={
+                "prompt_preset_id": "minimal",
+                "prompt_sha256": "abc123",
+                "prompt_default": "false",
+            },
+        )
+    )
+    assert record["promptPresetId"] == "minimal"
+    assert record["promptSha256"] == "abc123"
+    assert record["promptIsDefault"] is False
+
+
+def test_run_record_marks_default_preset_when_logged():
+    record = mlflow_store._run_record(
+        _fake_run(
+            params={"experiment_type": "gym_with_checklist", "model": "m", "dataset": "d"},
+            metrics={},
+            tags={"prompt_preset_id": "default", "prompt_default": "true"},
+        )
+    )
+    assert record["promptPresetId"] == "default"
+    assert record["promptIsDefault"] is True
+
+
+def test_run_record_legacy_run_has_null_preset_fields():
+    """Runs that predate this PR have no preset tag — show null, NOT 'default'.
+    Mislabeling them as default would falsely imply they used today's prompt."""
+    record = mlflow_store._run_record(
+        _fake_run(
+            params={"experiment_type": "gym_with_checklist", "model": "m", "dataset": "d"},
+            metrics={},
+        )
+    )
+    assert record["promptPresetId"] is None
+    assert record["promptSha256"] is None
+    assert record["promptIsDefault"] is None
