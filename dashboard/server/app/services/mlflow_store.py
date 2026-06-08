@@ -19,6 +19,12 @@ from pathlib import Path
 from typing import Any
 
 from ..config import get_settings
+from gym.run_summary import (
+    fallback_summary_from_solution,
+    normalize_summary_text,
+    read_solution_code,
+    summary_needs_fallback,
+)
 
 _MODE_MAP = {
     "baseline": "single",
@@ -284,10 +290,21 @@ def run_summary(episode_dir: Path | None) -> dict[str, Any]:
     if not isinstance(data, dict):
         return {}
     text = data.get("summary")
-    if not isinstance(text, str) or not text.strip():
+    if not isinstance(text, str):
+        return {}
+    text = normalize_summary_text(text)
+    if summary_needs_fallback(text):
+        validation_metric = _best_validation_metric(episode_dir)
+        fallback = fallback_summary_from_solution(
+            read_solution_code(episode_dir),
+            validation_metric=validation_metric,
+        )
+        if fallback:
+            text = fallback
+    if not text:
         return {}
     return {
-        "summary": text.strip(),
+        "summary": text,
         "model": data.get("model"),
         "generatedAt": data.get("generated_at"),
     }
@@ -295,6 +312,21 @@ def run_summary(episode_dir: Path | None) -> dict[str, Any]:
 
 def has_run_summary(episode_dir: Path | None) -> bool:
     return bool(run_summary(episode_dir))
+
+
+def _best_validation_metric(episode_dir: Path | None) -> float | None:
+    summary = _episode_summary(episode_dir)
+    value = summary.get("best_validation_metric")
+    if isinstance(value, (int, float)):
+        return float(value)
+    data = _read_json((episode_dir / "validation_trajectory.json") if episode_dir else None)
+    if not isinstance(data, list):
+        return None
+    for item in data:
+        metric = item.get("metric")
+        if isinstance(metric, (int, float)):
+            return float(metric)
+    return None
 
 
 def current_stage(episode_dir: Path | None) -> str | None:

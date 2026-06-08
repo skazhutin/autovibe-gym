@@ -180,13 +180,16 @@ def main():
         # summarize its own solution and persist it as run_summary.json so the
         # dashboard «Мысли» tab can show it on top.
         if summary.get("submitted"):
-            from gym.run_summary import generate_and_write
+            from gym.run_summary import generate_and_write, read_solution_code
 
             generate_and_write(
                 agent.client,
                 agent.model,
                 summary.get("episode_workspace") or args.workspace_dir,
                 conversation=agent.messages,
+                solution_code=read_solution_code(
+                    summary.get("episode_workspace") or args.workspace_dir
+                ),
                 max_tokens=min(max_tokens, 700),
             )
 

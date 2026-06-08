@@ -243,7 +243,7 @@ def test_run_summary_reader_maps_fields_and_handles_missing(tmp_path):
 
     (tmp_path / "run_summary.json").write_text(
         json.dumps({
-            "summary": "  **Подход** — градиентный бустинг.  ",
+            "summary": "  **What was built** — gradient boosting.  ",
             "model": "llama-3.1-8b-instant",
             "generated_at": "2026-06-06T00:00:00Z",
             "input_tokens": 120,
@@ -252,7 +252,7 @@ def test_run_summary_reader_maps_fields_and_handles_missing(tmp_path):
     )
     out = mlflow_store.run_summary(tmp_path)
     assert out == {
-        "summary": "**Подход** — градиентный бустинг.",
+        "summary": "**What was built** — gradient boosting.",
         "model": "llama-3.1-8b-instant",
         "generatedAt": "2026-06-06T00:00:00Z",
     }
@@ -266,6 +266,69 @@ def test_run_summary_reader_ignores_blank_summary(tmp_path):
     assert mlflow_store.run_summary(tmp_path) == {}
 
 
+def test_run_summary_reader_normalizes_verbose_model_output(tmp_path):
+    (tmp_path / "run_summary.json").write_text(
+        json.dumps(
+            {
+                "summary": (
+                    "The user wants a retrospective summary.\n\n"
+                    "Constraint checklist & Confidence score:\n"
+                    "1. Past tense? Yes.\n\n"
+                    "What was built: Built a sklearn Pipeline with LightGBM.\n"
+                    "How it was solved: Used numeric features and checked the model on val_df.\n"
+                    "Result: Achieved F1 Macro = 0.9411.\n"
+                    "What to improve: Tune hyperparameters.\n"
+                ),
+                "model": "m",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    out = mlflow_store.run_summary(tmp_path)
+    assert out["summary"].startswith("**What was built** — Built a sklearn Pipeline with LightGBM.")
+    assert "Constraint checklist" not in out["summary"]
+
+
+def test_run_summary_reader_falls_back_to_solution_code_for_unusable_saved_summary(tmp_path):
+    (tmp_path / "run_summary.json").write_text(
+        json.dumps(
+            {
+                "summary": (
+                    "* **Context:** already submitted solution.\n"
+                    "* **Constraints:** no bullets.\n"
+                    "3. **Drafting the Sections:**\n"
+                    "**What was built** I built a model.\n"
+                ),
+                "model": "m",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "final_notebook.py").write_text(
+        "\n".join(
+            [
+                "from sklearn.pipeline import Pipeline",
+                "from sklearn.preprocessing import StandardScaler",
+                "from sklearn.ensemble import RandomForestClassifier",
+                "X_train = train_df.drop(columns=[target_col])",
+                "model = Pipeline(steps=[('scale', StandardScaler()), ('clf', RandomForestClassifier())])",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "episode_summary.json").write_text(
+        json.dumps({"best_validation_metric": 0.9355934}),
+        encoding="utf-8",
+    )
+
+    out = mlflow_store.run_summary(tmp_path)
+
+    assert out["summary"].startswith("**What was built** — Built a scikit-learn Pipeline around RandomForestClassifier")
+    assert "**Result** — Best validation metric was 0.9356." in out["summary"]
+    assert "Constraints" not in out["summary"]
+
+
 def test_run_detail_frontend_shows_summary_card_and_gates_tab():
     source = (REPO_ROOT / "dashboard" / "web" / "src" / "pages" / "RunDetail.tsx").read_text(
         encoding="utf-8"
@@ -274,6 +337,8 @@ def test_run_detail_frontend_shows_summary_card_and_gates_tab():
     assert "run.thoughtsEnabled || !!run.hasSummary" in source
     assert "api.runSummary(id)" in source
     assert "SummaryCard" in source
+    assert "parseSummarySections" in source
+    assert "run-summary-section-body" in source
 
 
 def test_run_detail_frontend_declares_stage_and_think_rendering():
@@ -285,7 +350,16 @@ def test_run_detail_frontend_declares_stage_and_think_rendering():
     assert 'think: "мысль"' in source
     assert 'planning: "Планирование"' in source
     assert "stageLabel(s.stage)" in source
-    assert "s.thoughts" in source
+    # Thoughts are shown only on the «Мысли» tab, never inline in the trajectory.
+    assert "s.thoughts" not in source
+
+
+def test_new_run_frontend_limits_thoughts_toggle_to_gym_and_iterative():
+    source = (REPO_ROOT / "dashboard" / "web" / "src" / "pages" / "NewRun.tsx").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'const thoughtsSupported = selectedModes.some((m) => m === "gym" || m === "iterative");' in source
 
 
 def test_run_launcher_planned_steps_match_dashboard_modes():
@@ -345,11 +419,20 @@ def test_run_launcher_fixed_mode_uses_fixed_runner(monkeypatch):
             "modelId": "fake",
             "runName": "dash_live_unit",
             "maxSteps": 8,
+            "enableThoughts": True,
         }
     )
 
     assert args[:2] == ["-m", "experiments.run_fixed"]
     assert "--max-steps" in args
+    assert "--enable-thoughts" not in args
+
+
+def test_run_launcher_supports_thoughts_only_for_gym_and_iterative():
+    assert run_launcher._supports_thoughts("gym") is True
+    assert run_launcher._supports_thoughts("iterative") is True
+    assert run_launcher._supports_thoughts("fixed") is False
+    assert run_launcher._supports_thoughts("single") is False
 
 
 def test_run_launcher_uses_model_name_from_model_id(monkeypatch):

@@ -43,6 +43,10 @@ _MODE_TO_RUNNER = {
 }
 
 
+def _supports_thoughts(mode: str) -> bool:
+    return mode in {"iterative", "gym"}
+
+
 def _selected_modes(cfg: dict[str, Any]) -> list[str]:
     raw_modes = cfg.get("modes") or [cfg.get("mode")]
     modes: list[str] = []
@@ -150,7 +154,7 @@ def _runner_args(cfg: dict[str, Any]) -> list[str]:
             args += ["--max-steps", str(cfg["maxSteps"])]
         # Persistent agent scratchpad — only the notebook (gym/iterative) modes
         # support it (multi-turn, so thoughts can be re-shown to the agent).
-        if cfg.get("enableThoughts"):
+        if _supports_thoughts(mode) and cfg.get("enableThoughts"):
             args += ["--enable-thoughts"]
         # Checklist hint frequency (only gym_with_checklist emits hints).
         if cfg.get("hintCooldown"):
@@ -158,9 +162,6 @@ def _runner_args(cfg: dict[str, Any]) -> list[str]:
     elif mode == "fixed":
         if cfg.get("maxSteps"):
             args += ["--max-steps", str(cfg["maxSteps"])]
-        # Fixed-transitions gym is multi-turn too → supports the scratchpad.
-        if cfg.get("enableThoughts"):
-            args += ["--enable-thoughts"]
     elif mode == BATCH_REQUESTED_MODE and cfg.get("maxSteps"):
         args += ["--max-steps", str(cfg["maxSteps"])]
     if mode == "repeated" and cfg.get("shots"):
@@ -277,7 +278,7 @@ def launch(cfg: dict[str, Any]) -> dict[str, Any]:
         "temp": cfg.get("temp"),
         "budgetMode": cfg.get("budgetMode", "local"),
         "workspaceDir": str(workspace),
-        "thoughtsEnabled": bool(cfg.get("enableThoughts")),
+        "thoughtsEnabled": _supports_thoughts(cfg["mode"]) and bool(cfg.get("enableThoughts")),
         "source": "live",
         "mlflowId": None,
     }

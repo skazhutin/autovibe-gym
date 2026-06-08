@@ -112,7 +112,7 @@ export default function NewRun() {
   const multiMode = selectedCount > 1;
   const stepBased = selectedModes.some((m) => m === "iterative" || m === "gym" || m === "fixed");
   const repeatedLike = selectedModes.includes("repeated");
-  const thoughtsSupported = selectedModes.some((m) => m === "gym" || m === "iterative" || m === "fixed");
+  const thoughtsSupported = selectedModes.some((m) => m === "gym" || m === "iterative");
   const checklistMode = selectedModes.includes("gym");
   const canLaunch = selectedCount > 0 && !!modelId && !!dataset?.prepared && !launching;
 
