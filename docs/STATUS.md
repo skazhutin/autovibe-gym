@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-08 (gym now beats single-shot: validation-improvement nudge + unknown-cell-id robustness guard, both experiment-validated; run summary polish; model registry is source of truth for LLM config; ML toolbox deps added; dashboard/product-mode keys remapped: free=Free gym, directive=Directive gym, fixed=Fixed gym; dashboard detail metric goal label aligned to maximize/minimize; task cards now use title-case labels and inline grid dates)
+**Last updated:** 2026-06-08 (gym now beats single-shot: validation-improvement nudge + unknown-cell-id robustness guard, both experiment-validated; run summary polish; model registry is source of truth for LLM config; ML toolbox deps added; dashboard/product-mode keys remapped: free=Free gym, directive=Directive gym, fixed=Fixed gym; dashboard detail metric goal label aligned to maximize/minimize; task cards now use title-case labels and inline grid dates; task detail page now exposes bottom prepare action)
 **Phase:** Hardening after first full H200 recon + building the local control-panel dashboard for configuring/launching/inspecting runs.
 
 ---
@@ -169,6 +169,10 @@ Current task-card label cycle:
 
 - Task list and archive cards now use title-case parameter labels, with created
   and updated dates moved into the main stats grid as the final items.
+Current task-detail prepare-action cycle:
+
+- Unprepared task detail pages now show a bottom `Подготовить` action wired to
+  the existing prepare endpoint and refresh flow.
 Current dashboard logo cycle:
 
 - Replaced the old H-like sidebar logo mark with a diagonal dumbbell mark

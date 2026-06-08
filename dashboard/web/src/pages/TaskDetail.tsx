@@ -482,6 +482,8 @@ export default function DatasetDetail() {
   const { data: archivedTasks } = useAsync(() => api.listArchivedTasks(), [id]);
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName] = useState("");
+  const [preparing, setPreparing] = useState(false);
+  const [prepareErr, setPrepareErr] = useState<string | null>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const archived = (archivedTasks ?? []).some((task) => task.id === id);
 
@@ -509,6 +511,19 @@ export default function DatasetDetail() {
 
   function cancelName() {
     setEditingName(false);
+  }
+
+  async function prepareTask() {
+    setPreparing(true);
+    setPrepareErr(null);
+    try {
+      await api.prepareTask(id);
+      refresh();
+    } catch (e) {
+      setPrepareErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setPreparing(false);
+    }
   }
 
   if (loading && !data) return <Skeleton h={300} />;
@@ -560,6 +575,23 @@ export default function DatasetDetail() {
       {tab === "config" && <ConfigTab id={id} config={config} archived={archived} onSaved={refresh} />}
       {tab === "sources" && <SourcesTab id={id} config={config} onSaved={refresh} />}
       {tab === "notes" && <AgentNotesTab id={id} config={config} onSaved={refresh} />}
+
+      {!archived && !data.prepared && (
+        <Card style={{ marginTop: 20 }}>
+          <div className="spread" style={{ alignItems: "center", gap: 12 }}>
+            <div className="stack" style={{ gap: 4 }}>
+              <div style={{ fontWeight: 600 }}>Подготовка датасета</div>
+              <div className="faint" style={{ fontSize: 13 }}>
+                Соберет подготовленные `train` / `val` / `test` файлы по текущему конфигу задачи.
+              </div>
+              {prepareErr && <div className="error-inline">{prepareErr}</div>}
+            </div>
+            <Button variant="primary" onClick={prepareTask} disabled={preparing || configLoading}>
+              {preparing ? <Spinner /> : "Подготовить"}
+            </Button>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
