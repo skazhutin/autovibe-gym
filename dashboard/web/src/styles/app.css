@@ -1636,6 +1636,42 @@ table.data tbody tr.clickable:hover {
 .modal-actions > * { flex: 1; justify-content: center; }
 
 /* ============ Thoughts (agent scratchpad) ============ */
+/* Thoughts tab = optional self-summary report on top, then the step timeline. */
+.thoughts-tab { display: flex; flex-direction: column; gap: 16px; }
+.thoughts-steps-head {
+  font-size: 12px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase;
+  color: var(--text-faint); padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+/* Post-run model self-summary. Deliberately styled as a standalone report card
+   (neutral surface + accent side-stripe), NOT like a step thought, so it never
+   reads as one more node in the timeline below. */
+.run-summary {
+  position: relative;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent-ink);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, .04));
+}
+.run-summary-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 16px;
+  color: var(--accent-ink);
+  border-bottom: 1px solid var(--border);
+}
+.run-summary-title { font-weight: 650; font-size: 13px; letter-spacing: .01em; }
+.run-summary-model { margin-left: auto; font-size: 11px; color: var(--text-dim); }
+.run-summary-body { padding: 14px 18px; font-size: 14px; line-height: 1.6; color: var(--text); }
+.run-summary-body p { margin: 0 0 8px; }
+.run-summary-body p:last-child { margin-bottom: 0; }
+.run-summary-body ul { margin: 0 0 8px; padding-left: 18px; }
+.run-summary-body ul:last-child { margin-bottom: 0; }
+.run-summary-body li { margin: 3px 0; }
+.run-summary-body strong { color: var(--text); font-weight: 650; }
+
 .thoughts { display: flex; flex-direction: column; gap: 12px; }
 .thought { display: flex; gap: 14px; align-items: stretch; position: relative; }
 .thought-rail { flex: none; width: 22px; display: flex; justify-content: center; }

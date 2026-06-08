@@ -236,6 +236,46 @@ def test_episode_artifacts_expose_current_stage_type_and_thoughts(tmp_path):
     assert progress["currentStage"] == "validation_analysis"
 
 
+def test_run_summary_reader_maps_fields_and_handles_missing(tmp_path):
+    # Missing file → empty dict (old runs hide the summary card).
+    assert mlflow_store.run_summary(tmp_path) == {}
+    assert mlflow_store.has_run_summary(tmp_path) is False
+
+    (tmp_path / "run_summary.json").write_text(
+        json.dumps({
+            "summary": "  **Подход** — градиентный бустинг.  ",
+            "model": "llama-3.1-8b-instant",
+            "generated_at": "2026-06-06T00:00:00Z",
+            "input_tokens": 120,
+        }),
+        encoding="utf-8",
+    )
+    out = mlflow_store.run_summary(tmp_path)
+    assert out == {
+        "summary": "**Подход** — градиентный бустинг.",
+        "model": "llama-3.1-8b-instant",
+        "generatedAt": "2026-06-06T00:00:00Z",
+    }
+    assert mlflow_store.has_run_summary(tmp_path) is True
+
+
+def test_run_summary_reader_ignores_blank_summary(tmp_path):
+    (tmp_path / "run_summary.json").write_text(
+        json.dumps({"summary": "   ", "model": "m"}), encoding="utf-8"
+    )
+    assert mlflow_store.run_summary(tmp_path) == {}
+
+
+def test_run_detail_frontend_shows_summary_card_and_gates_tab():
+    source = (REPO_ROOT / "dashboard" / "web" / "src" / "pages" / "RunDetail.tsx").read_text(
+        encoding="utf-8"
+    )
+    # Thoughts tab is shown for runs with a scratchpad OR a self-summary.
+    assert "run.thoughtsEnabled || !!run.hasSummary" in source
+    assert "api.runSummary(id)" in source
+    assert "SummaryCard" in source
+
+
 def test_run_detail_frontend_declares_stage_and_think_rendering():
     source = (REPO_ROOT / "dashboard" / "web" / "src" / "pages" / "RunDetail.tsx").read_text(
         encoding="utf-8"

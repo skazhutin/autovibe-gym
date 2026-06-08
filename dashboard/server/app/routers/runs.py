@@ -157,6 +157,13 @@ def launch(payload: LaunchPayload) -> dict:
     return {"batch": True, "count": len(launched), "runs": launched, "id": launched[0]["id"]}
 
 
+def _with_summary_flag(run_id: str, rec: dict) -> dict:
+    """Flag whether this run has a model self-summary so the frontend can show
+    the «Мысли» tab even for runs that didn't enable the thoughts scratchpad."""
+    rec["hasSummary"] = mlflow_store.has_run_summary(_episode_dir(run_id))
+    return rec
+
+
 @router.get("/{run_id}")
 def get_run(run_id: str) -> dict:
     if run_id.startswith("live_"):
@@ -164,20 +171,20 @@ def get_run(run_id: str) -> dict:
         if live is None:
             raise HTTPException(404, f"Run '{run_id}' not found")
         if live.get("status") == "running":
-            return _enrich_live(live)
+            return _with_summary_flag(run_id, _enrich_live(live))
         if live.get("mlflowId"):
             rec = mlflow_store.get_run(live["mlflowId"])
             if rec:
                 merged = {**rec, **{k: v for k, v in live.items() if v is not None}}
                 merged["id"] = run_id
                 merged["currentStage"] = mlflow_store.current_stage(_episode_dir(run_id))
-                return merged
-        return live
+                return _with_summary_flag(run_id, merged)
+        return _with_summary_flag(run_id, live)
     rec = mlflow_store.get_run(run_id)
     if rec is None:
         raise HTTPException(404, f"Run '{run_id}' not found")
     rec["currentStage"] = mlflow_store.current_stage(_episode_dir(run_id))
-    return rec
+    return _with_summary_flag(run_id, rec)
 
 
 @router.post("/{run_id}/stop")
@@ -200,6 +207,12 @@ def trajectory(run_id: str) -> list[dict]:
 @router.get("/{run_id}/thoughts")
 def thoughts(run_id: str) -> list[dict]:
     return mlflow_store.thoughts(_episode_dir(run_id))
+
+
+@router.get("/{run_id}/summary")
+def run_summary(run_id: str) -> dict:
+    """The model's post-run self-summary, shown atop the «Мысли» tab."""
+    return mlflow_store.run_summary(_episode_dir(run_id))
 
 
 @router.get("/{run_id}/errors")
