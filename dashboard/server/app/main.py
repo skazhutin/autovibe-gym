@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.formparsers import MultiPartParser
 
 from .config import get_settings
-from .routers import datasets, health, models, runs, settings as settings_router
+from .routers import datasets, health, models, prompts, runs, settings as settings_router
 
 # Keep dashboard uploads useful for real tabular files while preserving a cap.
 MultiPartParser.max_part_size = 250 * 1024 * 1024
@@ -41,6 +41,7 @@ app.include_router(health.router, prefix="/api")
 app.include_router(settings_router.router, prefix="/api")
 app.include_router(datasets.router, prefix="/api")
 app.include_router(models.router, prefix="/api")
+app.include_router(prompts.router, prefix="/api")
 app.include_router(runs.router, prefix="/api")
 
 

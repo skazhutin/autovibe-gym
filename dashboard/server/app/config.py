@@ -51,6 +51,9 @@ class Settings:
         self.settings_file: Path = DATA_DIR / "settings.json"
         self.runs_dir: Path = DATA_DIR / "runs"
         self.uploads_dir: Path = DATA_DIR / "uploads"
+        # User-saved system-prompt presets. The `default` preset is synthesized
+        # from gym.prompts.DEFAULT_BLOCKS at read time, not stored here.
+        self.prompts_dir: Path = DATA_DIR / "prompts"
         # Built SPA to serve in single-app/server mode (FastAPI serves the UI too).
         self.web_dist: Path = Path(
             os.getenv("AUTOVIBE_DASHBOARD_WEB", str(SERVER_DIR.parent / "web" / "dist"))
@@ -61,7 +64,7 @@ class Settings:
         ]
 
     def ensure_dirs(self) -> None:
-        for d in (self.data_dir, self.runs_dir, self.uploads_dir):
+        for d in (self.data_dir, self.runs_dir, self.uploads_dir, self.prompts_dir):
             d.mkdir(parents=True, exist_ok=True)
 
 
