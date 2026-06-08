@@ -1057,6 +1057,12 @@ table.data tbody tr.clickable:hover {
 }
 .dataset-toolbar {
   position: sticky;
+  top: var(--header-h, 73px);
+  z-index: 15;
+  margin-top: -28px;
+}
+.dataset-toolbar {
+  position: sticky;
   top: 65px;
   z-index: 15;
 }

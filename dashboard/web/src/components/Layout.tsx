@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Icon } from "./Icon";
 import { Button, Dot } from "./ui";
@@ -59,6 +59,18 @@ export default function Layout() {
   const [collapsed, setCollapsed] = useState(false);
   const [headerAction, setHeaderActionRaw] = useState<HeaderAction | null>(null);
   const setHeaderAction: SetHeaderAction = useCallback((a) => setHeaderActionRaw(a), []);
+  const headerRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    function measure() {
+      if (headerRef.current) {
+        document.documentElement.style.setProperty("--header-h", `${headerRef.current.offsetHeight}px`);
+      }
+    }
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
 
   const isRuns = loc.pathname === "/runs" || loc.pathname.startsWith("/runs") && !loc.pathname.startsWith("/runs/");
   const isCompare = loc.pathname.startsWith("/compare");
@@ -100,7 +112,7 @@ export default function Layout() {
       </button>
 
       <div className="main">
-        <header className="header">
+        <header className="header" ref={headerRef}>
           <div>
             <h1>{t(meta.titleKey)}</h1>
             <div className="sub">{t(meta.subKey)}</div>
