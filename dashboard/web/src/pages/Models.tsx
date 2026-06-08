@@ -323,7 +323,7 @@ export default function Models() {
               <div className="ds-stats">
                 <div className="ds-stat"><span className="k">Input token limit</span><span className="v">{(m.ctx / 1024).toFixed(0)}k</span></div>
                 <div className="ds-stat"><span className="k">Output token limit</span><span className="v">{m.maxTokens ? `${(m.maxTokens / 1024).toFixed(0)}k` : "—"}</span></div>
-                <div className={`ds-stat${(m.baseUrl || "").length > 35 ? " span-full" : ""}`}><span className="k">URL</span><span className="v" style={{ fontSize: 11.5 }}>{m.baseUrl || "—"}</span></div>
+                <div className="ds-stat span-full"><span className="k">URL</span><span className="v" style={{ fontSize: 11.5 }}>{m.baseUrl || "—"}</span></div>
                 {m.createdAt && <div className="ds-stat span-full"><span className="k">Создана</span><span className="v">{new Date(m.createdAt).toLocaleString()}</span></div>}
               </div>
             </Card>
