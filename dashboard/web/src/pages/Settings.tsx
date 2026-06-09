@@ -142,8 +142,8 @@ export default function Settings() {
             <div className={`toggle${remoteOn ? " on" : ""}`} onClick={() => toggleRemote(!remoteOn)} />
           </div>
         </Row>
-        {remoteOn && (
-          <>
+        <div style={{ display: "grid", gridTemplateRows: remoteOn ? "1fr" : "0fr", transition: "grid-template-rows var(--dur-slow) var(--ease-standard)" }}>
+          <div style={{ overflow: "hidden" }}>
             <Row label={t("settings.remoteSsh")} info={t("settings.info.remoteSsh")}>
               <input className="input mono" placeholder="user@host.example.com" value={form.remote_ssh ?? ""} onChange={(e) => set("remote_ssh", e.target.value)} />
             </Row>
@@ -162,12 +162,12 @@ export default function Settings() {
             <Row label={t("settings.remotePassword")} info={t("settings.info.remotePassword")}>
               <input className="input" type="password" value={form.remote_password ?? ""} onChange={(e) => set("remote_password", e.target.value)} placeholder="••••••••" />
             </Row>
-            <div className="row" style={{ marginTop: 6 }}>
+            <div className="row" style={{ marginTop: 6, marginBottom: 4 }}>
               <Button variant="secondary" onClick={runCheck} disabled={checking}>{checking ? <Spinner /> : <Icon name="refresh" size={16} />} {t("settings.checkConnection")}</Button>
               {check && <span style={{ fontSize: 13, color: check.ok ? "var(--green)" : "var(--red)" }}>{check.msg}</span>}
             </div>
-          </>
-        )}
+          </div>
+        </div>
       </Card>
 
       <Card>
