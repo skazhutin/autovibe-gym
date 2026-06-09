@@ -77,18 +77,18 @@ function Stepper({ value, onChange, min = 1, max = 999999, step = 1, suffix }: {
 }
 
 // ── Model Picker Modal ───────────────────────────────────────────────────────
-function useBlockEsc() {
+function useCloseOnEsc(onClose: () => void) {
   useEffect(() => {
-    function onKey(e: KeyboardEvent) { if (e.key === "Escape") e.stopImmediatePropagation(); }
-    document.addEventListener("keydown", onKey, true);
-    return () => document.removeEventListener("keydown", onKey, true);
-  }, []);
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
 }
 
 function ModelPickerModal({ models, current, onSelect, onClose }: {
   models: ModelRec[]; current: string; onSelect: (id: string) => void; onClose: () => void;
 }) {
-  useBlockEsc();
+  useCloseOnEsc(onClose);
   const [q, setQ] = useState("");
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -130,7 +130,7 @@ function ModelPickerModal({ models, current, onSelect, onClose }: {
 function TaskPickerModal({ tasks, current, onSelect, onClose }: {
   tasks: Task[]; current: string; onSelect: (id: string) => void; onClose: () => void;
 }) {
-  useBlockEsc();
+  useCloseOnEsc(onClose);
   const [q, setQ] = useState("");
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();

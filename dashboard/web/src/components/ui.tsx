@@ -236,10 +236,10 @@ export function Modal({
   width?: number;
 }) {
   useEffect(() => {
-    function onKey(e: KeyboardEvent) { if (e.key === "Escape") e.stopImmediatePropagation(); }
-    document.addEventListener("keydown", onKey, true);
-    return () => document.removeEventListener("keydown", onKey, true);
-  }, []);
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
   return createPortal(
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" style={{ width }} onClick={(e) => e.stopPropagation()}>
