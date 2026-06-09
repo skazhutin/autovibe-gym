@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { api, type Task, type TaskConfig, type LaunchRunMode, type ModelRec } from "../lib/api";
 import { ModelModal } from "./Models";
 import { useAsync } from "../lib/hooks";
 import { MODE_LABELS } from "../lib/format";
-import { Button, Card, Dot, Field, Modal, Spinner, Tag } from "../components/ui";
+import { Button, Card, Dot, FieldInfo, Modal, Spinner, Tag } from "../components/ui";
 import { Icon } from "../components/Icon";
 
 const MAX_SELECTED_MODES = 5;
@@ -33,31 +33,6 @@ const TASK_TYPES = [
 ];
 
 // ── Info tooltip (same pattern as Models page) ──────────────────────────────
-function Info({ text }: { text: string }) {
-  const [visible, setVisible] = useState(false);
-  const [pos, setPos] = useState({ top: 0, left: 0 });
-  const dotRef = useRef<HTMLSpanElement>(null);
-  function show() {
-    const rect = dotRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    setPos({ top: rect.top, left: rect.left + rect.width / 2 });
-    setVisible(true);
-  }
-  return (
-    <>
-      <span ref={dotRef} className="info-dot" onMouseEnter={show} onMouseLeave={() => setVisible(false)}>?</span>
-      {visible && createPortal(<div className="tooltip-portal" style={{ top: pos.top, left: pos.left }}>{text}</div>, document.body)}
-    </>
-  );
-}
-
-function FI({ label, info, children }: { label: ReactNode; info: string; children: ReactNode }) {
-  return (
-    <Field label={<span className="field-info-label">{label}<Info text={info} /></span>}>
-      {children}
-    </Field>
-  );
-}
 
 // ── Stepper ──────────────────────────────────────────────────────────────────
 function Stepper({ value, onChange, min = 1, max = 999999, step = 1, suffix }: {
@@ -422,44 +397,44 @@ export default function NewRun() {
                     <div className="mode-row-params">
                       {mi.hasSteps && (
                         <div className="mode-param">
-                          <FI label="Макс. шагов" info="Сколько интерактивных шагов доступно режиму до финального submit.">
+                          <FieldInfo label="Макс. шагов" info="Сколько интерактивных шагов доступно режиму до финального submit.">
                             <Stepper value={p.maxSteps} onChange={v => setModeParam(mi.id, "maxSteps", v)} min={1} max={200} />
-                          </FI>
+                          </FieldInfo>
                         </div>
                       )}
                       {mi.hasShots && (
                         <div className="mode-param">
-                          <FI label="Число попыток" info="Количество независимых попыток. Каждая попытка независима, между ними только val-метрика.">
+                          <FieldInfo label="Число попыток" info="Количество независимых попыток. Каждая попытка независима, между ними только val-метрика.">
                             <Stepper value={p.shots} onChange={v => setModeParam(mi.id, "shots", v)} min={2} max={50} />
-                          </FI>
+                          </FieldInfo>
                         </div>
                       )}
                       {mi.hasHint && (
                         <div className="mode-param">
-                          <FI label="Подсказка каждые N шагов" info="Через сколько шагов агенту даётся следующая подсказка чеклиста DS-пайплайна. 1 — на каждом шаге, 3 — каждые три шага.">
+                          <FieldInfo label="Подсказка каждые N шагов" info="Через сколько шагов агенту даётся следующая подсказка чеклиста DS-пайплайна. 1 — на каждом шаге, 3 — каждые три шага.">
                             <Stepper value={p.hintCooldown} onChange={v => setModeParam(mi.id, "hintCooldown", v)} min={1} max={20} />
-                          </FI>
+                          </FieldInfo>
                         </div>
                       )}
                       {!mi.hasSteps && !mi.hasShots && !mi.hasHint && <div className="mode-param-spacer" aria-hidden="true" />}
                       {mi.hasThoughts && mi.hasSteps && !mi.hasHint && !mi.hasShots && <div className="mode-param-spacer" aria-hidden="true" />}
                       <div className="mode-param">
-                        <FI label={`Температура: ${p.temp.toFixed(2)}`} info="Случайность ответов: 0 — всегда одинаково, 1 — очень вариативно. Рекомендуется 0.3–0.6 для кода.">
+                        <FieldInfo label={`Температура: ${p.temp.toFixed(2)}`} info="Случайность ответов: 0 — всегда одинаково, 1 — очень вариативно. Рекомендуется 0.3–0.6 для кода.">
                           <div className="stepper-height-wrap">
                             <input className="range" type="range" min={0} max={1} step={0.05} value={p.temp}
                               onChange={e => setModeParam(mi.id, "temp", parseFloat(e.target.value))} />
                           </div>
-                        </FI>
+                        </FieldInfo>
                       </div>
                       {mi.hasThoughts && (
                         <div className="mode-param">
-                          <FI label="Мысли LLM" info="Агент ведёт внутренние заметки между шагами. Улучшает качество решений за счёт рассуждений, но заметно увеличивает расход токенов.">
+                          <FieldInfo label="Мысли LLM" info="Агент ведёт внутренние заметки между шагами. Улучшает качество решений за счёт рассуждений, но заметно увеличивает расход токенов.">
                             <div className="wide-toggle" onClick={() => setModeParam(mi.id, "enableThoughts", !p.enableThoughts)}>
                               <div className={`wide-toggle-thumb${p.enableThoughts ? " on" : ""}`} />
                               <span className="wide-toggle-off">Выкл</span>
                               <span className="wide-toggle-on">Вкл</span>
                             </div>
-                          </FI>
+                          </FieldInfo>
                         </div>
                       )}
                     </div>
@@ -526,7 +501,7 @@ export default function NewRun() {
                       </div>
                       {dsSection !== "notes" ? (
                         <div className="stack" style={{ gap: 14 }}>
-                          <FI label="Тип задачи" info="classification — предсказание категорий. regression — предсказание числа. auto — определится автоматически по данным.">
+                          <FieldInfo label="Тип задачи" info="classification — предсказание категорий. regression — предсказание числа. auto — определится автоматически по данным.">
                             <div className="sort-tabs">
                               {TASK_TYPES.map(tt => (
                                 <button key={tt.value}
@@ -536,38 +511,38 @@ export default function NewRun() {
                                 </button>
                               ))}
                             </div>
-                          </FI>
-                          <FI label={<>Метрика <a className="docs-link" href="https://scikit-learn.org/stable/modules/model_evaluation.html" target="_blank" rel="noopener noreferrer">sklearn ↗</a></>} info="Название метрики sklearn, считается на test после submit. Агент видит только val. Напр. f1_macro, accuracy, neg_rmse, roc_auc.">
+                          </FieldInfo>
+                          <FieldInfo label={<>Метрика <a className="docs-link" href="https://scikit-learn.org/stable/modules/model_evaluation.html" target="_blank" rel="noopener noreferrer">sklearn ↗</a></>} info="Название метрики sklearn, считается на test после submit. Агент видит только val. Напр. f1_macro, accuracy, neg_rmse, roc_auc.">
                             <input className="input mono" style={{ width: "100%" }} value={datasetConfig.task.metric_name}
                               onChange={e => setTaskConfig(c => c ? { ...c, task: { ...c.task, metric_name: e.target.value } } : c)} />
-                          </FI>
-                          <FI label="Target column" info="Колонка с целевой переменной — то, что агент должен предсказывать. Эта колонка никогда не включается в признаки.">
+                          </FieldInfo>
+                          <FieldInfo label="Target column" info="Колонка с целевой переменной — то, что агент должен предсказывать. Эта колонка никогда не включается в признаки.">
                             <input className="input mono" style={{ width: "100%" }} value={datasetConfig.task.target_col}
                               onChange={e => setTaskConfig(c => c ? { ...c, task: { ...c.task, target_col: e.target.value } } : c)} />
-                          </FI>
+                          </FieldInfo>
                         </div>
                       ) : (
                         <div className="stack" style={{ gap: 12 }}>
-                          <FI label="Описание задачи" info="Текст, который агент получит как описание задачи в начале прогона. Объясните что нужно предсказать и почему.">
+                          <FieldInfo label="Описание задачи" info="Текст, который агент получит как описание задачи в начале прогона. Объясните что нужно предсказать и почему.">
                             <textarea className="input" rows={3} style={{ resize: "vertical", width: "100%" }}
                               value={datasetConfig.agent_notes.task_description}
                               onChange={e => setTaskConfig(c => c ? { ...c, agent_notes: { ...c.agent_notes, task_description: e.target.value } } : c)} />
-                          </FI>
-                          <FI label="Структура данных" info="Описание колонок и их смысла. Агент использует это для интерпретации признаков.">
+                          </FieldInfo>
+                          <FieldInfo label="Структура данных" info="Описание колонок и их смысла. Агент использует это для интерпретации признаков.">
                             <textarea className="input" rows={3} style={{ resize: "vertical", width: "100%" }}
                               value={datasetConfig.agent_notes.data_structure}
                               onChange={e => setTaskConfig(c => c ? { ...c, agent_notes: { ...c.agent_notes, data_structure: e.target.value } } : c)} />
-                          </FI>
-                          <FI label="Дополнительные комментарии" info="Дополнительные подсказки агенту: особенности данных, известные ограничения, запреты. Агент видит это в каждом шаге.">
+                          </FieldInfo>
+                          <FieldInfo label="Дополнительные комментарии" info="Дополнительные подсказки агенту: особенности данных, известные ограничения, запреты. Агент видит это в каждом шаге.">
                             <textarea className="input" rows={2} style={{ resize: "vertical", width: "100%" }}
                               value={datasetConfig.agent_notes.additional_comments}
                               onChange={e => setTaskConfig(c => c ? { ...c, agent_notes: { ...c.agent_notes, additional_comments: e.target.value } } : c)} />
-                          </FI>
-                          <FI label="Предупреждение об утечках" info="Колонки или паттерны, которые нельзя использовать как признаки — они уже содержат target или производные от него.">
+                          </FieldInfo>
+                          <FieldInfo label="Предупреждение об утечках" info="Колонки или паттерны, которые нельзя использовать как признаки — они уже содержат target или производные от него.">
                             <textarea className="input" rows={2} style={{ resize: "vertical", width: "100%" }}
                               value={datasetConfig.agent_notes.leakage_warning}
                               onChange={e => setTaskConfig(c => c ? { ...c, agent_notes: { ...c.agent_notes, leakage_warning: e.target.value } } : c)} />
-                          </FI>
+                          </FieldInfo>
                         </div>
                       )}
                     </div>
@@ -587,7 +562,7 @@ export default function NewRun() {
         <Card>
           <div className="step-head"><span className="step-num">4</span><span className="step-title">Параметры</span></div>
           <div style={{ maxWidth: 220 }}>
-            <FI label="Seed" info="Фиксирует случайность запуска, чтобы результаты было проще воспроизводить и сравнивать.">
+            <FieldInfo label="Seed" info="Фиксирует случайность запуска, чтобы результаты было проще воспроизводить и сравнивать.">
               <div className="row" style={{ gap: 6 }}>
                 <input className="input mono" style={{ flex: 1 }} type="number" min={0} max={999999}
                   value={seed} onChange={e => setSeed(Math.max(0, Math.min(999999, Number(e.target.value) || 0)))} />
@@ -596,7 +571,7 @@ export default function NewRun() {
                   <Icon name="refresh" size={16} />
                 </button>
               </div>
-            </FI>
+            </FieldInfo>
           </div>
         </Card>
 

@@ -1,95 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import type { SetHeaderAction } from "../components/Layout";
-import { api, type Task, type TaskStatus } from "../lib/api";
-import { formatDateOnly } from "../lib/date";
+import { api, type Task } from "../lib/api";
 import { useAsync } from "../lib/hooks";
 import { createPortal } from "react-dom";
-import { Button, Card, EmptyState, Field, Modal, SelectDropdown, Skeleton, Spinner, Tag } from "../components/ui";
+import { Button, Card, EmptyState, Field, SelectDropdown, Skeleton } from "../components/ui";
 import { Icon } from "../components/Icon";
 import { TaskWizard } from "../components/tasks/TaskWizard";
+import { TaskCard } from "../components/tasks/TaskCard";
+import { ConfirmDialog } from "../components/ConfirmDialog";
+import { SelectionBar } from "../components/SelectionBar";
+import { statusOf } from "../lib/taskUtils";
 
 type SortField = "updated" | "created" | "az";
 type SortDir = "asc" | "desc";
 
-const STATUS_TONE: Record<TaskStatus, "green" | "blue" | "red"> = {
-  prepared: "green",
-  partial: "blue",
-  unprepared: "red",
-};
-const STATUS_LABEL: Record<TaskStatus, string> = {
-  prepared: "подготовлен",
-  partial: "частичный",
-  unprepared: "не подготовлен",
-};
-const TASK_LABEL: Record<string, string> = {
-  classification: "classification",
-  regression: "regression",
-  auto: "auto",
-  unknown: "unknown",
-};
-function statusOf(d: Task): TaskStatus {
-  return d.status ?? (d.prepared ? "prepared" : d.hasTrain ? "partial" : "unprepared");
-}
-
-function splitTag(ok?: boolean, label?: string) {
-  return <Tag tone={ok ? "green" : "neutral"}>{label}</Tag>;
-}
-
-function sourceText(d: Task) {
-  const value = d.source && d.source !== "-" ? d.source : d.sources?.[0]?.name || d.sources?.[0]?.url || "-";
-  return !value || value === "source" ? "-" : value;
-}
-
 function textBlob(d: Task) {
   return [
-    d.name,
-    d.id,
-    d.target,
-    d.metric,
-    d.source,
-    d.desc,
+    d.name, d.id, d.target, d.metric, d.source, d.desc,
     ...(d.tags ?? []),
     ...(d.sources ?? []).flatMap((s) => [s.name, s.url, s.license, s.organization]),
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .replace(/[_-]+/g, " ")
-    .toLowerCase();
-}
-
-function TaskCard({ d, dateFormat, onOpen, selecting, isSelected, onToggle }: { d: Task; dateFormat: "mdy" | "dmy"; onOpen: () => void; selecting: boolean; isSelected: boolean; onToggle: () => void }) {
-  const status = statusOf(d);
-  const taskLabel = TASK_LABEL[d.taskType ?? d.task] ?? d.task;
-  return (
-    <Card className={`ds-card task-card-rich${selecting && isSelected ? " row-selected" : ""}`} hover onClick={() => selecting ? onToggle() : onOpen()}>
-      <div className="spread">
-        <div style={{ minWidth: 0 }}>
-          <div className="ds-title">{d.name}</div>
-        </div>
-        <Tag tone={STATUS_TONE[status]}>{STATUS_LABEL[status]}</Tag>
-      </div>
-      {d.desc && <div className="muted clamp-2">{d.desc}</div>}
-      <div className="run-meta-line" style={{ margin: 0 }}>
-        <Tag tone={d.taskType === "regression" ? "blue" : d.taskType === "classification" ? "accent" : "neutral"}>{taskLabel}</Tag>
-        {(d.tags ?? []).slice(0, 3).map((tag) => <Tag key={tag} tone="neutral">{tag}</Tag>)}
-        {d.warningsCount ? <Tag tone="red">{d.warningsCount} warnings</Tag> : null}
-      </div>
-      <div className="ds-stats rich">
-        <div className="ds-stat"><span className="k">Rows</span><span className="v">{d.rows ? d.rows.toLocaleString() : "-"}</span></div>
-        <div className="ds-stat"><span className="k">Features</span><span className="v">{d.cols || "-"}</span></div>
-        <div className="ds-stat"><span className="k">Target</span><span className="v">{d.target}</span></div>
-        <div className="ds-stat"><span className="k">Metric</span><span className="v">{d.metric}</span></div>
-        <div className="ds-stat"><span className="k">Source</span><span className="v">{sourceText(d)}</span></div>
-        {d.createdAt && <div className="ds-stat"><span className="k">Created</span><span className="v">{formatDateOnly(d.createdAt, dateFormat)}</span></div>}
-      </div>
-      <div className="split-pills">
-        {splitTag(d.hasTrain, "Train")}
-        {splitTag(d.hasVal, "Val")}
-        {splitTag(d.hasTest, "Test")}
-      </div>
-    </Card>
-  );
+  ].filter(Boolean).join(" ").replace(/[_-]+/g, " ").toLowerCase();
 }
 
 export default function Tasks() {
@@ -274,51 +205,39 @@ export default function Tasks() {
         </button>
       </div>
 
-      {selecting && createPortal(
-        <div className="selection-bar">
-          <span className="selection-bar-label">Выбрано {selected.size} задач{selected.size === 1 ? "а" : selected.size < 5 ? "и" : ""}</span>
-          <Button variant="primary" onClick={() => setConfirmBulk(true)} disabled={selected.size === 0}>
-            <Icon name="archive" size={15} /> Архивировать
-          </Button>
-          <Button variant="secondary" onClick={cancelSelect}>Отменить</Button>
-        </div>,
-        document.body
+      {selecting && (
+        <SelectionBar
+          count={selected.size}
+          noun="задача"
+          actionLabel="Архивировать"
+          actionIcon="archive"
+          busy={busyBulk}
+          onAction={() => setConfirmBulk(true)}
+          onCancel={cancelSelect}
+        />
       )}
 
-      {confirmBulk && createPortal(
-        <div className="modal-backdrop" onClick={() => setConfirmBulk(false)}>
-          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-            <h3 className="modal-title">Архивировать задачи?</h3>
-            <p className="modal-desc">
-              {selected.size === 1 ? "1 задача будет перемещена в архив." : `${selected.size} задач будут перемещены в архив.`}
-              {" "}Вернуть их можно из раздела «Архив».
-            </p>
-            <div className="modal-actions">
-              <Button variant="secondary" onClick={() => setConfirmBulk(false)} disabled={busyBulk}>Отменить</Button>
-              <Button variant="primary" onClick={doBulkArchive} disabled={busyBulk}>{busyBulk ? "Архивирование…" : "Архивировать"}</Button>
-            </div>
-          </div>
-        </div>,
-        document.body
+      {confirmBulk && (
+        <ConfirmDialog
+          title="Архивировать задачи?"
+          description={`${selected.size === 1 ? "1 задача будет перемещена в архив." : `${selected.size} задач будут перемещены в архив.`} Вернуть можно из раздела «Архив».`}
+          confirmLabel="Архивировать"
+          busy={busyBulk}
+          onConfirm={doBulkArchive}
+          onCancel={() => setConfirmBulk(false)}
+        />
       )}
 
       {wizardOpen && <TaskWizard onClose={() => setWizardOpen(false)} onCreated={created} />}
       {toArchive && (
-        <Modal
+        <ConfirmDialog
           title="Архивировать задачу?"
-          width={420}
-          onClose={() => setToArchive(null)}
-          footer={
-            <>
-              <Button variant="ghost" onClick={() => setToArchive(null)}>Отмена</Button>
-              <Button variant="primary" onClick={doArchive} disabled={busyArchive}>{busyArchive ? <Spinner /> : "Архивировать"}</Button>
-            </>
-          }
-        >
-          <p className="modal-desc">
-            <strong>{toArchive.name}</strong> будет перемещена в архив. Вернуть можно из раздела «Архив».
-          </p>
-        </Modal>
+          description={`"${toArchive.name}" будет перемещена в архив. Вернуть можно из раздела «Архив».`}
+          confirmLabel="Архивировать"
+          busy={busyArchive}
+          onConfirm={doArchive}
+          onCancel={() => setToArchive(null)}
+        />
       )}
     </div>
   );

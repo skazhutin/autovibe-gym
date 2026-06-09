@@ -1,41 +1,18 @@
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { api, type ModelRec } from "../lib/api";
 import type { SetHeaderAction } from "../components/Layout";
 import { useAsync } from "../lib/hooks";
-import { Button, Card, Dot, EmptyState, Field, Modal, SelectDropdown, Skeleton, Spinner, Tag } from "../components/ui";
+import { Button, Card, Dot, EmptyState, FieldInfo, Field, Modal, SelectDropdown, Skeleton, Spinner, Tag } from "../components/ui";
 import { Icon } from "../components/Icon";
 import { formatDateOnly } from "../lib/date";
+import { ConfirmDialog } from "../components/ConfirmDialog";
+import { SelectionBar } from "../components/SelectionBar";
 
 const PROVIDERS = ["OpenAI-совместимый", "vLLM", "Gemini", "LiteLLM"];
 const needsBaseUrl = (provider: string) => provider === "OpenAI-совместимый" || provider === "vLLM";
 
-function Info({ text }: { text: string }) {
-  const [visible, setVisible] = useState(false);
-  const [pos, setPos] = useState({ top: 0, left: 0 });
-  const dotRef = useRef<HTMLSpanElement>(null);
-  function show() {
-    const rect = dotRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    setPos({ top: rect.top, left: rect.left + rect.width / 2 });
-    setVisible(true);
-  }
-  return (
-    <>
-      <span ref={dotRef} className="info-dot" aria-label={text} onMouseEnter={show} onMouseLeave={() => setVisible(false)}>?</span>
-      {visible && createPortal(<div className="tooltip-portal" style={{ top: pos.top, left: pos.left }}>{text}</div>, document.body)}
-    </>
-  );
-}
-
-function FI({ label, info, children }: { label: string; info: string; children: ReactNode }) {
-  return (
-    <Field label={<span className="field-info-label">{label}<Info text={info} /></span>}>
-      {children}
-    </Field>
-  );
-}
 
 export type ModelDraft = { name: string; provider: string; baseUrl: string; apiKey: string; ctx: number | string; maxTokens: number | string };
 export const defaultDraft = (): ModelDraft => ({ name: "", provider: PROVIDERS[0], baseUrl: "", apiKey: "", ctx: 32768, maxTokens: 8192 });
@@ -95,65 +72,42 @@ export function ModelModal({ initial, draft, onDraftChange, onClose, onDone, onU
         <Button variant="primary" onClick={save} disabled={busy || !f.name}>{busy ? <Spinner /> : "Сохранить"}</Button>
       </>}>
       <div className="stack" style={{ gap: 14 }}>
-        <FI label="Имя модели" info="Название модели как у провайдера, напр. anthropic/claude-opus-4-5, gemini-2.5-flash"><input className="input mono" value={f.name} onChange={(e) => set("name", e.target.value)} /></FI>
+        <FieldInfo label="Имя модели" info="Название модели как у провайдера, напр. anthropic/claude-opus-4-5, gemini-2.5-flash"><input className="input mono" value={f.name} onChange={(e) => set("name", e.target.value)} /></FieldInfo>
         <div className="grid-2">
-          <FI label="Input token limit" info="Максимум токенов в запросе (контекстное окно модели). Если превышено — прогон завершится с ошибкой. Напр. 32768 для большинства моделей, 128000 для GPT-4o."><input className="input mono" value={f.ctx} onChange={(e) => set("ctx", e.target.value.replace(/\D/g, ""))} /></FI>
+          <FieldInfo label="Input token limit" info="Максимум токенов в запросе (контекстное окно модели). Если превышено — прогон завершится с ошибкой. Напр. 32768 для большинства моделей, 128000 для GPT-4o."><input className="input mono" value={f.ctx} onChange={(e) => set("ctx", e.target.value.replace(/\D/g, ""))} /></FieldInfo>
         </div>
-        <FI label="Провайдер" info="Тип API: OpenAI-совместимый и vLLM требуют Base URL, Gemini — Google API Key, LiteLLM — любой провайдер через litellm"><SelectDropdown value={f.provider} options={PROVIDERS.map((p) => ({ value: p, label: p }))} onChange={(v) => set("provider", v)} /></FI>
-        {showBaseUrl && <FI label="URL" info="Базовый адрес API. Для vLLM/локального сервера: http://host:8000/v1. Для OpenRouter: https://openrouter.ai/api/v1"><input className="input mono" value={f.baseUrl} onChange={(e) => set("baseUrl", e.target.value)} placeholder="http://host:8000/v1" /></FI>}
-        <FI label="API-ключ" info={initial?.hasApiKey ? "Ключ уже сохранён — оставьте пустым, чтобы не менять" : "Ключ авторизации у провайдера. Для локального vLLM можно оставить пустым."}><input className="input" type="password" value={f.apiKey} onChange={(e) => set("apiKey", e.target.value)} placeholder="••••••••" /></FI>
-        <FI label="Output token limit" info="Максимум токенов в одном ответе. Если модель упирается в этот лимит — ответ обрезается и прогон завершается с ошибкой."><input className="input mono" value={f.maxTokens} onChange={(e) => set("maxTokens", e.target.value.replace(/\D/g, ""))} /></FI>
+        <FieldInfo label="Провайдер" info="Тип API: OpenAI-совместимый и vLLM требуют Base URL, Gemini — Google API Key, LiteLLM — любой провайдер через litellm"><SelectDropdown value={f.provider} options={PROVIDERS.map((p) => ({ value: p, label: p }))} onChange={(v) => set("provider", v)} /></FieldInfo>
+        {showBaseUrl && <FieldInfo label="URL" info="Базовый адрес API. Для vLLM/локального сервера: http://host:8000/v1. Для OpenRouter: https://openrouter.ai/api/v1"><input className="input mono" value={f.baseUrl} onChange={(e) => set("baseUrl", e.target.value)} placeholder="http://host:8000/v1" /></FieldInfo>}
+        <FieldInfo label="API-ключ" info={initial?.hasApiKey ? "Ключ уже сохранён — оставьте пустым, чтобы не менять" : "Ключ авторизации у провайдера. Для локального vLLM можно оставить пустым."}><input className="input" type="password" value={f.apiKey} onChange={(e) => set("apiKey", e.target.value)} placeholder="••••••••" /></FieldInfo>
+        <FieldInfo label="Output token limit" info="Максимум токенов в одном ответе. Если модель упирается в этот лимит — ответ обрезается и прогон завершается с ошибкой."><input className="input mono" value={f.maxTokens} onChange={(e) => set("maxTokens", e.target.value.replace(/\D/g, ""))} /></FieldInfo>
         {test && <div style={{ fontSize: 13, color: test === "Соединение есть" ? "var(--green)" : test === "…" ? "var(--text-dim)" : "var(--red)" }}>{test === "…" ? <Spinner /> : test}</div>}
       </div>
     </Modal>
-    {confirmArchive && initial && createPortal(
-      <div className="modal-backdrop" onClick={() => setConfirmArchive(false)}>
-        <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-          <h3 className="modal-title">Архивировать модель?</h3>
-          <p className="modal-desc">Модель будет перемещена в архив. Вернуть её можно из раздела «Архив».</p>
-          <div className="modal-actions">
-            <Button variant="secondary" onClick={() => setConfirmArchive(false)} disabled={busy}>Отменить</Button>
-            <Button variant="primary" onClick={async () => { setBusy(true); try { await api.archiveModels([initial.id]); onDone(); } finally { setBusy(false); } }} disabled={busy}>{busy ? "Архивирование…" : "Архивировать"}</Button>
-          </div>
-        </div>
-      </div>,
-      document.body
+    {confirmArchive && initial && (
+      <ConfirmDialog
+        title="Архивировать модель?"
+        description="Модель будет перемещена в архив. Вернуть её можно из раздела «Архив»."
+        confirmLabel="Архивировать"
+        busy={busy}
+        onConfirm={async () => { setBusy(true); try { await api.archiveModels([initial.id]); onDone(); } finally { setBusy(false); } }}
+        onCancel={() => setConfirmArchive(false)}
+      />
     )}
-    {confirmDelete && initial && createPortal(
-      <div className="modal-backdrop" onClick={() => setConfirmDelete(false)}>
-        <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-          <h3 className="modal-title">Удалить модель?</h3>
-          <p className="modal-desc">Модель будет удалена безвозвратно. Это действие нельзя отменить.</p>
-          <div className="modal-actions">
-            <Button variant="secondary" onClick={() => setConfirmDelete(false)} disabled={busy}>Отменить</Button>
-            <Button variant="danger" onClick={async () => { setBusy(true); try { await api.deleteModel(initial.id); onDone(); } finally { setBusy(false); } }} disabled={busy}>{busy ? "Удаление…" : "Удалить"}</Button>
-          </div>
-        </div>
-      </div>,
-      document.body
+    {confirmDelete && initial && (
+      <ConfirmDialog
+        title="Удалить модель?"
+        description="Модель будет удалена безвозвратно. Это действие нельзя отменить."
+        confirmLabel="Удалить"
+        confirmVariant="danger"
+        busy={busy}
+        onConfirm={async () => { setBusy(true); try { await api.deleteModel(initial.id); onDone(); } finally { setBusy(false); } }}
+        onCancel={() => setConfirmDelete(false)}
+      />
     )}
     </>
   );
 }
 
-function ConfirmArchiveModal({ count, onConfirm, onCancel, busy }: { count: number; onConfirm: () => void; onCancel: () => void; busy: boolean }) {
-  return createPortal(
-    <div className="modal-backdrop" onClick={onCancel}>
-      <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-        <h3 className="modal-title">Архивировать модели?</h3>
-        <p className="modal-desc">
-          {count === 1 ? "1 модель будет перемещена в архив." : `${count} моделей будут перемещены в архив.`}
-          {" "}Вернуть их можно из раздела «Архив» — он находится внизу страницы моделей.
-        </p>
-        <div className="modal-actions">
-          <Button variant="secondary" onClick={onCancel} disabled={busy}>Отменить</Button>
-          <Button variant="primary" onClick={onConfirm} disabled={busy}>{busy ? "Архивирование…" : "Архивировать"}</Button>
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-}
 
 export default function Models() {
   const nav = useNavigate();
@@ -345,18 +299,28 @@ export default function Models() {
         </button>
       </div>
 
-      {selecting && createPortal(
-        <div className="selection-bar">
-          <span className="selection-bar-label">Выбрано {selected.size} модел{selected.size === 1 ? "ь" : selected.size < 5 ? "и" : "ей"}</span>
-          <Button variant="primary" onClick={() => setConfirm(true)} disabled={selected.size === 0}>
-            <Icon name="archive" size={15} /> Архивировать
-          </Button>
-          <Button variant="secondary" onClick={cancelSelect}>Отменить</Button>
-        </div>,
-        document.body
+      {selecting && (
+        <SelectionBar
+          count={selected.size}
+          noun="модель"
+          actionLabel="Архивировать"
+          actionIcon="archive"
+          busy={archiving}
+          onAction={() => setConfirm(true)}
+          onCancel={cancelSelect}
+        />
       )}
 
-      {confirm && <ConfirmArchiveModal count={selected.size} onConfirm={doArchive} onCancel={() => setConfirm(false)} busy={archiving} />}
+      {confirm && (
+        <ConfirmDialog
+          title="Архивировать модели?"
+          description={`${selected.size === 1 ? "1 модель будет перемещена в архив." : `${selected.size} моделей будут перемещены в архив.`} Вернуть можно из раздела «Архив».`}
+          confirmLabel="Архивировать"
+          busy={archiving}
+          onConfirm={doArchive}
+          onCancel={() => setConfirm(false)}
+        />
+      )}
 
       {adding && <ModelModal draft={newDraft} onDraftChange={setNewDraft} onClose={() => setAdding(false)} onDone={() => { setAdding(false); setNewDraft(defaultDraft()); reload(); }} />}
       {edit && <ModelModal initial={edit} onClose={() => setEdit(null)} onDone={() => { setEdit(null); reload(); }} />}

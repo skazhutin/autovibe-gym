@@ -6,24 +6,8 @@ import { ModelModal } from "./Models";
 import { useAsync } from "../lib/hooks";
 import { Button, Card, Dot, EmptyState, Skeleton, Tag } from "../components/ui";
 import { Icon } from "../components/Icon";
-
-function ConfirmModal({ count, onConfirm, onCancel, busy }: { count: number; onConfirm: () => void; onCancel: () => void; busy: boolean }) {
-  return createPortal(
-    <div className="modal-backdrop" onClick={onCancel}>
-      <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-        <h3 className="modal-title">Вернуть модели?</h3>
-        <p className="modal-desc">
-          {count === 1 ? "1 модель будет возвращена из архива." : `${count} моделей будут возвращены из архива.`}
-        </p>
-        <div className="modal-actions">
-          <Button variant="secondary" onClick={onCancel} disabled={busy}>Отменить</Button>
-          <Button variant="primary" onClick={onConfirm} disabled={busy}>{busy ? "Возврат…" : "Вернуть"}</Button>
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-}
+import { ConfirmDialog } from "../components/ConfirmDialog";
+import { SelectionBar } from "../components/SelectionBar";
 
 export default function ModelsArchive() {
   const nav = useNavigate();
@@ -131,18 +115,28 @@ export default function ModelsArchive() {
         </Card>
       )}
 
-      {selecting && selected.size > 0 && createPortal(
-        <div className="selection-bar">
-          <span className="selection-bar-label">Выбрано {selected.size} модел{selected.size === 1 ? "ь" : selected.size < 5 ? "и" : "ей"}</span>
-          <Button variant="primary" onClick={() => setConfirm(true)}>
-            <Icon name="undo" size={15} /> Вернуть
-          </Button>
-          <Button variant="secondary" onClick={cancelSelect}>Отменить</Button>
-        </div>,
-        document.body
+      {selecting && selected.size > 0 && (
+        <SelectionBar
+          count={selected.size}
+          noun="модель"
+          actionLabel="Вернуть"
+          actionIcon="undo"
+          busy={restoring}
+          onAction={() => setConfirm(true)}
+          onCancel={cancelSelect}
+        />
       )}
 
-      {confirm && <ConfirmModal count={selected.size} onConfirm={doRestore} onCancel={() => setConfirm(false)} busy={restoring} />}
+      {confirm && (
+        <ConfirmDialog
+          title="Вернуть модели?"
+          description={selected.size === 1 ? "1 модель будет возвращена из архива." : `${selected.size} моделей будут возвращены из архива.`}
+          confirmLabel="Вернуть"
+          busy={restoring}
+          onConfirm={doRestore}
+          onCancel={() => setConfirm(false)}
+        />
+      )}
       {edit && <ModelModal initial={edit} onClose={() => setEdit(null)} onDone={() => { setEdit(null); reload(); }}
         onUnarchive={async () => { await api.unarchiveModels([edit.id]); setEdit(null); reload(); }} />}
     </div>

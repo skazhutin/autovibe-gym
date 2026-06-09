@@ -1,85 +1,13 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
-import { api, type Task, type TaskStatus } from "../lib/api";
-import { formatDateOnly } from "../lib/date";
+import { api } from "../lib/api";
 import { useAsync } from "../lib/hooks";
-import { Button, Card, EmptyState, Skeleton, Tag } from "../components/ui";
+import { Button, Card, EmptyState, Skeleton } from "../components/ui";
 import { Icon } from "../components/Icon";
-
-const STATUS_TONE: Record<TaskStatus, "green" | "blue" | "red"> = {
-  prepared: "green", partial: "blue", unprepared: "red",
-};
-const STATUS_LABEL: Record<TaskStatus, string> = {
-  prepared: "подготовлен", partial: "частичный", unprepared: "не подготовлен",
-};
-const TASK_LABEL: Record<string, string> = {
-  classification: "classification", regression: "regression", auto: "auto", unknown: "unknown",
-};
-function statusOf(d: Task): TaskStatus {
-  return d.status ?? (d.prepared ? "prepared" : d.hasTrain ? "partial" : "unprepared");
-}
-
-function splitTag(ok?: boolean, label?: string) {
-  return <Tag tone={ok ? "green" : "neutral"}>{label}</Tag>;
-}
-
-function sourceText(d: Task) {
-  const value = d.source && d.source !== "-" ? d.source : d.sources?.[0]?.name || d.sources?.[0]?.url || "-";
-  return !value || value === "source" ? "-" : value;
-}
-
-function TaskCard({ d, dateFormat, onOpen, selecting, isSelected, onToggle }: { d: Task; dateFormat: "mdy" | "dmy"; onOpen: () => void; selecting: boolean; isSelected: boolean; onToggle: () => void }) {
-  const status = statusOf(d);
-  const taskLabel = TASK_LABEL[d.taskType ?? d.task] ?? d.task;
-  return (
-    <Card className={`ds-card task-card-rich${selecting && isSelected ? " row-selected" : ""}`} hover onClick={() => selecting ? onToggle() : onOpen()}>
-      <div className="spread">
-        <div style={{ minWidth: 0 }}>
-          <div className="ds-title">{d.name}</div>
-        </div>
-        <Tag tone={STATUS_TONE[status]}>{STATUS_LABEL[status]}</Tag>
-      </div>
-      {d.desc && <div className="muted clamp-2">{d.desc}</div>}
-      <div className="run-meta-line" style={{ margin: 0 }}>
-        <Tag tone={d.taskType === "regression" ? "blue" : d.taskType === "classification" ? "accent" : "neutral"}>{taskLabel}</Tag>
-        {(d.tags ?? []).slice(0, 3).map((tag) => <Tag key={tag} tone="neutral">{tag}</Tag>)}
-        {d.warningsCount ? <Tag tone="red">{d.warningsCount} warnings</Tag> : null}
-      </div>
-      <div className="ds-stats rich">
-        <div className="ds-stat"><span className="k">Rows</span><span className="v">{d.rows ? d.rows.toLocaleString() : "-"}</span></div>
-        <div className="ds-stat"><span className="k">Features</span><span className="v">{d.cols || "-"}</span></div>
-        <div className="ds-stat"><span className="k">Target</span><span className="v">{d.target}</span></div>
-        <div className="ds-stat"><span className="k">Metric</span><span className="v">{d.metric}</span></div>
-        <div className="ds-stat"><span className="k">Source</span><span className="v">{sourceText(d)}</span></div>
-        {d.createdAt && <div className="ds-stat"><span className="k">Created</span><span className="v">{formatDateOnly(d.createdAt, dateFormat)}</span></div>}
-      </div>
-      <div className="split-pills">
-        {splitTag(d.hasTrain, "Train")}
-        {splitTag(d.hasVal, "Val")}
-        {splitTag(d.hasTest, "Test")}
-      </div>
-    </Card>
-  );
-}
-
-function ConfirmModal({ count, onConfirm, onCancel, busy }: { count: number; onConfirm: () => void; onCancel: () => void; busy: boolean }) {
-  return createPortal(
-    <div className="modal-backdrop" onClick={onCancel}>
-      <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-        <h3 className="modal-title">Вернуть задачи?</h3>
-        <p className="modal-desc">
-          {count === 1 ? "1 задача будет возвращена из архива." : `${count} задач будут возвращены из архива.`}
-        </p>
-        <div className="modal-actions">
-          <Button variant="secondary" onClick={onCancel} disabled={busy}>Отменить</Button>
-          <Button variant="primary" onClick={onConfirm} disabled={busy}>{busy ? "Возврат…" : "Вернуть"}</Button>
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-}
+import { TaskCard } from "../components/tasks/TaskCard";
+import { ConfirmDialog } from "../components/ConfirmDialog";
+import { SelectionBar } from "../components/SelectionBar";
 
 export default function DatasetsArchive() {
   const nav = useNavigate();
@@ -174,18 +102,28 @@ export default function DatasetsArchive() {
         </Card>
       )}
 
-      {selecting && selected.size > 0 && createPortal(
-        <div className="selection-bar">
-          <span className="selection-bar-label">Выбрано {selected.size} задач{selected.size === 1 ? "а" : selected.size < 5 ? "и" : ""}</span>
-          <Button variant="primary" onClick={() => setConfirm(true)}>
-            <Icon name="undo" size={15} /> Вернуть
-          </Button>
-          <Button variant="secondary" onClick={cancelSelect}>Отменить</Button>
-        </div>,
-        document.body
+      {selecting && selected.size > 0 && (
+        <SelectionBar
+          count={selected.size}
+          noun="задача"
+          actionLabel="Вернуть"
+          actionIcon="undo"
+          busy={restoring}
+          onAction={() => setConfirm(true)}
+          onCancel={cancelSelect}
+        />
       )}
 
-      {confirm && <ConfirmModal count={selected.size} onConfirm={doRestore} onCancel={() => setConfirm(false)} busy={restoring} />}
+      {confirm && (
+        <ConfirmDialog
+          title="Вернуть задачи?"
+          description={selected.size === 1 ? "1 задача будет возвращена из архива." : `${selected.size} задач будут возвращены из архива.`}
+          confirmLabel="Вернуть"
+          busy={restoring}
+          onConfirm={doRestore}
+          onCancel={() => setConfirm(false)}
+        />
+      )}
     </div>
   );
 }

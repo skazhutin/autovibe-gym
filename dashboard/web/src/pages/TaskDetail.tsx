@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, type AgentNotes, type Task, type TaskConfig, type TaskSource } from "../lib/api";
 import { useAsync } from "../lib/hooks";
-import { Button, Card, EmptyState, Field, Modal, SelectDropdown, Skeleton, Spinner, Tabs, Tag } from "../components/ui";
+import { Button, Card, EmptyState, FieldInfo, Field, Modal, SelectDropdown, Skeleton, Spinner, Tabs, Tag } from "../components/ui";
 import { Icon } from "../components/Icon";
 import { MiniHist } from "../components/charts";
 
@@ -50,31 +49,6 @@ function inferGoal(metric: string): "max" | "min" {
   return ["rmse", "rmsle", "mae", "mse", "logloss"].includes(m) ? "min" : "max";
 }
 
-function Info({ text }: { text: string }) {
-  const [visible, setVisible] = useState(false);
-  const [pos, setPos] = useState({ top: 0, left: 0 });
-  const dotRef = useRef<HTMLSpanElement>(null);
-  function show() {
-    const rect = dotRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    setPos({ top: rect.top, left: rect.left + rect.width / 2 });
-    setVisible(true);
-  }
-  return (
-    <>
-      <span ref={dotRef} className="info-dot" aria-label={text} onMouseEnter={show} onMouseLeave={() => setVisible(false)}>?</span>
-      {visible && createPortal(<div className="tooltip-portal" style={{ top: pos.top, left: pos.left }}>{text}</div>, document.body)}
-    </>
-  );
-}
-
-function FieldInfo({ label, info, hint, children, required }: { label: ReactNode; info: string; hint?: string; children: ReactNode; required?: boolean }) {
-  return (
-    <Field label={<span className="field-info-label">{label}<Info text={info} /></span>} hint={hint} required={required}>
-      {children}
-    </Field>
-  );
-}
 
 function sourceText(task: Task) {
   const value = task.source && task.source !== "-" ? task.source : task.sources?.[0]?.name || task.sources?.[0]?.url || "-";

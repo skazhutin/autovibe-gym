@@ -7,31 +7,12 @@ import { MODE_LABELS, STATUS_LABELS, formatTokens, timeAgo } from "../lib/format
 import { Button, Card, EmptyState, SelectDropdown, Skeleton, StatusBadge } from "../components/ui";
 import { Icon } from "../components/Icon";
 import { ModeTag, ScoreCell } from "../components/runbits";
+import { ConfirmDialog } from "../components/ConfirmDialog";
+import { SelectionBar } from "../components/SelectionBar";
 
 type ModeFilter = RunMode | "any";
 const RUN_MODE_OPTIONS = (Object.keys(MODE_LABELS) as RunMode[]).filter((m) => m !== "batch");
 const RUN_STATUS_OPTIONS = (Object.keys(STATUS_LABELS) as RunStatus[]).filter((s) => s !== "null");
-
-function ConfirmModal({ count, onConfirm, onCancel, busy }: { count: number; onConfirm: () => void; onCancel: () => void; busy: boolean }) {
-  return createPortal(
-    <div className="modal-backdrop" onClick={onCancel}>
-      <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-        <h3 className="modal-title">Архивировать прогоны?</h3>
-        <p className="modal-desc">
-          {count === 1 ? "1 прогон будет перемещён в архив." : `${count} прогонов будут перемещены в архив.`}
-          {" "}Вернуть их можно из раздела «Архив» — он находится внизу страницы прогонов.
-        </p>
-        <div className="modal-actions">
-          <Button variant="secondary" onClick={onCancel} disabled={busy}>Отменить</Button>
-          <Button variant="primary" onClick={onConfirm} disabled={busy}>
-            {busy ? "Архивирование…" : "Архивировать"}
-          </Button>
-        </div>
-      </div>
-    </div>,
-    document.body
-  );
-}
 
 export default function Runs() {
   const nav = useNavigate();
@@ -181,19 +162,27 @@ export default function Runs() {
         </button>
       </div>
 
-      {selecting && selected.size > 0 && createPortal(
-        <div className="selection-bar">
-          <span className="selection-bar-label">Выбрано {selected.size} прогон{selected.size === 1 ? "" : selected.size < 5 ? "а" : "ов"}</span>
-          <Button variant="primary" onClick={() => setConfirm(true)}>
-            <Icon name="archive" size={15} /> Архивировать
-          </Button>
-          <Button variant="secondary" onClick={cancelSelect}>Отменить</Button>
-        </div>,
-        document.body
+      {selecting && selected.size > 0 && (
+        <SelectionBar
+          count={selected.size}
+          noun="прогон"
+          actionLabel="Архивировать"
+          actionIcon="archive"
+          busy={archiving}
+          onAction={() => setConfirm(true)}
+          onCancel={cancelSelect}
+        />
       )}
 
       {confirm && (
-        <ConfirmModal count={selected.size} onConfirm={doArchive} onCancel={() => setConfirm(false)} busy={archiving} />
+        <ConfirmDialog
+          title="Архивировать прогоны?"
+          description={`${selected.size === 1 ? "1 прогон будет перемещён в архив." : `${selected.size} прогонов будут перемещены в архив.`} Вернуть можно из раздела «Архив».`}
+          confirmLabel="Архивировать"
+          busy={archiving}
+          onConfirm={doArchive}
+          onCancel={() => setConfirm(false)}
+        />
       )}
     </div>
   );
