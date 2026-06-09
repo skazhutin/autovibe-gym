@@ -229,6 +229,10 @@ button {
     transform: translateY(0) scale(1);
   }
 }
+@keyframes tooltip-enter {
+  from { opacity: 0; margin-top: 4px; }
+  to   { opacity: 1; margin-top: 0; }
+}
 @keyframes modal-enter {
   from {
     opacity: 0;
