@@ -19,6 +19,7 @@ from gym.llm import (
 )
 from gym.model_config import (
     apply_model_reference,
+    load_registry,
     provider_uses_base_url,
     runtime_env_for_model,
 )
@@ -325,3 +326,13 @@ def test_apply_model_reference_resolves_registry_name(tmp_path, monkeypatch):
     assert apply_model_reference("m1") == "gemini-2.5-flash"
     assert os.environ["LLM_PROVIDER"] == "google"
     assert os.environ["GEMINI_API_KEY"] == "token"
+
+
+def test_model_registry_accepts_utf8_bom(tmp_path):
+    registry = tmp_path / "models.json"
+    registry.write_text(
+        '\ufeff[{"id":"m1","name":"model-a","provider":"OpenAI-compatible"}]',
+        encoding="utf-8",
+    )
+
+    assert load_registry(registry)[0]["name"] == "model-a"

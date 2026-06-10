@@ -45,7 +45,7 @@ def _load() -> list[dict[str, Any]]:
     s = get_settings()
     if s.models_config.exists():
         try:
-            return json.loads(s.models_config.read_text("utf-8"))
+            return json.loads(s.models_config.read_text("utf-8-sig"))
         except (json.JSONDecodeError, OSError):
             return []
     seeded = _seed()

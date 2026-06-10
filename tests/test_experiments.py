@@ -70,6 +70,32 @@ def test_run_baseline_extract_code_accepts_plain_fence_and_plain_text():
     assert run_baseline.extract_code("x = 2") == "x = 2"
 
 
+def test_single_shot_candidate_lookup_ignores_predictor_classes():
+    class EstimatorClass:
+        def predict(self, X):
+            return X
+
+    assert run_baseline.candidate_from_namespace({"GradientBoostingRegressor": EstimatorClass}) is None
+
+    instance = EstimatorClass()
+    assert run_baseline.candidate_from_namespace({"model": instance}) is instance
+
+
+def test_single_shot_traceback_failure_extracts_primary_exception():
+    stderr = """Traceback (most recent call last):
+  File "runner.py", line 95, in <module>
+    exec(code, namespace)
+ValueError: could not convert string to float: 'Norm'
+
+[submit preflight error] AttributeError: 'DataFrame' object has no attribute '_validate_params'
+"""
+
+    assert (
+        run_baseline.traceback_failure(stderr)
+        == "ValueError: could not convert string to float: 'Norm'"
+    )
+
+
 def test_run_multishot_extract_code_and_feedback():
     assert run_multishot._extract_code("```python\nx = 1\n```") == "x = 1"
 
