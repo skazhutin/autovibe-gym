@@ -6,6 +6,7 @@ import os
 import urllib.error
 import urllib.request
 import uuid
+from datetime import datetime, timezone
 from typing import Any
 
 from ..config import get_settings
@@ -33,7 +34,6 @@ def _seed() -> list[dict[str, Any]]:
             "apiKeyEnv": "",
             "apiKey": "",
             "ctx": m["ctx"],
-            "temp": 0.4,
             "maxTokens": 4096,
             "online": None,
         }
@@ -45,7 +45,7 @@ def _load() -> list[dict[str, Any]]:
     s = get_settings()
     if s.models_config.exists():
         try:
-            return json.loads(s.models_config.read_text("utf-8"))
+            return json.loads(s.models_config.read_text("utf-8-sig"))
         except (json.JSONDecodeError, OSError):
             return []
     seeded = _seed()
@@ -76,9 +76,9 @@ def create_model(payload: dict[str, Any]) -> dict[str, Any]:
         "apiKeyEnv": payload.get("apiKeyEnv") or "",
         "apiKey": payload.get("apiKey") or "",
         "ctx": payload.get("ctx") or 32768,
-        "temp": payload.get("temp", 0.4),
         "maxTokens": payload.get("maxTokens") or 8192,
         "online": None,
+        "createdAt": datetime.now(timezone.utc).isoformat(),
     }
     models.append(record)
     _save(models)

@@ -1,171 +1,248 @@
 # AutoVibe Gym
 
-AutoVibe Gym is an iterative AutoML environment where an LLM writes ML code,
-receives structured feedback, improves the solution, and submits one final model
-against a hidden test split.
+AutoVibe Gym is a research environment for testing whether an LLM solves
+tabular ML tasks better when it can work iteratively inside a controlled
+notebook-like gym.
 
-The goal is not the highest score — it is a **verifiable evaluation environment**
-that makes agent failures observable and private test evaluation tamper-proof.
+The project compares plain one-shot code generation against multi-step agent
+runs that receive runtime feedback, contract checks, and optional data-science
+checklist hints. Hidden test data stays private until the final submit.
 
----
+## Why This Exists
 
-## Quickstart — run all 4 experiment modes in 5 minutes
+The main research question is not "can an LLM get a good score once?" The goal is
+to measure deltas between interaction modes:
 
-### Prerequisites
-
-- Docker installed
-- Git
-- An API key for the LLM (OpenAI-compatible endpoint)
-
-### Step 1 — Clone and build
-
-```bash
-git clone https://github.com/skazhutin/autovibe-gym.git
-cd autovibe-gym
-docker build -t autovibe-gym .
+```text
+delta = score(iterative mode) - score(single-shot baseline)
 ```
 
-### Step 2 — Download raw datasets
+All reported metrics are normalized so higher is better. For regression tasks
+this means metrics such as `neg_rmse`, where `-0.48` is better than `-0.58`.
 
-The five example datasets are configured but raw files must be downloaded once.
-The simplest dataset that works immediately is `student_dropout` (CSV, no account needed):
+AutoVibe Gym records more than a final score:
 
-```bash
-# Download student_dropout raw data
-mkdir -p datasets/student_dropout/raw_data
-curl -L "https://archive.ics.uci.edu/static/public/697/predict+students+dropout+and+academic+success.zip" \
-  -o datasets/student_dropout/raw_data/predict+students+dropout+and+academic+success.zip
+- final hidden-test metric, when a valid submit exists
+- checklist coverage
+- execution errors and preflight failures
+- token usage and steps used
+- public notebook trajectory
+- private evaluator artifacts that are never shown to the agent
+
+## Current Product Modes
+
+The shared runner supports five product modes:
+
+| Mode | CLI key | Description |
+| --- | --- | --- |
+| Single-shot | `single_shot` | One LLM response, no iterative feedback |
+| Repeated single-shot | `repeated_single_shot` | Several independent one-shot attempts |
+| Free gym | `free_gym` | Real notebook loop with runtime/contract feedback |
+| Directive gym | `directive_gym` | Free gym plus generic checklist hints |
+| Fixed gym | `fixed_gym` | Multi-stage guided gym run |
+
+Use `experiments.run --mode all` to launch all five modes for one dataset/model,
+or `--modes ...` to launch a selected batch.
+
+## Repository Layout
+
+```text
+gym/                 core environment, protocol, Jupyter backend, LLM clients
+experiments/         CLI runners and comparison utilities
+dashboard/           FastAPI + React control panel
+datasets/            prepared/example datasets and local dataset workspaces
+docs/                project notes, protocol, status, reports
+tests/               unit and regression tests
+Dockerfile.sandbox   sandbox image for legacy single-shot code execution
 ```
 
-Or copy the `datasets/student_dropout/prepared/` directory directly from someone who already has it.
+Generated data, local model keys, MLflow outputs, run workspaces, and dashboard
+state are intentionally gitignored.
 
-### Step 3 — Prepare splits
+## Quickstart: Local Python
+
+Requirements:
+
+- Python 3.10+
+- Node.js 18+ for the dashboard frontend
+- Docker, if you want the Docker sandbox/backend
+- an OpenAI-compatible, Gemini, or LiteLLM-accessible model
+
+Create an environment and install dependencies:
 
 ```bash
-docker run --rm \
-  -v "$(pwd):/autovibe" \
-  -e MLFLOW_TRACKING_URI=file:///autovibe/mlruns \
-  autovibe-gym \
-  -m scripts.prepare_datasets --dataset student_dropout
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m pip install -r dashboard/server/requirements.txt
 ```
 
-### Step 4 — Configure a model
+On Windows PowerShell:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m pip install -r dashboard/server/requirements.txt
+```
+
+## Configure Models
+
+Models live in the shared registry at `dashboard/server/data/models.json`.
+That file is local state and should not be committed.
+
+List configured models:
+
+```bash
+python -m experiments.models list
+```
+
+Add an OpenAI-compatible model:
 
 ```bash
 python -m experiments.models add \
-  --name deepseek-v4-flash \
-  --provider "OpenAI-совместимый" \
-  --base-url "<provided separately>" \
-  --api-key "<provided separately>"
+  --name my-model-name \
+  --provider OpenAI-compatible \
+  --base-url http://localhost:8000/v1 \
+  --api-key local-or-secret-token
 ```
 
-### Step 5 — Run all 4 modes
+Add a Gemini model:
 
 ```bash
-DS="/autovibe/datasets/student_dropout/prepared"
-DOCKER="docker run --rm \
-  -v $(pwd):/autovibe \
-  -e MLFLOW_TRACKING_URI=file:///autovibe/mlruns \
-  autovibe-gym"
+python -m experiments.models add \
+  --name gemini-2.5-flash \
+  --provider Gemini \
+  --api-key your-token
+```
 
-# Recommended: run the 4 product modes as one linked batch.
-# This creates 4 separate MLflow runs with the same batch_id and
-# requested_mode=all.
-$DOCKER -m experiments.run \
-  --dataset-dir $DS \
+Runners accept either a model id or a model name from the registry.
+
+## Run The Dashboard
+
+Start the backend API:
+
+```bash
+dashboard/server/run.sh
+```
+
+On Windows, run the same backend directly:
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn dashboard.server.app.main:app --port 8000
+```
+
+Start the frontend:
+
+```bash
+cd dashboard/web
+npm install
+npm run dev
+```
+
+Open `http://127.0.0.1:5173`.
+
+The dashboard can:
+
+- manage dataset tasks and prepared splits
+- manage the model registry
+- launch local or SSH-remote runs
+- stream live run progress
+- inspect notebooks, trajectories, checklist evidence, logs, and failures
+- compare finished runs
+
+For a single-process server deployment, build and serve the dashboard with:
+
+```bash
+BUILD=1 PORT=8011 HOST=0.0.0.0 dashboard/server/serve.sh
+```
+
+## Run Experiments From CLI
+
+Run all product modes for one dataset/model:
+
+```bash
+python -m experiments.run \
+  --dataset-dir datasets/example_dry_bean/prepared \
   --mode all \
-  --budget-mode cloud \
-  --model deepseek-v4-flash
-
-# Or run each mode manually:
-
-# Mode 1 — Single-shot (no feedback, ~15s)
-$DOCKER -m experiments.run_baseline --dataset-dir $DS --mode cloud
-
-# Mode 2 — Repeated single-shot (5 attempts, ~2 min)
-$DOCKER -m experiments.run_multishot --dataset-dir $DS --mode cloud
-
-# Mode 3 — Flexible transitions / gym (15 steps, ~5 min)
-$DOCKER -m experiments.run_gym --dataset-dir $DS --mode cloud
-
-# Mode 4 — Fixed transitions (5 stages, ~5 min)
-$DOCKER -m experiments.run_fixed --dataset-dir $DS --mode cloud
+  --model my-model-name
 ```
 
-Or run the four product modes in one command with the batch runner:
+Run selected modes:
 
 ```bash
-$DOCKER -m experiments.run_all_modes_matrix \
-  --datasets /autovibe/datasets/student_dropout/prepared \
-  --models deepseek-v4-flash \
-  --mode cloud
+python -m experiments.run \
+  --dataset-dir datasets/example_dry_bean/prepared \
+  --modes single_shot directive_gym fixed_gym \
+  --model my-model-name
 ```
 
-Use `experiments.run_all_modes_matrix` when you want the full
-datasets × models × product modes matrix. Use `experiments.run --mode all`
-for the normal one-dataset launch.
-
-### Step 6 — Compare results
+Run individual modes:
 
 ```bash
-docker run --rm \
-  -v "$(pwd):/autovibe" \
-  -e MLFLOW_TRACKING_URI=file:///autovibe/mlruns \
-  autovibe-gym \
-  -m experiments.compare --dataset student_dropout
+python -m experiments.run_baseline --dataset-dir datasets/example_dry_bean/prepared --model my-model-name
+python -m experiments.run_multishot --dataset-dir datasets/example_dry_bean/prepared --model my-model-name
+python -m experiments.run_gym --dataset-dir datasets/example_dry_bean/prepared --episode-mode free_gym --model my-model-name
+python -m experiments.run_gym --dataset-dir datasets/example_dry_bean/prepared --episode-mode directive_gym --model my-model-name
+python -m experiments.run_fixed --dataset-dir datasets/example_dry_bean/prepared --model my-model-name
 ```
 
-Expected output (values will vary by model):
+Compare finished runs:
 
-```
-requested_mode  batch_id          mode_label            test_metric  steps  tokens   elapsed
---------------  ----------------  --------------------  -----------  -----  -------  -------
-all             20260603-...      single_shot                 0.747      1    2 120      12s
-all             20260603-...      repeated_single_shot        0.730      5   11 228     110s
-all             20260603-...      gym_with_checklist          0.745     14  146 013     111s
-all             20260603-...      fixed_transitions            null     17  218 322     218s
+```bash
+python -m experiments.compare
 ```
 
-> The single-shot baseline wins on score **and** cost.
-> The gym reveals what the agent did (checklist coverage, failure types).
-> Fixed transitions with rigid stage order performs worst when the agent
-> exhausts its preprocessing budget before finding good features.
-> `null` means no valid hidden-test submission, not a score of zero.
+## Dataset Layout
 
----
-
-## Key finding
-
-More interaction ≠ better score. The environment's value is **diagnostic**:
-it shows *why* an agent succeeded or failed, not just the final number.
-This is invisible to a plain leaderboard.
-
----
-
-## Core Loop
+Preferred layout:
 
 ```text
-GymAgent
-  -> LLMClient
-  -> JSON Action
-  -> NotebookGymEnv.step()
-  -> real .ipynb document + persistent Jupyter kernel
-  -> runtime / contract / checklist feedback
-  -> Observation feedback
-  -> next JSON Action
+datasets/<dataset_name>/
+  prepared/
+    train.csv
+    val.csv
+    test.csv
+    meta.json
 ```
 
-Actions always use canonical `type` and must include a deterministic `stage`:
+Minimal `meta.json`:
 
 ```json
-{"type": "code", "stage": "data_schema_inspection", "code": "print(train_df.shape)"}
+{
+  "name": "example_dry_bean",
+  "target_col": "Class",
+  "metric_name": "f1_macro",
+  "task_type": "classification",
+  "seed": 42
+}
 ```
 
-Legacy `code` actions are still accepted, but the current protocol is
-cell-oriented:
+Regression tasks can use `neg_rmse`. Since higher is always better, the stored
+score is the negative RMSE.
+
+Prepare configured example datasets:
+
+```bash
+python scripts/prepare_datasets.py --list
+python scripts/prepare_datasets.py --dataset example_dry_bean
+```
+
+## Agent Protocol
+
+Interactive gym modes use canonical JSON actions. Every action has a `type` and
+a deterministic `stage`.
+
+Examples:
 
 ```json
-{"type": "add_cell", "stage": "feature_pipeline_building", "cell_type": "code", "source": "print(train_df.shape)", "execute": true}
+{"type": "think", "stage": "planning", "thoughts": "I will inspect the schema, build a raw-input pipeline, validate it, and submit only when ready."}
+```
+
+```json
+{"type": "add_cell", "stage": "data_schema_inspection", "cell_type": "code", "source": "print(train_df.shape); print(train_df.dtypes)", "execute": true}
 ```
 
 ```json
@@ -180,241 +257,98 @@ cell-oriented:
 {"type": "submit", "stage": "submission", "model_var": "model"}
 ```
 
-When `--enable-thoughts` is set, every action also includes a short visible
-`thoughts` summary. The first action must be a non-mutating planning thought:
+`test_df` is never injected into the agent workspace. A successful submit only
+tells the agent that the candidate was accepted; the hidden score is stored in
+private artifacts and MLflow metrics.
 
-```json
-{"type": "think", "stage": "planning", "thoughts": "I will inspect the data, build and validate a reproducible pipeline, and submit only when ready."}
+## Sandbox And Privacy Boundary
+
+Notebook gym modes use a persistent Jupyter kernel and write a real
+`solution.ipynb`. The local Jupyter backend is useful for research and demos,
+but it is not a full OS sandbox for untrusted code.
+
+For stronger notebook isolation, set:
+
+```bash
+AUTOVIBE_KERNEL_BACKEND=docker
 ```
 
-Useful gym tools are also JSON actions:
-
-```json
-{"type": "inspect_data", "stage": "data_schema_inspection"}
-{"type": "profile_data", "stage": "data_quality_inspection", "profile": "compact"}
-{"type": "list_candidates", "stage": "candidate_training"}
-{"type": "check_candidate", "stage": "validation_analysis", "model_var": "auto"}
-{"type": "quick_validate", "stage": "validation_analysis", "model_var": "auto"}
-{"type": "finalize", "stage": "submission", "model_var": "auto"}
-```
-
-Optional diagnostics are available when configured/installed:
-
-```json
-{"type": "profile_data", "stage": "data_quality_inspection", "profile": "ydata"}
-{"type": "cleanlab_diagnose", "stage": "validation_analysis", "model_var": "auto"}
-{"type": "tune_hyperparameters", "stage": "model_improvement", "model_var": "model", "search_space": {}, "n_trials": 10}
-```
-
-Each episode creates `solution.ipynb` and treats it as the source of truth.
-The LLM can add, update, delete, move, run, and inspect real notebook cells.
-The kernel is persistent during interactive work, so variables survive between
-executions. Final acceptance still requires a clean `restart_and_run_all`,
-environment-controlled `validate`, and then `submit`.
-
-The kernel contains `train_df`, `val_df`, `target_col`, `pd`, and `np`.
-`test_df` and hidden split files are never copied into the episode workspace.
-Successful submit returns only:
-
-```text
-[SUBMITTED] Final candidate accepted. Episode finished.
-```
-
-The hidden test metric is stored only in private summaries and MLflow metrics.
-
-Agent-visible episode artifacts are saved in the episode workspace:
-
-```text
-final_notebook.ipynb
-final_notebook.py
-notebook_events.json
-feedback_trace.json
-validation_trajectory.json
-episode_summary.json
-scratchpad.json          # only when thoughts mode is enabled
-```
-
-These public JSON artifacts are sanitized: hidden test metrics, private
-checklist coverage, submit failure types, and candidate pickle paths are not
-written where the kernel can read them. Private evaluator artifacts live in a
-separate private episode directory that is not mounted into the Docker kernel:
-
-```text
-episode_summary.json
-feedback_trace_private.json
-notebook_events_private.json
-validation_trajectory_private.json
-agent_trace_private.jsonl
-cell_executions_private.jsonl
-candidate_diagnostics_private.jsonl
-data_profile_private.json
-artifacts/*.pkl
-```
-
-## Execution Sandbox
-
-The default iterative Gym runner uses a local real Jupyter kernel. This provides
-real notebook behavior, saved outputs, rich displays, and clean replay. The
-implementation strips common secret environment variables from the kernel and
-physically keeps hidden test files and private evaluator artifacts outside the
-episode workspace.
-
-`gym.jupyter_kernel` defines `KernelExecutionBackend`,
-`LocalJupyterKernelBackend`, and `ContainerJupyterKernelBackend`. Set
-`AUTOVIBE_KERNEL_BACKEND=docker` to run each notebook kernel in a Docker
-container with an internal network, read-only root filesystem, dropped
-capabilities, no-new-privileges, resource caps, `/tmp` tmpfs, and ZMQ ports
-published only on `127.0.0.1`.
-
-The legacy `CodeExecutor` is still used by single-shot/repeated-single-shot
-baselines and can run through Docker by default:
-
-Build the sandbox image once:
+Legacy single-shot and repeated-single-shot runners use `CodeExecutor`. Build
+the sandbox image with:
 
 ```bash
 docker build -f Dockerfile.sandbox -t autovibe-gym-sandbox:latest .
 ```
 
-Default sandbox settings:
+Useful executor settings:
 
 ```bash
 AUTOVIBE_EXECUTOR_BACKEND=docker
 AUTOVIBE_SANDBOX_IMAGE=autovibe-gym-sandbox:latest
-AUTOVIBE_SANDBOX_MEMORY_MB=2048
-AUTOVIBE_SANDBOX_CPUS=1
-AUTOVIBE_SANDBOX_PIDS_LIMIT=128
+AUTOVIBE_SANDBOX_THREADS=1
 ```
 
-Unit tests can use the lightweight subprocess fallback:
-
-```bash
-AUTOVIBE_EXECUTOR_BACKEND=subprocess python -m pytest
-```
-
-## LLM Providers
-
-AutoVibe Gym uses the shared model registry for model names, providers,
-endpoints, and per-model API keys. Use the dashboard Models page or the CLI:
-
-```bash
-python -m experiments.models list
-python -m experiments.models add \
-  --name Qwen/Qwen2.5-Coder-7B-Instruct \
-  --provider "OpenAI-совместимый" \
-  --base-url http://localhost:8000/v1 \
-  --api-key local
-```
-
-OpenAI-compatible entries cover local vLLM, OpenAI, LiteLLM proxies, Yandex AI
-through its OpenAI-compatible endpoint, and any other `/v1/chat/completions`
-server. Gemini does not use a Base URL:
-
-```bash
-python -m experiments.models add \
-  --name gemini-2.5-flash \
-  --provider Gemini \
-  --api-key your-token
-```
-
-Then pass either the model id or the model name to any runner:
-
-```bash
-python -m experiments.run_gym --dataset-dir datasets/demo/prepared --model gemini-2.5-flash
-```
+The immediate privacy guarantee is physical hidden-test isolation: hidden test
+files, labels, hidden score, evaluator diagnostics, and candidate pickle paths
+are not exposed to agent-facing artifacts.
 
 ## MLflow
 
-Experiment runners and `experiments.compare` use the same tracking default:
-local `sqlite:///mlflow.db`. `MLFLOW_TRACKING_URI` is only needed when you want
-to point at a separate MLflow server.
-
-To open the local UI:
-
-```bash
-python -m mlflow server --host 127.0.0.1 --port 5000 --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns
-```
-
-## Experiment Modes
-
-`experiments.run_gym` supports two fair iterative modes on the same Jupyter
-backend:
-
-- `iterative_no_checklist`: real notebook, runtime feedback, contract feedback,
-  no data-science checklist hints.
-- `gym_with_checklist`: the same notebook/backend/budget/actions plus selective
-  generic checklist hints.
-
-The non-notebook controls remain:
-
-- `single_shot`: one solution without the interactive notebook loop
-  (`experiments.run_baseline`).
-- `repeated_single_shot`: repeated attempts with execution feedback
-  (`experiments.run_multishot`).
-
-For a single entrypoint, use `experiments.run`:
-
-```bash
-python -m experiments.run --dataset-dir datasets/example_dry_bean/prepared --mode single_shot --model deepseek-v4-flash
-python -m experiments.run --dataset-dir datasets/example_dry_bean/prepared --mode all --model deepseek-v4-flash --dry-run
-```
-
-`--mode all` expands to four separate product runs in this order:
-`single_shot`, `repeated_single_shot`, `gym_with_checklist`,
-`fixed_transitions`. Each child run logs `requested_mode`, `batch_id`,
-`product_mode`, `mode_label`, and `mode_order` so `experiments.compare` can
-group the batch without mixing metrics into one run.
-
-Run the checklist ablation:
-
-```bash
-python -m experiments.run_gym --dataset-dir datasets/example_dry_bean/prepared --episode-mode iterative_no_checklist
-python -m experiments.run_gym --dataset-dir datasets/example_dry_bean/prepared --episode-mode gym_with_checklist
-```
-
-## Dataset Layout
-
-Legacy CSV mode is supported:
-
-```bash
-python3 -m experiments.run_gym --dataset datasets/wine_quality.csv --target quality
-```
-
-Preferred fixed split mode for experiments:
+By default runners use local SQLite MLflow tracking:
 
 ```text
-datasets/<dataset_name>/
-  train.csv
-  val.csv
-  test.csv
-  meta.json
+sqlite:///mlflow.db
 ```
+
+Open a local MLflow UI:
 
 ```bash
-python3 -m experiments.run_gym --dataset-dir datasets/wine_quality
+python -m mlflow server \
+  --host 127.0.0.1 \
+  --port 5000 \
+  --backend-store-uri sqlite:///mlflow.db \
+  --default-artifact-root ./mlruns
 ```
 
-`meta.json` should include at least:
-
-```json
-{
-  "name": "wine_quality",
-  "target_col": "quality",
-  "metric": "f1_weighted",
-  "seed": 42
-}
-```
-
-## Example datasets (config-driven)
-
-Datasets can be organized as `datasets/<name>/{config.yaml,raw_data/,prepared/}`.
-Run preparation with:
+If the installed MLflow version changes and `/api/runs` starts failing with an
+out-of-date schema error, back up the database and migrate it:
 
 ```bash
-python scripts/prepare_datasets.py --list
-python scripts/prepare_datasets.py --dataset example_dry_bean
-python scripts/prepare_datasets.py --suite example_datasets
+cp mlflow.db mlflow.db.bak
+python -m mlflow db upgrade sqlite:///mlflow.db
 ```
 
-The repository commits only the five curated `datasets/example_*` datasets. Any
-other dataset folders under `datasets/` are treated as local-only data and are
-ignored by git.
+## Development Checks
+
+Run the focused test suite:
+
+```bash
+python -m pytest
+```
+
+Dashboard frontend checks:
+
+```bash
+cd dashboard/web
+npm run build
+```
+
+Before opening a PR:
+
+```bash
+git status --short
+git diff --check
+python -m pytest
+```
+
+## What Not To Commit
+
+Do not commit:
+
+- `.env` or API keys
+- local `dashboard/server/data/` state
+- `mlflow.db`, `mlruns/`, `outputs/`, `logs/`, run workspaces
+- private/raw datasets unless explicitly curated for the repo
+- notebook checkpoints, caches, or local agent memory
+
+See `docs/GIT_WORKFLOW.md` and `docs/STATUS.md` before preparing a PR.

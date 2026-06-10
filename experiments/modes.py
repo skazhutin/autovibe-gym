@@ -41,53 +41,53 @@ REPEATED_SINGLE_SHOT = ProductMode(
     mode_order=2,
 )
 
-GYM_WITH_CHECKLIST = ProductMode(
-    key="gym_with_checklist",
-    display_name="Flexible gym",
-    matrix_label="flexible gym",
-    dashboard_mode="gym",
+DIRECTIVE_GYM = ProductMode(
+    key="directive_gym",
+    display_name="Directive gym",
+    matrix_label="directive gym",
+    dashboard_mode="directive",
     module="experiments.run_gym",
-    experiment_type="gym_with_checklist",
+    experiment_type="directive_gym",
     mode_order=4,
-    episode_mode="gym_with_checklist",
+    episode_mode="directive_gym",
 )
 
-FIXED_TRANSITIONS = ProductMode(
-    key="fixed_transitions",
+FIXED_GYM = ProductMode(
+    key="fixed_gym",
     display_name="Fixed gym",
     matrix_label="fixed gym",
     dashboard_mode="fixed",
     module="experiments.run_fixed",
-    experiment_type="fixed_transitions",
+    experiment_type="fixed_gym",
     mode_order=5,
 )
 
-ITERATIVE_NO_CHECKLIST = ProductMode(
-    key="iterative_no_checklist",
-    display_name="Iterative no checklist",
-    matrix_label="iterative no-checklist",
-    dashboard_mode="iterative",
+FREE_GYM = ProductMode(
+    key="free_gym",
+    display_name="Free gym",
+    matrix_label="free gym",
+    dashboard_mode="free",
     module="experiments.run_gym",
-    experiment_type="iterative_no_checklist",
+    experiment_type="free_gym",
     mode_order=3,
-    episode_mode="iterative_no_checklist",
+    episode_mode="free_gym",
 )
 
 # Product modes presented in README quickstart and the all-modes matrix.
 ALL_PRODUCT_MODES: tuple[ProductMode, ...] = (
     SINGLE_SHOT,
     REPEATED_SINGLE_SHOT,
-    ITERATIVE_NO_CHECKLIST,
-    GYM_WITH_CHECKLIST,
-    FIXED_TRANSITIONS,
+    FREE_GYM,
+    DIRECTIVE_GYM,
+    FIXED_GYM,
 )
 
 RUNNABLE_MODES: tuple[ProductMode, ...] = (
     SINGLE_SHOT,
     REPEATED_SINGLE_SHOT,
-    ITERATIVE_NO_CHECKLIST,
-    GYM_WITH_CHECKLIST,
-    FIXED_TRANSITIONS,
+    FREE_GYM,
+    DIRECTIVE_GYM,
+    FIXED_GYM,
 )
 
 MODE_BY_KEY = {mode.key: mode for mode in RUNNABLE_MODES}
@@ -102,13 +102,12 @@ MODE_ALIASES = {
     "repeated": REPEATED_SINGLE_SHOT.key,
     "repeated-single-shot": REPEATED_SINGLE_SHOT.key,
     "multishot": REPEATED_SINGLE_SHOT.key,
-    "iterative": ITERATIVE_NO_CHECKLIST.key,
-    "iterative-no-checklist": ITERATIVE_NO_CHECKLIST.key,
-    "gym": GYM_WITH_CHECKLIST.key,
-    "gym-with-checklist": GYM_WITH_CHECKLIST.key,
-    "flexible-gym": GYM_WITH_CHECKLIST.key,
-    "fixed": FIXED_TRANSITIONS.key,
-    "fixed-transitions": FIXED_TRANSITIONS.key,
+    "free": FREE_GYM.key,
+    "free-gym": FREE_GYM.key,
+    "directive": DIRECTIVE_GYM.key,
+    "directive-gym": DIRECTIVE_GYM.key,
+    "fixed": FIXED_GYM.key,
+    "fixed-gym": FIXED_GYM.key,
 }
 
 

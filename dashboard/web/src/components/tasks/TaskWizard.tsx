@@ -1,16 +1,15 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   api,
   type AgentNotes,
-  type Dataset,
-  type DatasetCreatePayload,
-  type DatasetPreview,
-  type DatasetSource,
-  type DatasetTaskConfig,
+  type Task,
+  type TaskCreatePayload,
+  type TaskPreview,
+  type TaskSource,
+  type TaskTypeConfig,
   type UploadedFileNode,
 } from "../../lib/api";
-import { Button, Card, Field, Modal, Spinner, Tag } from "../ui";
+import { Button, Card, FieldInfo, Info, Field, Modal, SelectDropdown, Spinner, Tag } from "../ui";
 import { Icon } from "../Icon";
 
 const STEPS = [
@@ -76,60 +75,6 @@ function flatten(nodes: UploadedFileNode[]): UploadedFileNode[] {
 }
 
 /** Portal-based tooltip — renders in document.body, always on top */
-function Info({ text }: { text: string }) {
-  const [visible, setVisible] = useState(false);
-  const [pos, setPos] = useState({ top: 0, left: 0 });
-  const dotRef = useRef<HTMLSpanElement>(null);
-
-  function show() {
-    const rect = dotRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    setPos({ top: rect.top, left: rect.left + rect.width / 2 });
-    setVisible(true);
-  }
-
-  return (
-    <>
-      <span
-        ref={dotRef}
-        className="info-dot"
-        aria-label={text}
-        onMouseEnter={show}
-        onMouseLeave={() => setVisible(false)}
-      >?</span>
-      {visible && createPortal(
-        <div className="tooltip-portal" style={{ top: pos.top, left: pos.left }}>
-          {text}
-        </div>,
-        document.body
-      )}
-    </>
-  );
-}
-
-function FieldInfo({
-  label,
-  info,
-  hint,
-  children,
-  required,
-}: {
-  label: ReactNode;
-  info: string;
-  hint?: string;
-  children: ReactNode;
-  required?: boolean;
-}) {
-  return (
-    <Field
-      label={<span className="field-info-label">{label}<Info text={info} /></span>}
-      hint={hint}
-      required={required}
-    >
-      {children}
-    </Field>
-  );
-}
 
 function FileRows({
   files, selected, onSelect, onPreview, onExtract, onDelete,
@@ -145,7 +90,7 @@ function FileRows({
   if (!rows.length) return <div className="empty-inline">Файлы ещё не загружены.</div>;
   return (
     <div className="table-wrap">
-      <table className="data dataset-file-table">
+      <table className="data task-file-table">
         <thead>
           <tr>
             <th>Файл</th><th>Формат</th><th>Размер</th><th>Форма</th><th />
@@ -176,7 +121,7 @@ function FileRows({
   );
 }
 
-function PreviewBox({ preview, target }: { preview: DatasetPreview | null; target: string }) {
+function PreviewBox({ preview, target }: { preview: TaskPreview | null; target: string }) {
   if (!preview) return null;
   return (
     <Card style={{ padding: 0 }}>
@@ -205,8 +150,8 @@ function PreviewBox({ preview, target }: { preview: DatasetPreview | null; targe
   );
 }
 
-function SourceEditor({ sources, onChange }: { sources: DatasetSource[]; onChange: (v: DatasetSource[]) => void }) {
-  const update = (idx: number, patch: DatasetSource) => onChange(sources.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
+function SourceEditor({ sources, onChange }: { sources: TaskSource[]; onChange: (v: TaskSource[]) => void }) {
+  const update = (idx: number, patch: TaskSource) => onChange(sources.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
   return (
     <div className="stack" style={{ gap: 12 }}>
       {sources.map((source, idx) => (
@@ -246,7 +191,7 @@ function clearDraft() {
   try { localStorage.removeItem(DRAFT_KEY); } catch {}
 }
 
-export function DatasetWizard({ onClose, onCreated }: { onClose: () => void; onCreated: (dataset: Dataset) => void }) {
+export function TaskWizard({ onClose, onCreated }: { onClose: () => void; onCreated: (task: Task) => void }) {
   const fileInput = useRef<HTMLInputElement>(null);
 
   // Restore from draft on first mount
@@ -271,7 +216,7 @@ export function DatasetWizard({ onClose, onCreated }: { onClose: () => void; onC
   const [uploadUrl, setUploadUrl] = useState("");
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [previewPath, setPreviewPath] = useState<string | null>(null);
-  const [preview, setPreview] = useState<DatasetPreview | null>(null);
+  const [preview, setPreview] = useState<TaskPreview | null>(null);
 
   // Step 2 — Splits
   const [splitMode, setSplitMode] = useState<SplitMode>((d?.splitMode as SplitMode) ?? "raw_split");
@@ -307,7 +252,7 @@ export function DatasetWizard({ onClose, onCreated }: { onClose: () => void; onC
   );
 
   // Step 5 — Sources
-  const [sources, setSources] = useState<DatasetSource[]>((d?.sources as DatasetSource[]) ?? []);
+  const [sources, setSources] = useState<TaskSource[]>((d?.sources as TaskSource[]) ?? []);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -357,7 +302,7 @@ export function DatasetWizard({ onClose, onCreated }: { onClose: () => void; onC
       const dupes: string[] = [];
       for (const file of Array.from(picked)) {
         if (existingNames.has(file.name)) { dupes.push(file.name); continue; }
-        const res = await api.uploadDatasetFile(file, current);
+        const res = await api.uploadTaskFile(file, current);
         current = res.upload_id;
         latestFiles = res.files;
         existingNames.add(file.name);
@@ -373,7 +318,7 @@ export function DatasetWizard({ onClose, onCreated }: { onClose: () => void; onC
     if (!uploadUrl.trim()) return;
     setBusy(true); setError(null);
     try {
-      const res = await api.uploadDatasetFromUrl(uploadUrl.trim(), uploadId);
+      const res = await api.uploadTaskFromUrl(uploadUrl.trim(), uploadId);
       setUploadId(res.upload_id);
       setFiles(res.files);
       setUploadUrl("");
@@ -442,7 +387,7 @@ export function DatasetWizard({ onClose, onCreated }: { onClose: () => void; onC
     setMetricGoal(inferGoal(nextMetric));
   }
 
-  function taskConfig(): DatasetTaskConfig {
+  function taskConfig(): TaskTypeConfig {
     return {
       task_type: taskType,
       target_col: target.trim(),
@@ -462,7 +407,7 @@ export function DatasetWizard({ onClose, onCreated }: { onClose: () => void; onC
     };
   }
 
-  function buildPayload(): DatasetCreatePayload {
+  function buildPayload(): TaskCreatePayload {
     const notes = { ...agentNotes, column_descriptions: {} };
     return {
       id: finalSlug,
@@ -487,12 +432,12 @@ export function DatasetWizard({ onClose, onCreated }: { onClose: () => void; onC
     };
   }
 
-  async function createDataset() {
+  async function createTask() {
     const stepError = [0, 1, 2].map((idx) => validateStep(idx)).find(Boolean);
     if (stepError) { setError(stepError); return; }
     setBusy(true); setError(null);
     try {
-      const created = await api.createDatasetFromConfig(buildPayload());
+      const created = await api.createTaskFromConfig(buildPayload());
       clearDraft(); // success → clear saved draft
       onCreated(created);
     }
@@ -519,7 +464,7 @@ export function DatasetWizard({ onClose, onCreated }: { onClose: () => void; onC
 
   return (
     <Modal
-      title="Новая проблема"
+      title="Новая задача"
       width={980}
       onClose={onClose}
       footer={
@@ -530,7 +475,7 @@ export function DatasetWizard({ onClose, onCreated }: { onClose: () => void; onC
           {step < STEPS.length - 1 ? (
             <Button variant="primary" onClick={next} disabled={busy}>Далее</Button>
           ) : (
-            <Button variant="primary" onClick={createDataset} disabled={busy}>
+            <Button variant="primary" onClick={createTask} disabled={busy}>
               {busy ? <Spinner /> : "Создать"}
             </Button>
           )}
@@ -572,11 +517,7 @@ export function DatasetWizard({ onClose, onCreated }: { onClose: () => void; onC
 
               <div className="grid-3">
                 <FieldInfo label="Тип задачи" info="classification — предсказание категорий (классов). regression — предсказание числа. auto — тип определится автоматически по данным.">
-                  <select className="input" value={taskType} onChange={(e) => setTaskType(e.target.value as TaskType)}>
-                    <option value="auto">auto</option>
-                    <option value="classification">classification</option>
-                    <option value="regression">regression</option>
-                  </select>
+                  <SelectDropdown value={taskType} options={[{ value: "auto", label: "auto" }, { value: "classification", label: "classification" }, { value: "regression", label: "regression" }]} onChange={(v) => setTaskType(v as TaskType)} />
                 </FieldInfo>
                 <FieldInfo label="Target column" info="Название колонки с целевой переменной — то, что агент должен научиться предсказывать. Эта колонка никогда не включается в признаки." required>
                   <input className="input mono" value={target} onChange={(e) => setTarget(e.target.value)} placeholder="target" />
@@ -603,21 +544,18 @@ export function DatasetWizard({ onClose, onCreated }: { onClose: () => void; onC
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "var(--gap, 16px)" }}>
                 <FieldInfo label="Metric goal" info="Направление оптимизации: maximize — чем больше, тем лучше (accuracy, f1); minimize — чем меньше, тем лучше (rmse, mae). Выводится автоматически из имени метрики.">
-                  <select className="input" value={metricGoal} onChange={(e) => setMetricGoal(e.target.value as MetricGoal)}>
-                    <option value="max">maximize</option>
-                    <option value="min">minimize</option>
-                  </select>
+                  <SelectDropdown value={metricGoal} options={[{ value: "max", label: "maximize" }, { value: "min", label: "minimize" }]} onChange={(v) => setMetricGoal(v as MetricGoal)} />
                 </FieldInfo>
-                <FieldInfo label="Теги" info="Ключевые слова через запятую — используются для поиска и фильтрации на странице Проблем. Пример: tabular, benchmark, uci">
+                <FieldInfo label="Теги" info="Ключевые слова через запятую — используются для поиска и фильтрации на странице Задач. Пример: tabular, benchmark, uci">
                   <input className="input" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="tabular, benchmark" />
                 </FieldInfo>
               </div>
 
-              <FieldInfo label="Описание" info="Короткое описание для карточки проблемы. Не влияет ни на что — только отображается в интерфейсе.">
+              <FieldInfo label="Описание" info="Короткое описание для карточки задачи. Не влияет ни на что — только отображается в интерфейсе.">
                 <textarea className="input" rows={2} value={desc} onChange={(e) => setDesc(e.target.value)} />
               </FieldInfo>
 
-              <div className="path-preview">Папка: <span className="mono">datasets/{finalSlug || "dataset_id"}</span></div>
+              <div className="path-preview">Папка: <span className="mono">tasks/{finalSlug || "task_id"}</span></div>
             </div>
           )}
 
@@ -735,17 +673,10 @@ export function DatasetWizard({ onClose, onCreated }: { onClose: () => void; onC
 
               <div className="grid-3">
                 <FieldInfo label="Shuffle" info="Перемешать строки перед разбиением. Рекомендуется для большинства задач, кроме временных рядов.">
-                  <select className="input" value={shuffle ? "true" : "false"} onChange={(e) => setShuffle(e.target.value === "true")}>
-                    <option value="true">да</option>
-                    <option value="false">нет</option>
-                  </select>
+                  <SelectDropdown value={shuffle ? "true" : "false"} options={[{ value: "true", label: "да" }, { value: "false", label: "нет" }]} onChange={(v) => setShuffle(v === "true")} />
                 </FieldInfo>
                 <FieldInfo label="Stratify" info="Стратифицированный сплит: каждая часть содержит одинаковое распределение классов target. Auto — включается автоматически для классификации.">
-                  <select className="input" value={stratify} onChange={(e) => setStratify(e.target.value as StratifyMode)}>
-                    <option value="auto">auto</option>
-                    <option value="on">on</option>
-                    <option value="off">off</option>
-                  </select>
+                  <SelectDropdown value={stratify} options={[{ value: "auto", label: "auto" }, { value: "on", label: "on" }, { value: "off", label: "off" }]} onChange={(v) => setStratify(v as StratifyMode)} />
                 </FieldInfo>
                 <FieldInfo label="Seed" info="Фиксирует случайность — одинаковый seed всегда даёт воспроизводимые train/val/test сплиты.">
                   <input className="input mono" type="number" value={seed} onChange={(e) => setSeed(Number(e.target.value || 42))} />
@@ -769,11 +700,7 @@ export function DatasetWizard({ onClose, onCreated }: { onClose: () => void; onC
             <div className="stack" style={{ gap: 16 }}>
               <div className="grid-3">
                 <FieldInfo label="Тип задачи" info="Тип ML-задачи. Влияет на стратификацию и доступные метрики.">
-                  <select className="input" value={taskType} onChange={(e) => setTaskType(e.target.value as TaskType)}>
-                    <option value="auto">auto</option>
-                    <option value="classification">classification</option>
-                    <option value="regression">regression</option>
-                  </select>
+                  <SelectDropdown value={taskType} options={[{ value: "auto", label: "auto" }, { value: "classification", label: "classification" }, { value: "regression", label: "regression" }]} onChange={(v) => setTaskType(v as TaskType)} />
                 </FieldInfo>
                 <FieldInfo label="Target" info="Колонка с целевой переменной. Совпадает с шагом Основное.">
                   <input className="input mono" value={target} onChange={(e) => setTarget(e.target.value)} />
@@ -813,10 +740,10 @@ export function DatasetWizard({ onClose, onCreated }: { onClose: () => void; onC
               <FieldInfo label="Структура данных" info="Описание колонок: типы, форматы, особенности (пропуски, выбросы). Помогает агенту быстрее разобраться с данными.">
                 <textarea className="input" rows={3} value={agentNotes.data_structure} onChange={(e) => setAgentNotes((n) => ({ ...n, data_structure: e.target.value }))} />
               </FieldInfo>
-              <FieldInfo label="Дополнительные комментарии" info="Любые пояснения для агента: известные проблемы в данных, советы по feature engineering, особенности задачи.">
+              <FieldInfo label="Дополнительные комментарии" info="Любые пояснения для агента: известные задачи в данных, советы по feature engineering, особенности задачи.">
                 <textarea className="input" rows={3} value={agentNotes.additional_comments} onChange={(e) => setAgentNotes((n) => ({ ...n, additional_comments: e.target.value }))} />
               </FieldInfo>
-              <FieldInfo label="Предупреждения" info="Потенциальные источники data leakage или других проблем, о которых должен знать агент. Не указывайте тестовые ответы.">
+              <FieldInfo label="Предупреждения" info="Потенциальные источники data leakage или других нюансов, о которых должен знать агент. Не указывайте тестовые ответы.">
                 <textarea className="input" rows={2} value={agentNotes.leakage_warning} onChange={(e) => setAgentNotes((n) => ({ ...n, leakage_warning: e.target.value }))} />
               </FieldInfo>
             </div>

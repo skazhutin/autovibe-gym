@@ -47,11 +47,11 @@
 |---|---|---|
 | **Single-shot** | Один полный ответ с моделью; без environment feedback | Сила первичной генерации |
 | **Repeated single-shot** | Несколько независимых попыток; между ними только scalar validation metric | Отделяет iteration от перебора |
-| **Fixed transitions** | Feedback доступен, но порядок этапов задан заранее | Полезна ли структурированная траектория |
-| **Flexible transitions** | Feedback доступен, агент сам выбирает следующий шаг | Полезна ли автономная доработка |
+| **Fixed gym** | Feedback доступен, но порядок этапов задан заранее | Полезна ли структурированная траектория |
+| **Directive gym** | Feedback доступен, агент сам выбирает следующий шаг | Полезна ли автономная доработка |
 
 > **Важно:** Single-shot и repeated single-shot **не получают** stage feedback, validator hints, reward или traceback.
-> Feedback выдаётся только в интерактивных режимах: fixed и flexible.
+> Feedback выдаётся только в интерактивных режимах: fixed и directive.
 
 ---
 
@@ -112,7 +112,7 @@ Train → Validate → Choose → Replay → Final
 
 | Эксперимент | Зачем нужен | Ожидаемый вывод |
 |---|---|---|
-| **Mode comparison** | single-shot vs repeated vs fixed vs flexible | Помогает ли interaction |
+| **Mode comparison** | single-shot vs repeated vs fixed vs directive | Помогает ли interaction |
 | **Validation-final gap** | validation score vs private final score | Есть ли overfitting к feedback |
 | **Cost-quality** | score на токен / вызов / секунду | Стоит ли interaction своих затрат |
 | **Robustness** | leakage-seeking, sloppy, non-reproducible agents | Не ломается ли среда |
@@ -160,15 +160,15 @@ Train → Validate → Choose → Replay → Final
 | `NotebookGymEnv` — среда на реальном Jupyter kernel | ✅ | основная среда |
 | `GymEnv` (legacy) — subprocess sandbox | ✅ | retained for compatibility |
 | `GymAgent` — LLM-агент с JSON-действиями | ✅ | |
-| `Checklist` — 8 пунктов с generic hints | ✅ | режим gym_with_checklist |
+| `Checklist` — 8 пунктов с generic hints | ✅ | режим directive_gym |
 | `CodeExecutor` — Docker/subprocess sandbox | ✅ | legacy path |
 | `ContainerJupyterKernelBackend` — Docker kernel | ✅ | `AUTOVIBE_KERNEL_BACKEND=docker` |
 | `run_baseline.py` — single-shot | ✅ | |
 | `run_multishot.py` — repeated single-shot | ✅ | N независимых попыток, только scalar val metric |
-| `run_fixed.py` — fixed transitions | ✅ | legacy GymEnv runtime |
-| `run_gym.py` — flexible transitions | ✅ | NotebookGymEnv |
+| `run_fixed.py` — fixed gym | ✅ | legacy GymEnv runtime |
+| `run_gym.py` — directive gym | ✅ | NotebookGymEnv |
 | `run_matrix.py` — batch experiment runner | ✅ | N датасетов × M режимов |
-| `iterative_no_checklist` — fair control | ✅ | тот же backend, без hints |
+| `free_gym` — fair control | ✅ | тот же backend, без hints |
 | Candidate lifecycle: Train→Validate→Replay→Final | ✅ | `restart_and_run_all` + `validate` + `submit` |
 | Trajectory artifacts (notebook, feedback_trace, etc.) | ✅ | MLflow artifacts |
 | MLflow трекинг | ✅ | все режимы |

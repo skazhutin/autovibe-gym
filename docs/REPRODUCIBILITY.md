@@ -65,17 +65,17 @@ python -m experiments.run_multishot \
   --dataset-dir datasets/student_dropout/prepared \
   --mode local --shots 5
 
-# Iterative no-checklist
+# Free gym
 python -m experiments.run_gym \
   --dataset-dir datasets/student_dropout/prepared \
-  --mode local --episode-mode iterative_no_checklist --max-steps 15
+  --mode local --episode-mode free_gym --max-steps 15
 
-# Flexible gym
+# Directive gym
 python -m experiments.run_gym \
   --dataset-dir datasets/student_dropout/prepared \
   --mode local --max-steps 15
 
-# Fixed transitions gym
+# Fixed gym
 python -m experiments.run_fixed \
   --dataset-dir datasets/student_dropout/prepared \
   --mode local

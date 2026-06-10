@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { api, type AgentNotes, type Dataset, type DatasetConfig, type DatasetSource } from "../lib/api";
+import { api, type AgentNotes, type Task, type TaskConfig, type TaskSource } from "../lib/api";
 import { useAsync } from "../lib/hooks";
-import { Button, Card, EmptyState, Field, Skeleton, Spinner, Tabs, Tag } from "../components/ui";
+import { Button, Card, EmptyState, FieldInfo, Field, Modal, SelectDropdown, Skeleton, Spinner, Tabs, Tag } from "../components/ui";
 import { Icon } from "../components/Icon";
 import { MiniHist } from "../components/charts";
 
@@ -12,16 +11,16 @@ const TABS = [
   { id: "preview", label: "Превью", icon: "table" },
   { id: "columns", label: "Колонки", icon: "sliders" },
   { id: "splits", label: "Сплиты", icon: "layers" },
-  { id: "config", label: "Конфиг", icon: "settings" },
-  { id: "sources", label: "Источники", icon: "external" },
   { id: "notes", label: "Заметки агенту", icon: "notebook" },
+  { id: "sources", label: "Источники", icon: "external" },
+  { id: "config", label: "Параметры", icon: "settings" },
 ];
 
 type Split = "train" | "val" | "test";
 const STATUS_LABEL: Record<string, string> = {
-  prepared: "prepared",
-  partial: "partial",
-  unprepared: "unprepared",
+  prepared: "подготовлен",
+  partial: "частичный",
+  unprepared: "не подготовлен",
 };
 const TASK_LABEL: Record<string, string> = {
   auto: "auto",
@@ -30,7 +29,7 @@ const TASK_LABEL: Record<string, string> = {
   unknown: "unknown",
 };
 const METRIC_GOAL_LABEL: Record<string, string> = {
-  max: "больше лучше",
+  max: "maximize",
   min: "меньше лучше",
 };
 const SPLIT_MODE_LABEL: Record<string, string> = {
@@ -50,39 +49,14 @@ function inferGoal(metric: string): "max" | "min" {
   return ["rmse", "rmsle", "mae", "mse", "logloss"].includes(m) ? "min" : "max";
 }
 
-function Info({ text }: { text: string }) {
-  const [visible, setVisible] = useState(false);
-  const [pos, setPos] = useState({ top: 0, left: 0 });
-  const dotRef = useRef<HTMLSpanElement>(null);
-  function show() {
-    const rect = dotRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    setPos({ top: rect.top, left: rect.left + rect.width / 2 });
-    setVisible(true);
-  }
-  return (
-    <>
-      <span ref={dotRef} className="info-dot" aria-label={text} onMouseEnter={show} onMouseLeave={() => setVisible(false)}>?</span>
-      {visible && createPortal(<div className="tooltip-portal" style={{ top: pos.top, left: pos.left }}>{text}</div>, document.body)}
-    </>
-  );
-}
 
-function FieldInfo({ label, info, hint, children, required }: { label: ReactNode; info: string; hint?: string; children: ReactNode; required?: boolean }) {
-  return (
-    <Field label={<span className="field-info-label">{label}<Info text={info} /></span>} hint={hint} required={required}>
-      {children}
-    </Field>
-  );
-}
-
-function sourceText(dataset: Dataset) {
-  const value = dataset.source && dataset.source !== "-" ? dataset.source : dataset.sources?.[0]?.name || dataset.sources?.[0]?.url || "-";
+function sourceText(task: Task) {
+  const value = task.source && task.source !== "-" ? task.source : task.sources?.[0]?.name || task.sources?.[0]?.url || "-";
   return !value || value === "source" ? "-" : value;
 }
 
-function SplitSelector({ split, onChange, dataset }: { split: Split; onChange: (s: Split) => void; dataset: Dataset }) {
-  const flags = { train: dataset.hasTrain, val: dataset.hasVal, test: dataset.hasTest };
+function SplitSelector({ split, onChange, task }: { split: Split; onChange: (s: Split) => void; task: Task }) {
+  const flags = { train: task.hasTrain, val: task.hasVal, test: task.hasTest };
   return (
     <div className="segmented small">
       {(["train", "val", "test"] as const).map((s) => (
@@ -94,46 +68,46 @@ function SplitSelector({ split, onChange, dataset }: { split: Split; onChange: (
   );
 }
 
-function OverviewTab({ dataset, config }: { dataset: Dataset; config: DatasetConfig | null }) {
-  const warnings = config?.warnings ?? dataset.warnings ?? [];
+function OverviewTab({ task, config }: { task: Task; config: TaskConfig | null }) {
+  const warnings = config?.warnings ?? task.warnings ?? [];
   return (
     <div className="stack" style={{ gap: 16 }}>
       <div className="grid-4">
-        <Card className="metric-card"><span className="metric-label">Статус</span><span className="metric-num" style={{ fontSize: 24 }}>{STATUS_LABEL[dataset.status ?? (dataset.prepared ? "prepared" : "partial")]}</span></Card>
-        <Card className="metric-card"><span className="metric-label">Строки</span><span className="metric-num">{dataset.rows?.toLocaleString() ?? "-"}</span></Card>
-        <Card className="metric-card"><span className="metric-label">Признаки</span><span className="metric-num">{dataset.cols || "-"}</span></Card>
-        <Card className="metric-card"><span className="metric-label">Seed</span><span className="metric-num">{dataset.seed ?? 42}</span></Card>
+        <Card className="metric-card"><span className="metric-label">Статус</span><span className="metric-num" style={{ fontSize: 24 }}>{STATUS_LABEL[task.status ?? (task.prepared ? "prepared" : "partial")]}</span></Card>
+        <Card className="metric-card"><span className="metric-label">Строки</span><span className="metric-num">{task.rows?.toLocaleString() ?? "-"}</span></Card>
+        <Card className="metric-card"><span className="metric-label">Признаки</span><span className="metric-num">{task.cols || "-"}</span></Card>
+        <Card className="metric-card"><span className="metric-label">Seed</span><span className="metric-num">{task.seed ?? 42}</span></Card>
       </div>
       <Card>
-        <div className="dataset-overview-grid">
-          <div><span className="k">ID</span><span className="v mono">{dataset.id}</span></div>
-          <div><span className="k">задача</span><span className="v">{TASK_LABEL[dataset.taskType ?? dataset.task] ?? dataset.task}</span></div>
-          <div><span className="k">target</span><span className="v mono">{dataset.target}</span></div>
-          <div><span className="k">метрика</span><span className="v mono">{dataset.metric} ({METRIC_GOAL_LABEL[dataset.metricGoal ?? "max"] ?? dataset.metricGoal})</span></div>
-          <div><span className="k">источник</span><span className="v">{sourceText(dataset)}</span></div>
-          <div><span className="k">создан</span><span className="v">{dataset.createdAt ? new Date(dataset.createdAt).toLocaleString() : "-"}</span></div>
-          <div><span className="k">обновлен</span><span className="v">{dataset.updatedAt ? new Date(dataset.updatedAt).toLocaleString() : "-"}</span></div>
+        <div className="task-overview-grid">
+          <div><span className="k">ID</span><span className="v mono">{task.id}</span></div>
+          <div><span className="k">задача</span><span className="v">{TASK_LABEL[task.taskType ?? task.task] ?? task.task}</span></div>
+          <div><span className="k">target</span><span className="v mono">{task.target}</span></div>
+          <div><span className="k">метрика</span><span className="v mono">{task.metric} ({METRIC_GOAL_LABEL[task.metricGoal ?? "max"] ?? task.metricGoal})</span></div>
+          <div><span className="k">источник</span><span className="v">{sourceText(task)}</span></div>
+          <div><span className="k">создана</span><span className="v">{task.createdAt ? new Date(task.createdAt).toLocaleString() : "-"}</span></div>
+          <div><span className="k">обновлен</span><span className="v">{task.updatedAt ? new Date(task.updatedAt).toLocaleString() : "-"}</span></div>
         </div>
         <div className="split-pills" style={{ marginTop: 16 }}>
-          <Tag tone={dataset.hasTrain ? "green" : "neutral"}>train</Tag>
-          <Tag tone={dataset.hasVal ? "green" : "neutral"}>val</Tag>
-          <Tag tone={dataset.hasTest ? "green" : "neutral"}>test</Tag>
-          {(dataset.tags ?? []).map((tag) => <Tag key={tag}>{tag}</Tag>)}
+          <Tag tone={task.hasTrain ? "green" : "neutral"}>train</Tag>
+          <Tag tone={task.hasVal ? "green" : "neutral"}>val</Tag>
+          <Tag tone={task.hasTest ? "green" : "neutral"}>test</Tag>
+          {(task.tags ?? []).map((tag) => <Tag key={tag}>{tag}</Tag>)}
         </div>
       </Card>
       {warnings.length > 0 && <div className="warn-box">{warnings.join(" ")}</div>}
-      {dataset.desc && <Card><div className="metric-label">Описание</div><p style={{ marginBottom: 0 }}>{dataset.desc}</p></Card>}
+      {task.desc && <Card><div className="metric-label">Описание</div><p style={{ marginBottom: 0 }}>{task.desc}</p></Card>}
     </div>
   );
 }
 
-function PreviewTab({ id, dataset }: { id: string; dataset: Dataset }) {
+function PreviewTab({ id, task }: { id: string; task: Task }) {
   const [split, setSplit] = useState<Split>("train");
-  const { data, loading } = useAsync(() => api.datasetPreview(id, split, 50), [id, split]);
+  const { data, loading } = useAsync(() => api.taskPreview(id, split, 50), [id, split]);
   if (loading && !data) return <Skeleton h={240} />;
   return (
     <div className="stack" style={{ gap: 12 }}>
-      <SplitSelector split={split} onChange={setSplit} dataset={dataset} />
+      <SplitSelector split={split} onChange={setSplit} task={task} />
       {!data || !data.columns.length ? (
         <EmptyState icon="table" title={`Нет данных ${split}`} text={`${split}.csv недоступен.`} />
       ) : (
@@ -142,14 +116,14 @@ function PreviewTab({ id, dataset }: { id: string; dataset: Dataset }) {
             <table className="data">
               <thead>
                 <tr>
-                  {data.columns.map((c) => <th key={c} className={c === dataset.target ? "target-col" : undefined}>{c}</th>)}
+                  {data.columns.map((c) => <th key={c} className={c === task.target ? "target-col" : undefined}>{c}</th>)}
                 </tr>
               </thead>
               <tbody>
                 {data.rows.map((row, i) => (
                   <tr key={i}>
                     {row.map((v, j) => (
-                      <td key={j} className={`mono${data.columns[j] === dataset.target ? " target-col" : ""}`} style={{ fontSize: 12.5 }}>
+                      <td key={j} className={`mono${data.columns[j] === task.target ? " target-col" : ""}`} style={{ fontSize: 12.5 }}>
                         {v === null ? <span className="faint">пусто</span> : String(v)}
                       </td>
                     ))}
@@ -167,15 +141,15 @@ function PreviewTab({ id, dataset }: { id: string; dataset: Dataset }) {
   );
 }
 
-function ColumnsTab({ id, dataset, config }: { id: string; dataset: Dataset; config: DatasetConfig | null }) {
+function ColumnsTab({ id, task, config }: { id: string; task: Task; config: TaskConfig | null }) {
   const [split, setSplit] = useState<Split>("train");
-  const { data, loading } = useAsync(() => api.datasetColumns(id, split), [id, split]);
+  const { data, loading } = useAsync(() => api.taskColumns(id, split), [id, split]);
   const ignored = new Set(config?.task.ignore_columns ?? []);
   const idCols = new Set(config?.task.id_columns ?? []);
   if (loading && !data) return <Skeleton h={240} />;
   return (
     <div className="stack" style={{ gap: 12 }}>
-      <SplitSelector split={split} onChange={setSplit} dataset={dataset} />
+      <SplitSelector split={split} onChange={setSplit} task={task} />
       {!data || !data.length ? (
         <EmptyState icon="sliders" title={`Нет статистики колонок для ${split}`} />
       ) : (
@@ -193,7 +167,7 @@ function ColumnsTab({ id, dataset, config }: { id: string; dataset: Dataset; con
                     <td className="mono faint">{c.unique}</td>
                     <td>
                       <div className="split-pills">
-                        {c.name === dataset.target && <Tag tone="accent">цель</Tag>}
+                        {c.name === task.target && <Tag tone="accent">цель</Tag>}
                         {(c.ignored || ignored.has(c.name)) && <Tag tone="red">игнор</Tag>}
                         {(c.idColumn || idCols.has(c.name)) && <Tag tone="blue">id</Tag>}
                       </div>
@@ -210,7 +184,7 @@ function ColumnsTab({ id, dataset, config }: { id: string; dataset: Dataset; con
   );
 }
 
-function SplitsTab({ config }: { config: DatasetConfig | null }) {
+function SplitsTab({ config }: { config: TaskConfig | null }) {
   if (!config) return <Skeleton h={220} />;
   const splits = config.splits;
   return (
@@ -234,7 +208,7 @@ function SplitsTab({ config }: { config: DatasetConfig | null }) {
           </tbody>
         </table>
       </div>
-      <div className="dataset-split-meta">
+      <div className="task-split-meta">
         <Tag mono>{SPLIT_MODE_LABEL[splits.mode] ?? splits.mode}</Tag>
         <span>seed: <span className="mono">{splits.seed}</span></span>
         <span>перемешивание: <span className="mono">{splits.shuffle ?? true ? "да" : "нет"}</span></span>
@@ -245,12 +219,37 @@ function SplitsTab({ config }: { config: DatasetConfig | null }) {
   );
 }
 
-function ConfigTab({ id, config, onSaved }: { id: string; config: DatasetConfig | null; onSaved: () => void }) {
-  const [form, setForm] = useState<DatasetConfig | null>(config);
+function ConfigTab({ id, config, archived, onSaved }: { id: string; config: TaskConfig | null; archived: boolean; onSaved: () => void }) {
+  const nav = useNavigate();
+  const [form, setForm] = useState<TaskConfig | null>(config);
   const [tagsStr, setTagsStr] = useState((config?.tags ?? []).join(", "));
   const [busy, setBusy] = useState(false);
   const [ok, setOk] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [archiving, setArchiving] = useState(false);
+
+  async function doDelete() {
+    setDeleting(true);
+    try {
+      await api.deleteTask(id);
+      nav("/problems");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  async function doArchive() {
+    setArchiving(true);
+    try {
+      if (archived) await api.unarchiveTasks([id]);
+      else await api.archiveTasks([id]);
+      nav("/problems");
+    } finally {
+      setArchiving(false);
+    }
+  }
   useEffect(() => {
     setForm(config);
     setTagsStr((config?.tags ?? []).join(", "));
@@ -270,7 +269,7 @@ function ConfigTab({ id, config, onSaved }: { id: string; config: DatasetConfig 
     if (!current) return;
     setBusy(true); setOk(false); setErr(null);
     try {
-      await api.updateDatasetConfig(id, {
+      await api.updateTaskConfig(id, {
         ...current,
         tags: tagsStr.split(",").map((s) => s.trim()).filter(Boolean),
       });
@@ -287,20 +286,13 @@ function ConfigTab({ id, config, onSaved }: { id: string; config: DatasetConfig 
       <div className="stack" style={{ gap: 16 }}>
         <div className="grid-3">
           <FieldInfo label="Тип задачи" info="classification — предсказание категорий (классов). regression — предсказание числа. auto — тип определится автоматически по данным.">
-            <select className="input" value={task.task_type} onChange={(e) => setTask({ task_type: e.target.value as typeof task.task_type })}>
-              <option value="auto">auto</option>
-              <option value="classification">classification</option>
-              <option value="regression">regression</option>
-            </select>
+            <SelectDropdown value={task.task_type} options={[{ value: "auto", label: "auto" }, { value: "classification", label: "classification" }, { value: "regression", label: "regression" }]} onChange={(v) => setTask({ task_type: v as typeof task.task_type })} />
           </FieldInfo>
           <FieldInfo label="Target column" info="Название колонки с целевой переменной — то, что агент должен научиться предсказывать. Эта колонка никогда не включается в признаки." required>
             <input className="input mono" value={task.target_col} onChange={(e) => setTask({ target_col: e.target.value })} placeholder="target" />
           </FieldInfo>
           <FieldInfo label="Metric goal" info="Направление оптимизации: maximize — чем больше, тем лучше (accuracy, f1); minimize — чем меньше, тем лучше (rmse, mae). Выводится автоматически из имени метрики.">
-            <select className="input" value={task.metric_goal} onChange={(e) => setTask({ metric_goal: e.target.value as typeof task.metric_goal })}>
-              <option value="max">maximize</option>
-              <option value="min">minimize</option>
-            </select>
+            <SelectDropdown value={task.metric_goal} options={[{ value: "max", label: "maximize" }, { value: "min", label: "minimize" }]} onChange={(v) => setTask({ metric_goal: v as typeof task.metric_goal })} />
           </FieldInfo>
           <FieldInfo
             label={<>Метрика <a className="docs-link" href="https://scikit-learn.org/stable/modules/model_evaluation.html" target="_blank" rel="noopener noreferrer">все метрики sklearn ↗</a></>}
@@ -332,26 +324,50 @@ function ConfigTab({ id, config, onSaved }: { id: string; config: DatasetConfig 
             </FieldInfo>
           </div>
         </details>
-        <div className="row">
-          <Button variant="primary" onClick={save} disabled={busy}>{busy ? <Spinner /> : "Сохранить конфиг"}</Button>
-          {ok && <span className="success-inline"><Icon name="check" size={14} /> сохранено</span>}
-          {err && <span className="error-inline">{err}</span>}
+        <div className="spread" style={{ alignItems: "center" }}>
+          <div className="row">
+            <Button variant="primary" onClick={save} disabled={busy}>{busy ? <Spinner /> : "Сохранить конфиг"}</Button>
+            {ok && <span className="success-inline"><Icon name="check" size={14} /> сохранено</span>}
+            {err && <span className="error-inline">{err}</span>}
+          </div>
+          <div className="row" style={{ gap: 8 }}>
+            <Button variant="ghost" icon="archive" onClick={doArchive} disabled={archiving}>{archiving ? <Spinner /> : archived ? "Разархивировать" : "Архивировать"}</Button>
+            <Button variant="ghost" icon="trash" onClick={() => setConfirmDelete(true)}>Удалить датасет</Button>
+          </div>
         </div>
       </div>
+
+      {confirmDelete && (
+        <Modal
+          title="Удалить датасет?"
+          width={420}
+          onClose={() => setConfirmDelete(false)}
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setConfirmDelete(false)} disabled={deleting}>Отменить</Button>
+              <Button variant="danger" onClick={doDelete} disabled={deleting}>{deleting ? <Spinner /> : "Удалить"}</Button>
+            </>
+          }
+        >
+          <p style={{ margin: 0, fontSize: 13, color: "var(--text-dim)", lineHeight: 1.55 }}>
+            Все исходные и подготовленные файлы будут удалены без возможности восстановления.
+          </p>
+        </Modal>
+      )}
     </Card>
   );
 }
 
-function SourcesTab({ id, config, onSaved }: { id: string; config: DatasetConfig | null; onSaved: () => void }) {
-  const [sources, setSources] = useState<DatasetSource[]>(config?.sources ?? []);
+function SourcesTab({ id, config, onSaved }: { id: string; config: TaskConfig | null; onSaved: () => void }) {
+  const [sources, setSources] = useState<TaskSource[]>(config?.sources ?? []);
   const [busy, setBusy] = useState(false);
   useEffect(() => setSources(config?.sources ?? []), [config]);
   if (!config) return <Skeleton h={200} />;
-  const update = (idx: number, patch: DatasetSource) => setSources((all) => all.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
+  const update = (idx: number, patch: TaskSource) => setSources((all) => all.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
   async function save() {
     setBusy(true);
     try {
-      await api.updateDatasetConfig(id, { sources } as Partial<DatasetConfig>);
+      await api.updateTaskConfig(id, { sources } as Partial<TaskConfig>);
       onSaved();
     } finally {
       setBusy(false);
@@ -384,7 +400,7 @@ function SourcesTab({ id, config, onSaved }: { id: string; config: DatasetConfig
   );
 }
 
-function AgentNotesTab({ id, config, onSaved }: { id: string; config: DatasetConfig | null; onSaved: () => void }) {
+function AgentNotesTab({ id, config, onSaved }: { id: string; config: TaskConfig | null; onSaved: () => void }) {
   const [notes, setNotes] = useState<AgentNotes | null>(config?.agent_notes ?? null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -397,7 +413,7 @@ function AgentNotesTab({ id, config, onSaved }: { id: string; config: DatasetCon
     setBusy(true);
     setErr(null);
     try {
-      await api.updateDatasetConfig(id, { agent_notes: notes } as Partial<DatasetConfig>);
+      await api.updateTaskConfig(id, { agent_notes: notes } as Partial<TaskConfig>);
       onSaved();
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
@@ -416,10 +432,10 @@ function AgentNotesTab({ id, config, onSaved }: { id: string; config: DatasetCon
         <FieldInfo label="Структура данных" info="Описание колонок: типы, форматы, особенности (пропуски, выбросы). Помогает агенту быстрее разобраться с данными.">
           <textarea className="input" rows={3} value={notes.data_structure} onChange={(e) => set({ data_structure: e.target.value })} />
         </FieldInfo>
-        <FieldInfo label="Дополнительные комментарии" info="Любые пояснения для агента: известные проблемы в данных, советы по feature engineering, особенности задачи.">
+        <FieldInfo label="Дополнительные комментарии" info="Любые пояснения для агента: известные задачи в данных, советы по feature engineering, особенности задачи.">
           <textarea className="input" rows={3} value={notes.additional_comments} onChange={(e) => set({ additional_comments: e.target.value })} />
         </FieldInfo>
-        <FieldInfo label="Предупреждения" info="Потенциальные источники data leakage или других проблем, о которых должен знать агент. Не указывайте тестовые ответы.">
+        <FieldInfo label="Предупреждения" info="Потенциальные источники data leakage или других нюансов, о которых должен знать агент. Не указывайте тестовые ответы.">
           <textarea className="input" rows={2} value={notes.leakage_warning} onChange={(e) => set({ leakage_warning: e.target.value })} />
         </FieldInfo>
         <div className="row">
@@ -435,11 +451,15 @@ export default function DatasetDetail() {
   const { id = "" } = useParams();
   const nav = useNavigate();
   const [tab, setTab] = useState("overview");
-  const { data, loading, reload } = useAsync(() => api.getDataset(id), [id]);
-  const { data: config, loading: configLoading, reload: reloadConfig } = useAsync(() => api.getDatasetConfig(id), [id]);
+  const { data, loading, reload } = useAsync(() => api.getTask(id), [id]);
+  const { data: config, loading: configLoading, reload: reloadConfig } = useAsync(() => api.getTaskConfig(id), [id]);
+  const { data: archivedTasks } = useAsync(() => api.listArchivedTasks(), [id]);
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName] = useState("");
+  const [preparing, setPreparing] = useState(false);
+  const [prepareErr, setPrepareErr] = useState<string | null>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const archived = (archivedTasks ?? []).some((task) => task.id === id);
 
   function refresh() {
     reload();
@@ -458,7 +478,7 @@ export default function DatasetDetail() {
     setEditingName(false);
     if (!trimmed || trimmed === data?.name) return;
     try {
-      await api.updateDatasetConfig(id, { name: trimmed } as Partial<DatasetConfig>);
+      await api.updateTaskConfig(id, { name: trimmed } as Partial<TaskConfig>);
       refresh();
     } catch {}
   }
@@ -467,12 +487,25 @@ export default function DatasetDetail() {
     setEditingName(false);
   }
 
+  async function prepareTask() {
+    setPreparing(true);
+    setPrepareErr(null);
+    try {
+      await api.prepareTask(id);
+      refresh();
+    } catch (e) {
+      setPrepareErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setPreparing(false);
+    }
+  }
+
   if (loading && !data) return <Skeleton h={300} />;
   if (!data) return <EmptyState icon="alert" title="Датасет не найден" action={<Button onClick={() => nav("/problems")}>К датасетам</Button>} />;
 
   return (
     <div>
-      <button className="back-link" onClick={() => nav("/problems")}><Icon name="chevronLeft" size={16} /> Все датасеты</button>
+      <button className="back-link" onClick={() => nav("/problems")}><Icon name="chevronLeft" size={16} /> Все задачи</button>
       <Card style={{ marginBottom: 20 }}>
         <div className="spread" style={{ alignItems: "flex-start" }}>
           <div style={{ flex: 1 }}>
@@ -494,7 +527,7 @@ export default function DatasetDetail() {
             <div className="stack" style={{ gap: 4 }}>
               <span className="mono faint" style={{ fontSize: 13 }}>metric: <strong className="mono" style={{ color: "var(--text)" }}>{data.metric}</strong></span>
               <span className="mono faint" style={{ fontSize: 13 }}>target: <strong className="mono" style={{ color: "var(--text)" }}>{data.target}</strong></span>
-              <span className="mono faint" style={{ fontSize: 13 }}>path: {data.datasetDir}</span>
+              <span className="mono faint" style={{ fontSize: 13 }}>path: {data.taskDir}</span>
             </div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 12 }}>
@@ -509,13 +542,30 @@ export default function DatasetDetail() {
       </Card>
 
       <Tabs tabs={TABS} active={tab} onChange={setTab} />
-      {tab === "overview" && <OverviewTab dataset={data} config={config} />}
-      {tab === "preview" && <PreviewTab id={id} dataset={data} />}
-      {tab === "columns" && <ColumnsTab id={id} dataset={data} config={config} />}
+      {tab === "overview" && <OverviewTab task={data} config={config} />}
+      {tab === "preview" && <PreviewTab id={id} task={data} />}
+      {tab === "columns" && <ColumnsTab id={id} task={data} config={config} />}
       {tab === "splits" && (configLoading ? <Skeleton h={220} /> : <SplitsTab config={config} />)}
-      {tab === "config" && <ConfigTab id={id} config={config} onSaved={refresh} />}
+      {tab === "config" && <ConfigTab id={id} config={config} archived={archived} onSaved={refresh} />}
       {tab === "sources" && <SourcesTab id={id} config={config} onSaved={refresh} />}
       {tab === "notes" && <AgentNotesTab id={id} config={config} onSaved={refresh} />}
+
+      {!archived && !data.prepared && (
+        <Card style={{ marginTop: 20 }}>
+          <div className="spread" style={{ alignItems: "center", gap: 12 }}>
+            <div className="stack" style={{ gap: 4 }}>
+              <div style={{ fontWeight: 600 }}>Подготовка датасета</div>
+              <div className="faint" style={{ fontSize: 13 }}>
+                Соберет подготовленные `train` / `val` / `test` файлы по текущему конфигу задачи.
+              </div>
+              {prepareErr && <div className="error-inline">{prepareErr}</div>}
+            </div>
+            <Button variant="primary" onClick={prepareTask} disabled={preparing || configLoading}>
+              {preparing ? <Spinner /> : "Подготовить"}
+            </Button>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

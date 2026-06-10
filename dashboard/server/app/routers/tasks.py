@@ -1,4 +1,4 @@
-"""Datasets API: discovery, staging uploads, preparation, config, and edits."""
+"""Tasks API: discovery, staging uploads, preparation, config, and edits."""
 from __future__ import annotations
 
 from typing import Any
@@ -6,12 +6,16 @@ from typing import Any
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
-from ..services import dataset_store
+from ..services import task_archive_store, task_store
 
-router = APIRouter(prefix="/datasets", tags=["datasets"])
+router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 
-class DatasetMetaUpdate(BaseModel):
+class BulkPayload(BaseModel):
+    ids: list[str]
+
+
+class TaskMetaUpdate(BaseModel):
     name: str | None = None
     target: str | None = None
     metric: str | None = None
@@ -29,7 +33,7 @@ class ExtractRequest(BaseModel):
     path: str | None = None
 
 
-class DatasetConfigPayload(BaseModel):
+class TaskConfigPayload(BaseModel):
     id: str | None = None
     name: str | None = None
     upload_id: str | None = Field(default=None, alias="uploadId")
@@ -43,25 +47,44 @@ class DatasetConfigPayload(BaseModel):
 
 
 @router.get("")
-def list_datasets(deep: bool = True) -> list[dict]:
-    return dataset_store.list_datasets(deep=deep)
+def list_tasks(deep: bool = True) -> list[dict]:
+    archived = task_archive_store.list_archived()
+    return [d for d in task_store.list_tasks(deep=deep) if d.get("id") not in archived]
+
+
+@router.get("/archived")
+def list_archived_tasks(deep: bool = True) -> list[dict]:
+    archived = task_archive_store.list_archived()
+    return [d for d in task_store.list_tasks(deep=deep) if d.get("id") in archived]
+
+
+@router.post("/archive")
+def bulk_archive_tasks(payload: BulkPayload) -> dict:
+    task_archive_store.archive(payload.ids)
+    return {"archived": payload.ids}
+
+
+@router.post("/unarchive")
+def bulk_unarchive_tasks(payload: BulkPayload) -> dict:
+    task_archive_store.unarchive(payload.ids)
+    return {"unarchived": payload.ids}
 
 
 @router.post("/uploads")
-async def upload_dataset_file(
+async def upload_task_file(
     file: UploadFile = File(...),
     upload_id: str | None = Form(None),
 ) -> dict:
     try:
-        return dataset_store.upload_file(file.filename or "upload", await file.read(), upload_id)
+        return task_store.upload_file(file.filename or "upload", await file.read(), upload_id)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
 
 @router.post("/uploads/from-url")
-def upload_dataset_from_url(payload: UrlUpload) -> dict:
+def upload_task_from_url(payload: UrlUpload) -> dict:
     try:
-        return dataset_store.upload_from_url(payload.url, payload.upload_id)
+        return task_store.upload_from_url(payload.url, payload.upload_id)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     except OSError as exc:
@@ -71,7 +94,7 @@ def upload_dataset_from_url(payload: UrlUpload) -> dict:
 @router.get("/uploads/{upload_id}/files")
 def list_uploaded_files(upload_id: str) -> dict:
     try:
-        return dataset_store.list_uploaded_files(upload_id)
+        return task_store.list_uploaded_files(upload_id)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
@@ -79,7 +102,7 @@ def list_uploaded_files(upload_id: str) -> dict:
 @router.get("/uploads/{upload_id}/preview")
 def preview_uploaded_table(upload_id: str, path: str, limit: int = 50) -> dict:
     try:
-        return dataset_store.preview_upload(upload_id, path, limit=limit)
+        return task_store.preview_upload(upload_id, path, limit=limit)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
@@ -87,82 +110,82 @@ def preview_uploaded_table(upload_id: str, path: str, limit: int = 50) -> dict:
 @router.post("/uploads/{upload_id}/extract")
 def extract_uploaded_archive(upload_id: str, payload: ExtractRequest | None = None) -> dict:
     try:
-        return dataset_store.extract_upload_archive(upload_id, payload.path if payload else None)
+        return task_store.extract_upload_archive(upload_id, payload.path if payload else None)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
 
 @router.post("/create-from-config")
-def create_from_config(payload: DatasetConfigPayload) -> dict:
+def create_from_config(payload: TaskConfigPayload) -> dict:
     try:
-        return dataset_store.create_from_config(payload.model_dump(by_alias=False))
+        return task_store.create_from_config(payload.model_dump(by_alias=False))
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
 
-@router.get("/{dataset_id}/config")
-def get_config(dataset_id: str) -> dict:
-    cfg = dataset_store.get_dataset_config(dataset_id)
+@router.get("/{task_id}/config")
+def get_config(task_id: str) -> dict:
+    cfg = task_store.get_task_config(task_id)
     if cfg is None:
-        raise HTTPException(404, f"Dataset '{dataset_id}' not found")
+        raise HTTPException(404, f"Task '{task_id}' not found")
     return cfg
 
 
-@router.put("/{dataset_id}/config")
-def update_config(dataset_id: str, payload: dict[str, Any]) -> dict:
+@router.put("/{task_id}/config")
+def update_config(task_id: str, payload: dict[str, Any]) -> dict:
     try:
-        updated = dataset_store.update_dataset_config(dataset_id, payload)
+        updated = task_store.update_task_config(task_id, payload)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     if updated is None:
-        raise HTTPException(404, f"Dataset '{dataset_id}' not found")
-    cfg = dataset_store.get_dataset_config(dataset_id)
+        raise HTTPException(404, f"Task '{task_id}' not found")
+    cfg = task_store.get_task_config(task_id)
     return cfg or {}
 
 
-@router.post("/{dataset_id}/prepare")
-def prepare_dataset(dataset_id: str) -> dict:
+@router.post("/{task_id}/prepare")
+def prepare_task(task_id: str) -> dict:
     try:
-        updated = dataset_store.prepare_dataset(dataset_id)
+        updated = task_store.prepare_task(task_id)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     if updated is None:
-        raise HTTPException(404, f"Dataset '{dataset_id}' not found")
+        raise HTTPException(404, f"Task '{task_id}' not found")
     return updated
 
 
-@router.get("/{dataset_id}")
-def get_dataset(dataset_id: str) -> dict:
-    ds = dataset_store.get_dataset(dataset_id)
+@router.get("/{task_id}")
+def get_task(task_id: str) -> dict:
+    ds = task_store.get_task(task_id)
     if ds is None:
-        raise HTTPException(404, f"Dataset '{dataset_id}' not found")
+        raise HTTPException(404, f"Task '{task_id}' not found")
     return ds
 
 
-@router.get("/{dataset_id}/preview")
-def preview(dataset_id: str, split: str = "train", limit: int = 50) -> dict:
+@router.get("/{task_id}/preview")
+def preview(task_id: str, split: str = "train", limit: int = 50) -> dict:
     try:
-        return dataset_store.preview_rows(dataset_id, split=split, limit=limit)
+        return task_store.preview_rows(task_id, split=split, limit=limit)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
 
-@router.get("/{dataset_id}/columns")
-def columns(dataset_id: str, split: str = "train") -> list[dict]:
+@router.get("/{task_id}/columns")
+def columns(task_id: str, split: str = "train") -> list[dict]:
     try:
-        return dataset_store.column_stats(dataset_id, split=split)
+        return task_store.column_stats(task_id, split=split)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
 
-@router.put("/{dataset_id}")
-def update(dataset_id: str, payload: DatasetMetaUpdate) -> dict:
+@router.put("/{task_id}")
+def update(task_id: str, payload: TaskMetaUpdate) -> dict:
     try:
-        updated = dataset_store.update_meta(dataset_id, payload.model_dump())
+        updated = task_store.update_meta(task_id, payload.model_dump())
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     if updated is None:
-        raise HTTPException(404, f"Dataset '{dataset_id}' not found")
+        raise HTTPException(404, f"Task '{task_id}' not found")
     return updated
 
 
@@ -191,14 +214,14 @@ async def create(
         "desc": desc,
     }
     try:
-        return dataset_store.create_dataset(name, files, meta)
+        return task_store.create_task(name, files, meta)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
 
-@router.delete("/{dataset_id}")
-def delete(dataset_id: str) -> dict:
-    ok = dataset_store.delete_dataset(dataset_id)
+@router.delete("/{task_id}")
+def delete(task_id: str) -> dict:
+    ok = task_store.delete_task(task_id)
     if not ok:
-        raise HTTPException(404, f"Dataset '{dataset_id}' not found")
-    return {"deleted": dataset_id}
+        raise HTTPException(404, f"Task '{task_id}' not found")
+    return {"deleted": task_id}

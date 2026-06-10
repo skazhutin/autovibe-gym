@@ -1,8 +1,8 @@
 """Common experiment runner with first-class product-mode selection.
 
 Examples:
-    python -m experiments.run --dataset-dir datasets/example_dry_bean/prepared --mode gym_with_checklist
-    python -m experiments.run --dataset-dir datasets/example_dry_bean/prepared --modes single_shot gym_with_checklist
+    python -m experiments.run --dataset-dir datasets/example_dry_bean/prepared --mode directive_gym
+    python -m experiments.run --dataset-dir datasets/example_dry_bean/prepared --modes single_shot directive_gym
     python -m experiments.run --dataset-dir datasets/example_dry_bean/prepared --mode all --dry-run
 """
 from __future__ import annotations
@@ -133,8 +133,8 @@ def main() -> None:
     selection.add_argument(
         "--mode",
         help=(
-            "Product mode: single_shot, repeated_single_shot, iterative_no_checklist, "
-            "gym_with_checklist, fixed_transitions, or all."
+            "Product mode: single_shot, repeated_single_shot, free_gym, "
+            "directive_gym, fixed_gym, or all."
         ),
     )
     selection.add_argument(

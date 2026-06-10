@@ -1,10 +1,11 @@
 """
-Single-shot baseline: one LLM call, no iterative feedback, no checklist.
+Single-shot baseline: one LLM call, no multi-step feedback, no checklist.
 
 Usage:
     python -m experiments.run_baseline --dataset-dir datasets/example_dry_bean/prepared --mode local
 """
 import argparse
+import inspect
 import json
 import os
 import re
@@ -64,6 +65,31 @@ def extract_code(text: str) -> str:
     if m:
         return m.group(1).strip()
     return text.strip()
+
+
+def _is_predictor_instance(value) -> bool:
+    return not inspect.isclass(value) and callable(getattr(value, "predict", None))
+
+
+def candidate_from_namespace(namespace: dict):
+    for key in ("model", "best_model"):
+        value = namespace.get(key)
+        if _is_predictor_instance(value):
+            return value
+    for value in namespace.values():
+        if _is_predictor_instance(value):
+            return value
+    return None
+
+
+def traceback_failure(stderr: str) -> str | None:
+    if "Traceback (most recent call last)" not in (stderr or ""):
+        return None
+    for line in reversed(stderr.splitlines()):
+        text = line.strip()
+        if re.match(r"^[A-Za-z_][A-Za-z0-9_]*(Error|Exception):", text):
+            return text
+    return "Execution raised an exception; see stderr."
 
 
 def main():
@@ -162,12 +188,14 @@ def main():
         submit_failure_type = "no_candidate_found"
         finalize_path = "failed"
         submit_error = ""
-        model_obj = namespace.get("model") or namespace.get("best_model")
-        if model_obj is None:
-            for value in namespace.values():
-                if callable(getattr(value, "predict", None)):
-                    model_obj = value
-                    break
+        execution_failure = traceback_failure(stderr)
+        model_obj = candidate_from_namespace(namespace)
+        if model_obj is None and execution_failure:
+            final_status = "execution_error"
+            null_reason = execution_failure
+            submit_failure_type = execution_failure.split(":", 1)[0]
+            finalize_path = "execution"
+            submit_error = execution_failure
         if model_obj is not None:
             X_val = val.drop(columns=[target_col]).head(32)
             preflight_ok = True
@@ -182,12 +210,17 @@ def main():
                     finalize_path = "single_shot_autofit"
                 except Exception as exc:
                     preflight_ok = False
+                    preflight_error = f"{type(exc).__name__}: {exc}"
                     final_status = "submit_blocked_preflight"
-                    null_reason = f"{type(exc).__name__}: {exc}"
-                    submit_failure_type = type(exc).__name__
+                    null_reason = execution_failure or preflight_error
+                    submit_failure_type = (
+                        execution_failure.split(":", 1)[0]
+                        if execution_failure
+                        else type(exc).__name__
+                    )
                     finalize_path = "submit_preflight"
-                    submit_error = null_reason
-                    stderr += f"\n[submit preflight error] {submit_error}"
+                    submit_error = preflight_error
+                    stderr += f"\n[submit preflight error] {preflight_error}"
             if preflight_ok:
                 try:
                     X_test = test.drop(columns=[target_col])

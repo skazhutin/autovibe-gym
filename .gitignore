@@ -19,8 +19,10 @@ env/
 # MLflow tracking - generated experiment data
 mlruns/
 mlflow.db
+*.db.bak
 
 # Generic outputs/logs
+logs/
 runs/
 outputs/
 results/
@@ -89,6 +91,7 @@ memory/
 .codex/
 .cursor/
 .aider*
+agency-agents-main/
 
 # Jupyter
 .ipynb_checkpoints/

@@ -5,7 +5,7 @@ import { MODE_SHORT, formatScore } from "../lib/format";
 import { StatusBadge, Tag } from "./ui";
 
 export function ModeTag({ mode }: { mode: Run["mode"] }) {
-  return <Tag tone={mode === "gym" || mode === "batch" ? "accent" : "neutral"}>{MODE_SHORT[mode]}</Tag>;
+  return <Tag tone="neutral">{MODE_SHORT[mode]}</Tag>;
 }
 
 export function ScoreCell({ run }: { run: Run }) {
@@ -27,7 +27,7 @@ export function RunRow({ run }: { run: Run }) {
       <td className="mono faint">{run.shortId}</td>
       <td className="mono">{run.model}</td>
       <td><ModeTag mode={run.mode} /></td>
-      <td>{run.dataset}</td>
+      <td>{run.task}</td>
       <td><ScoreCell run={run} /></td>
       <td><StatusBadge status={run.status} /></td>
     </tr>

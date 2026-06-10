@@ -91,7 +91,7 @@ def load_registry(path: Path | None = None) -> list[dict[str, Any]]:
     if not p.exists():
         return []
     try:
-        data = json.loads(p.read_text("utf-8"))
+        data = json.loads(p.read_text("utf-8-sig"))
     except (json.JSONDecodeError, OSError):
         return []
     if not isinstance(data, list):
@@ -126,6 +126,10 @@ def runtime_env_for_model(model: dict[str, Any]) -> dict[str, str]:
 
     if provider_uses_base_url(model.get("provider")) and model.get("baseUrl"):
         out["LLM_BASE_URL"] = str(model["baseUrl"])
+    if model.get("ctx"):
+        out["AUTOVIBE_CTX_LIMIT"] = str(int(model["ctx"]))
+    if model.get("maxTokens"):
+        out["AUTOVIBE_MAX_TOKENS_LIMIT"] = str(int(model["maxTokens"]))
 
     key_env = model.get("apiKeyEnv") or ""
     key = model.get("apiKey") or (os.getenv(key_env, "") if key_env else "")

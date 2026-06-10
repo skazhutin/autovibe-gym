@@ -3,8 +3,8 @@ Repeated single-shot: N independent attempts.
 
 Each attempt is one LLM call and one fresh execution namespace. The only signal
 shared between attempts is the best validation metric so far. The fair
-iterative no-checklist control is `experiments.run_gym --episode-mode
-iterative_no_checklist`.
+free gym control is `experiments.run_gym --episode-mode
+free_gym`.
 """
 import argparse
 import json
@@ -30,6 +30,7 @@ from gym.llm import make_llm_client
 from gym.model_config import apply_model_reference
 from gym.protocol import Action
 from gym.scoring import score_with_coercion
+from experiments.run_baseline import candidate_from_namespace, traceback_failure
 
 if load_dotenv is not None:
     load_dotenv()
@@ -231,12 +232,8 @@ def main():
             if attempt_error:
                 errors_count += 1
 
-            model_obj = namespace.get("model") or namespace.get("best_model")
-            if model_obj is None:
-                for value in namespace.values():
-                    if callable(getattr(value, "predict", None)):
-                        model_obj = value
-                        break
+            execution_failure = traceback_failure(stderr)
+            model_obj = candidate_from_namespace(namespace)
 
             val_metric = None
             raw_validation_ready = False
@@ -260,9 +257,11 @@ def main():
                         best_stdout = stdout
                         best_attempt_idx = attempt
                 except Exception as exc:
-                    preflight_error = f"{type(exc).__name__}: {exc}"
+                    preflight_error = execution_failure or f"{type(exc).__name__}: {exc}"
                     attempt_error = (attempt_error or "") + f" [val_eval: {preflight_error}]"
                     errors_count += 1
+            elif execution_failure:
+                preflight_error = execution_failure
 
             attempt_log.append({
                 "attempt": attempt + 1,

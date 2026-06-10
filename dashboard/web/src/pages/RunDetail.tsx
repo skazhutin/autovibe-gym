@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../lib/api";
+import type { ChecklistItem, Run, RunError, TrajectoryStep } from "../lib/api";
 import { useAsync } from "../lib/hooks";
 import { MODE_LABELS, formatScore, formatTokens, improvementPct } from "../lib/format";
 import { Button, Card, EmptyState, LiveDuration, ProgressBar, ProgressRing, Skeleton, Spinner, StatusBadge, Tabs, Tag } from "../components/ui";
@@ -223,6 +224,382 @@ function ChipMetric({ label, value, ring }: { label: string; value: React.ReactN
   );
 }
 
+const CHECKLIST_GROUPS = [
+  {
+    title: "Данные и задача",
+    note: "Понимание цели, схемы и качества входных данных.",
+    ids: ["task_understanding", "schema_review", "target_distribution_review", "missing_values_audit", "categorical_features_audit", "duplicates_audit", "suspicious_columns_audit"],
+  },
+  {
+    title: "Модельный контур",
+    note: "Безопасное отделение target и первый рабочий кандидат.",
+    ids: ["target_exclusion", "baseline_candidate_created"],
+  },
+  {
+    title: "Валидация и submit",
+    note: "Проверка решения перед единственным hidden-test submit.",
+    ids: ["validation_evaluated", "reproducible_solution", "submit_ready_artifact"],
+  },
+];
+
+function ChecklistGroup({ title, note, items }: { title: string; note: string; items: ChecklistItem[] }) {
+  const closed = items.filter((it) => it.closed).length;
+  const pct = items.length ? Math.round((closed / items.length) * 100) : 0;
+  return (
+    <section className="cl-group">
+      <div className="cl-group-head">
+        <div>
+          <div className="cl-group-title">{title}</div>
+          <div className="cl-group-note">{note}</div>
+        </div>
+        <div className="cl-group-score mono">{closed}/{items.length}</div>
+      </div>
+      <div className="cl-group-bar" aria-hidden="true">
+        <span style={{ width: `${pct}%` }} />
+      </div>
+      <div className="cl-grid">
+        {items.map((it) => {
+          const evidence = it.evidence ?? [];
+          return (
+            <div key={it.id} className={`cl-item${it.closed ? " closed" : ""}`}>
+              <span className={`cl-ic ${it.closed ? "yes" : "no"}`}><Icon name={it.closed ? "check" : "x"} size={13} /></span>
+              <div>
+                <div className="cl-label">{it.label}</div>
+                {it.desc && <div className="cl-desc">{it.desc}</div>}
+                {it.closed && it.closedStep != null && <div className="cl-step">закрыт на шаге {it.closedStep}</div>}
+                {it.closed && evidence.length > 0 && (
+                  <details className="cl-evidence">
+                    <summary>доказательства</summary>
+                    <div className="cl-evidence-list">
+                      {evidence.slice(0, 4).map((ev, idx) => (
+                        <div key={idx} className="cl-evidence-row">
+                          <span className="mono">{ev.step != null ? `шаг ${ev.step}` : "шаг ?"}</span>
+                          {ev.cellId && <span className="mono">{ev.cellId}</span>}
+                          {ev.reason && <span>{ev.reason}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function ChecklistGroups({ items }: { items: ChecklistItem[] }) {
+  const grouped = CHECKLIST_GROUPS.map((group) => ({
+    ...group,
+    items: group.ids
+      .map((itemId) => items.find((item) => item.id === itemId))
+      .filter((item): item is ChecklistItem => Boolean(item)),
+  })).filter((group) => group.items.length > 0);
+  const groupedIds = new Set(grouped.flatMap((group) => group.items.map((item) => item.id)));
+  const otherItems = items.filter((item) => !groupedIds.has(item.id));
+
+  return (
+    <div className="cl-groups">
+      {grouped.map((group) => <ChecklistGroup key={group.title} title={group.title} note={group.note} items={group.items} />)}
+      {otherItems.length > 0 && <ChecklistGroup title="Другое" note="Пункты без назначенной группы." items={otherItems} />}
+    </div>
+  );
+}
+
+function healthTone(status: "good" | "warn" | "bad" | "neutral") {
+  return `health-item health-${status}`;
+}
+
+function RunHealthStrip({ run }: { run: Run }) {
+  const checklistPct = run.checklistTotal ? run.checklist / run.checklistTotal : 0;
+  const checklistTone = checklistPct >= 0.75 ? "good" : checklistPct >= 0.5 ? "warn" : "neutral";
+  const submitTone = run.status === "success" ? "good" : run.status === "failed" ? "bad" : run.status === "running" ? "warn" : "neutral";
+  const validationTone = run.baseline != null || run.score != null ? "good" : run.status === "running" ? "warn" : "neutral";
+  const budgetTone = run.steps && run.step >= run.steps && run.status !== "success" ? "warn" : "neutral";
+  const resultLabel = run.status === "success" ? "Успешно" : run.status === "running" ? "В работе" : run.status === "failed" ? "Ошибка" : "Нет submit";
+  const validationLabel = run.baseline != null ? formatScore(run.baseline, run.metric) : run.score != null ? "score есть" : "нет";
+
+  return (
+    <div className="run-health-strip" aria-label="Состояние прогона">
+      <div className={healthTone(submitTone)}>
+        <Icon name={run.status === "success" ? "check2" : run.status === "failed" ? "alert" : "route"} size={16} />
+        <div>
+          <span>Итог</span>
+          <strong title={run.finalStatus ?? run.status}>{resultLabel}</strong>
+        </div>
+      </div>
+      <div className={healthTone(validationTone)}>
+        <Icon name="check" size={16} />
+        <div>
+          <span>Валидация</span>
+          <strong>{validationLabel}</strong>
+        </div>
+      </div>
+      <div className={healthTone(checklistTone)}>
+        <Icon name="check2" size={16} />
+        <div>
+          <span>Чеклист</span>
+          <strong>{run.checklist}/{run.checklistTotal}</strong>
+        </div>
+      </div>
+      <div className={healthTone(run.errors > 0 ? "bad" : "good")}>
+        <Icon name="bug" size={16} />
+        <div>
+          <span>Ошибки</span>
+          <strong>{run.errors}</strong>
+        </div>
+      </div>
+      <div className={healthTone(budgetTone)}>
+        <Icon name="clock" size={16} />
+        <div>
+          <span>Шаги</span>
+          <strong>{run.step}{run.steps ? `/${run.steps}` : ""}</strong>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function metricHigherIsBetter(metric?: string | null) {
+  const m = (metric ?? "").toLowerCase();
+  return !(m.includes("rmse") || m.includes("mae") || m.includes("mse") || m.includes("loss") || m.includes("error"));
+}
+
+function compareScore(a: Run, b: Run, higherBetter: boolean) {
+  if (a.score == null && b.score == null) return 0;
+  if (a.score == null) return 1;
+  if (b.score == null) return -1;
+  return higherBetter ? b.score - a.score : a.score - b.score;
+}
+
+function comparisonRuns(run: Run, runs?: Run[]) {
+  const source = runs ?? [];
+  const batchRuns = run.batchId ? source.filter((candidate) => candidate.batchId === run.batchId) : [];
+  const related = batchRuns.length > 1
+    ? batchRuns
+    : source.filter((candidate) => candidate.taskDir ? candidate.taskDir === run.taskDir : candidate.task === run.task);
+  const unique = new Map<string, Run>();
+  [run, ...related].forEach((candidate) => unique.set(candidate.id, candidate));
+  return Array.from(unique.values());
+}
+
+function metricDirectionLabel(metric?: string | null) {
+  return metricHigherIsBetter(metric) ? "выше score лучше" : "ниже score лучше";
+}
+
+function ExperimentStoryPanel({ run, runs }: { run: Run; runs?: Run[] }) {
+  const peers = comparisonRuns(run, runs);
+  const higherBetter = metricHigherIsBetter(run.metric);
+  const scored = peers.filter((candidate) => candidate.score != null).sort((a, b) => compareScore(a, b, higherBetter));
+  const best = scored[0];
+  const currentRank = scored.findIndex((candidate) => candidate.id === run.id) + 1;
+  const isBatchStory = Boolean(run.batchId && peers.some((candidate) => candidate.id !== run.id && candidate.batchId === run.batchId));
+  const scopeLabel = isBatchStory ? "Пачка эксперимента" : "Та же задача";
+  const bestLabel = best
+    ? best.id === run.id
+      ? "текущий run"
+      : `${MODE_LABELS[best.mode]} · ${best.model}`
+    : "нет scored run";
+  const currentGap = best?.score != null && run.score != null
+    ? Math.abs(run.score - best.score)
+    : null;
+  const checklistPct = run.checklistTotal ? Math.round((run.checklist / run.checklistTotal) * 100) : 0;
+  const verdict = run.status === "running"
+    ? "Run ещё идёт: история будет уточняться по мере появления score и checklist."
+    : run.status === "success"
+      ? currentRank === 1
+        ? "Этот прогон сейчас выглядит как лучший scored вариант в выбранном сравнении."
+        : "Есть scored вариант лучше; полезно сравнить отличия по траектории и чеклисту."
+      : run.errors > 0
+        ? "Главная ценность этого run сейчас в диагностике: он показывает, где агент сорвался."
+        : "Run не дошёл до полноценного результата; стоит проверить финальный статус и логи.";
+
+  return (
+    <section className="story-panel">
+      <div className="story-head">
+        <div>
+          <div className="story-title"><Icon name="sparkles" size={15} /> История эксперимента</div>
+          <div className="story-note">{scopeLabel}: {peers.length} run · {metricDirectionLabel(run.metric)}</div>
+        </div>
+        {currentRank > 0 && <div className="story-rank mono">#{currentRank}/{scored.length}</div>}
+      </div>
+      <div className="story-grid">
+        <div className="story-card">
+          <span>Лучший score</span>
+          <strong>{best ? formatScore(best.score, run.metric) : "-"}</strong>
+          <em>{bestLabel}</em>
+        </div>
+        <div className="story-card">
+          <span>Текущий run</span>
+          <strong>{formatScore(run.score, run.metric)}</strong>
+          <em>{currentGap == null || best?.id === run.id ? "без отставания" : `gap ${formatScore(currentGap, run.metric)}`}</em>
+        </div>
+        <div className="story-card">
+          <span>Контроль качества</span>
+          <strong>{checklistPct}%</strong>
+          <em>чеклист {run.checklist}/{run.checklistTotal} · ошибки {run.errors}</em>
+        </div>
+      </div>
+      <div className="story-verdict">{verdict}</div>
+    </section>
+  );
+}
+
+function diagnoseFailure(run: Run, errors: RunError[]) {
+  const first = errors[0];
+  const text = [
+    run.failReason,
+    run.finalStatus,
+    first?.type,
+    first?.value,
+    first?.traceback,
+    first?.stderr,
+  ].filter(Boolean).join("\n").toLowerCase();
+
+  if (text.includes("model check") || text.includes("raw val") || text.includes("predict")) {
+    return {
+      title: "Модель не прошла readiness check",
+      detail: "Кандидат, похоже, не умеет предсказывать на raw validation dataframe перед hidden-test submit.",
+      next: "Открыть notebook и проверить, что preprocessing встроен в pipeline модели.",
+    };
+  }
+  if (text.includes("json") || text.includes("contract") || text.includes("invalid action") || text.includes("schema")) {
+    return {
+      title: "Сорвался action contract",
+      detail: "Агент отправил действие, которое среда не смогла принять как корректный протокол.",
+      next: "Смотреть траекторию вокруг первого contract/runtime feedback.",
+    };
+  }
+  if (text.includes("timeout") || text.includes("timed out")) {
+    return {
+      title: "Таймаут выполнения",
+      detail: "Код или проверка заняли слишком много времени для текущего бюджета исполнения.",
+      next: "Проверить тяжёлые операции, подбор гиперпараметров и повторные полные прогоны.",
+    };
+  }
+  if (text.includes("submit")) {
+    return {
+      title: "Submit не прошёл",
+      detail: "Run дошёл до финальной зоны, но submit завершился ошибкой или был отклонён.",
+      next: "Сравнить final status, ошибки и последний кандидат модели.",
+    };
+  }
+  if (run.status === "null") {
+    return {
+      title: "Не дошёл до submit",
+      detail: "У run нет финального test score; обычно это значит, что бюджет или сценарий закончился раньше submit.",
+      next: "Проверить последние шаги траектории и логи запуска.",
+    };
+  }
+  return {
+    title: run.errors > 0 ? "Ошибка выполнения кода" : "Нужна ручная проверка",
+    detail: first ? `Первый сбой на шаге ${first.step}: ${first.type || first.value || "runtime error"}.` : "Явной ошибки в artifact API не найдено.",
+    next: "Открыть Errors и Logs, затем сравнить с успешным run той же задачи.",
+  };
+}
+
+function FailureDiagnosisPanel({
+  id,
+  live,
+  run,
+  onOpenErrors,
+  onOpenLogs,
+}: {
+  id: string;
+  live: boolean;
+  run: Run;
+  onOpenErrors: () => void;
+  onOpenLogs: () => void;
+}) {
+  const { data } = useAsync(() => api.errors(id), [id], live ? 3000 : 0);
+  const errors = data ?? [];
+  const diagnosis = diagnoseFailure(run, errors);
+  const first = errors[0];
+
+  return (
+    <section className="diagnosis-panel">
+      <div className="diagnosis-main">
+        <div className="diagnosis-title"><Icon name="alert" size={16} /> Диагностика сбоя</div>
+        <strong>{diagnosis.title}</strong>
+        <p>{diagnosis.detail}</p>
+        <div className="diagnosis-next">{diagnosis.next}</div>
+      </div>
+      <div className="diagnosis-side">
+        <div className="diagnosis-kv"><span>Этап</span><strong>{stageLabel(run.currentStage)}</strong></div>
+        <div className="diagnosis-kv"><span>Первый error</span><strong>{first ? `шаг ${first.step}` : "не найден"}</strong></div>
+        <div className="diagnosis-actions">
+          <Button size="sm" icon="bug" onClick={onOpenErrors}>Ошибки</Button>
+          <Button size="sm" icon="terminal" onClick={onOpenLogs}>Логи</Button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function PeerRunPanel({ run, runs }: { run: Run; runs?: Run[] }) {
+  const peers = comparisonRuns(run, runs)
+    .filter((candidate) => candidate.id !== run.id)
+    .sort((a, b) => b.startedMs - a.startedMs)
+    .slice(0, 5);
+  if (!peers.length) return null;
+
+  const higherBetter = metricHigherIsBetter(run.metric);
+  const scored = [run, ...peers]
+    .filter((candidate) => candidate.score != null)
+    .sort((a, b) => compareScore(a, b, higherBetter));
+  const best = scored[0];
+  const currentRank = scored.findIndex((candidate) => candidate.id === run.id) + 1;
+  const delta = best?.score != null && run.score != null ? run.score - best.score : null;
+  const isCurrentBest = best?.id === run.id;
+  const gapText = delta == null ? "-" : isCurrentBest ? "лидер" : formatScore(Math.abs(delta), run.metric);
+
+  return (
+    <div className="peer-panel">
+      <div className="peer-head">
+        <div>
+          <div className="peer-title">Сравнение по этой задаче</div>
+          <div className="peer-note">Последние 5 запусков той же задачи. Ранг считается только среди прогонов, где есть test score.</div>
+        </div>
+        {currentRank > 0 && <div className="peer-rank mono">#{currentRank}/{scored.length}</div>}
+      </div>
+      <div className="peer-grid">
+        <div className="peer-best">
+          <span>Лучший из сравнения</span>
+          <strong>{best ? formatScore(best.score, run.metric) : "-"}</strong>
+          {best && <em>{best.id === run.id ? "текущий run" : `${MODE_LABELS[best.mode]} · ${best.model}`}</em>}
+        </div>
+        <div className="peer-best">
+          <span>{isCurrentBest ? "Позиция текущего" : "Отставание от лучшего"}</span>
+          <strong>{gapText}</strong>
+          <em>{higherBetter ? "выше score лучше" : "ниже score лучше"}</em>
+        </div>
+        <div className="peer-list">
+          {peers.map((peer) => (
+            <div key={peer.id} className="peer-row">
+              <span className="mono">{peer.shortId}</span>
+              <Tag tone={peer.status === "success" ? "green" : peer.status === "failed" ? "red" : peer.status === "running" ? "blue" : "neutral"}>{MODE_LABELS[peer.mode]}</Tag>
+              <span className="peer-score mono">{formatScore(peer.score, peer.metric ?? run.metric)}</span>
+              <span className="peer-meta">чеклист {peer.checklist}/{peer.checklistTotal} · ошибки {peer.errors}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function milestoneForStep(step: TrajectoryStep): { label: string; tone: "green" | "blue" | "accent" | "red" } | null {
+  if (step.type === "submit") return { label: "Финальный submit", tone: "green" };
+  if (step.type === "validate" || step.type === "quick_validate" || step.type === "check_candidate") return { label: "Проверка модели", tone: "blue" };
+  if (step.type === "restart_and_run_all") return { label: "Чистый прогон", tone: "accent" };
+  if (step.feedback.some((f) => f.ch === "contract")) return { label: "Проверка контракта", tone: "blue" };
+  if (step.feedback.some((f) => f.ch === "checklist" || f.ch === "checklist-hint")) return { label: "Подсказка чеклиста", tone: "green" };
+  if (step.feedback.some((f) => f.text.toLowerCase().includes("error") || f.text.toLowerCase().includes("traceback"))) return { label: "Ошибка выполнения", tone: "red" };
+  return null;
+}
+
 /* ---- tabs ---- */
 function NotebookTab({ id, live }: { id: string; live: boolean }) {
   const { data, loading } = useAsync(() => api.notebook(id), [id], live ? 2500 : 0);
@@ -259,11 +636,28 @@ function TrajectoryTab({ id, live }: { id: string; live: boolean }) {
   const { data, loading } = useAsync(() => api.trajectory(id), [id], live ? 2500 : 0);
   if (loading && !data) return <Skeleton h={300} />;
   const steps = data ?? [];
+  const milestones = steps
+    .map((step) => ({ step, milestone: milestoneForStep(step) }))
+    .filter((item) => item.milestone)
+    .slice(0, 6);
   if (!steps.length) return <EmptyState icon="route" title="Нет траектории" text="Шаги агента появятся здесь." />;
   return (
     <div className="traj">
-      {steps.map((s, i) => (
-        <div key={i} className={`traj-step${live && i === steps.length - 1 ? " before-live" : ""}`}>
+      {milestones.length > 0 && (
+        <div className="milestone-strip">
+          {milestones.map(({ step, milestone }) => (
+            <span key={`${step.step}-${milestone!.label}`} className={`milestone-chip milestone-${milestone!.tone}`}>
+              <Icon name={STEP_ICON[step.type] ?? "route"} size={13} />
+              <span>{milestone!.label}</span>
+              <span className="mono">#{step.step}</span>
+            </span>
+          ))}
+        </div>
+      )}
+      {steps.map((s, i) => {
+        const milestone = milestoneForStep(s);
+        return (
+        <div key={i} className={`traj-step${milestone ? ` milestone milestone-${milestone.tone}` : ""}${live && i === steps.length - 1 ? " before-live" : ""}`}>
           <div className="traj-marker">
             <div className={`traj-dot ${s.type}`}>
               <Icon name={STEP_ICON[s.type] ?? "code"} size={15} />
@@ -273,6 +667,7 @@ function TrajectoryTab({ id, live }: { id: string; live: boolean }) {
             <div className="th">
               <span className="st">шаг {s.step}</span>
               <Tag tone={actionTone(s.type)}>{ACTION_TYPE_LABEL[s.type] ?? s.type}</Tag>
+              {milestone && <Tag tone={milestone.tone === "red" ? "red" : milestone.tone === "green" ? "green" : milestone.tone === "blue" ? "blue" : "accent"}>{milestone.label}</Tag>}
               <Tag tone="neutral">{stageLabel(s.stage)}</Tag>
               <span className="st">{s.title}</span>
               {s.budgetRemaining !== undefined && s.budgetRemaining !== null && <span className="st">осталось {s.budgetRemaining}</span>}
@@ -286,7 +681,7 @@ function TrajectoryTab({ id, live }: { id: string; live: boolean }) {
             ))}
           </div>
         </div>
-      ))}
+      )})}
       {live && (
         <div className="traj-step traj-live">
           <div className="traj-marker">
@@ -315,18 +710,7 @@ function ChecklistTab({ id, live }: { id: string; live: boolean }) {
           </div>
         </div>
       </div>
-      <div className="cl-grid">
-        {data.items.map((it) => (
-          <div key={it.id} className={`cl-item${it.closed ? " closed" : ""}`}>
-            <span className={`cl-ic ${it.closed ? "yes" : "no"}`}><Icon name={it.closed ? "check" : "x"} size={13} /></span>
-            <div>
-              <div className="cl-label">{it.label}</div>
-              {it.desc && <div className="cl-desc">{it.desc}</div>}
-              {it.closed && it.closedStep != null && <div className="cl-step">закрыт на шаге {it.closedStep}</div>}
-            </div>
-          </div>
-        ))}
-      </div>
+      <ChecklistGroups items={data.items} />
     </div>
   );
 }
@@ -381,6 +765,7 @@ export default function RunDetail() {
   const nav = useNavigate();
   const [tab, setTab] = useState("notebook");
   const { data: run, loading, reload } = useAsync(() => api.getRun(id), [id], 2500);
+  const { data: runs } = useAsync(() => api.listRuns(), [], 5000);
 
   if (loading && !run) return <Skeleton h={400} />;
   if (!run) return <EmptyState icon="alert" title="Прогон не найден" action={<Button onClick={() => nav("/runs")}>К прогонам</Button>} />;
@@ -423,9 +808,9 @@ export default function RunDetail() {
           </div>
           <div className="run-meta-line">
             <span className="mono">{run.model}</span>
-            <Tag tone={run.mode === "gym" || run.mode === "batch" ? "accent" : "neutral"}>{MODE_LABELS[run.mode]}</Tag>
+            <Tag tone={run.mode === "directive" || run.mode === "batch" ? "accent" : "neutral"}>{MODE_LABELS[run.mode]}</Tag>
             <span>·</span>
-            <span>{run.dataset}</span>
+            <span>{run.task}</span>
           </div>
           <div className="chip-metrics">
             <ChipMetric label="чеклист" value={`${run.checklist}/${run.checklistTotal}`}
@@ -456,12 +841,26 @@ export default function RunDetail() {
         </div>
       </Card>
 
+      <RunHealthStrip run={run} />
+      <ExperimentStoryPanel run={run} runs={runs ?? undefined} />
+      <PeerRunPanel run={run} runs={runs ?? undefined} />
+
       {(run.status === "failed" || run.status === "null") && run.failReason && (
         <div className="fail-banner">
           <Icon name="alert" size={18} />
           <span>{run.failReason}</span>
           {run.finalStatus && <span className="mono faint" style={{ marginLeft: "auto", fontSize: 12 }}>{run.finalStatus}</span>}
         </div>
+      )}
+
+      {(run.status === "failed" || run.status === "null" || run.errors > 0) && (
+        <FailureDiagnosisPanel
+          id={id}
+          live={live}
+          run={run}
+          onOpenErrors={() => setTab("errors")}
+          onOpenLogs={() => setTab("logs")}
+        />
       )}
 
       <div style={{ marginTop: 24 }}>

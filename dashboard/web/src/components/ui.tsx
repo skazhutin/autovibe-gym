@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Icon } from "./Icon";
 import type { RunStatus } from "../lib/api";
 import { STATUS_LABELS, formatDuration } from "../lib/format";
@@ -234,7 +235,12 @@ export function Modal({
   footer?: ReactNode;
   width?: number;
 }) {
-  return (
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  return createPortal(
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" style={{ width }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
@@ -246,7 +252,8 @@ export function Modal({
         <div className="modal-body">{children}</div>
         {footer && <div className="modal-foot">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -313,5 +320,33 @@ export function Field({ label, hint, children, required }: { label: ReactNode; h
       {hint && <span className="field-hint">{hint}</span>}
       {children}
     </label>
+  );
+}
+
+/* ---------------- Info tooltip ---------------- */
+export function Info({ text }: { text: string }) {
+  const [visible, setVisible] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const dotRef = useRef<HTMLSpanElement>(null);
+  function show() {
+    const rect = dotRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setPos({ top: rect.top, left: rect.left + rect.width / 2 });
+    setVisible(true);
+  }
+  return (
+    <>
+      <span ref={dotRef} className="info-dot" aria-label={text} onMouseEnter={show} onMouseLeave={() => setVisible(false)}>?</span>
+      {visible && createPortal(<div className="tooltip-portal" style={{ top: pos.top, left: pos.left }}>{text}</div>, document.body)}
+    </>
+  );
+}
+
+/* ---------------- FieldInfo (Field + Info in label) ---------------- */
+export function FieldInfo({ label, info, hint, children, required }: { label: ReactNode; info: string; hint?: string; children: ReactNode; required?: boolean }) {
+  return (
+    <Field label={<span className="field-info-label">{label}<Info text={info} /></span>} hint={hint} required={required}>
+      {children}
+    </Field>
   );
 }

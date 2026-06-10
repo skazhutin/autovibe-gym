@@ -1,50 +1,112 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { createPortal } from "react-dom";
 import { api, type Run, type RunMode, type RunStatus } from "../lib/api";
 import { useAsync } from "../lib/hooks";
 import { MODE_LABELS, STATUS_LABELS, formatTokens, timeAgo } from "../lib/format";
-import { Button, Card, EmptyState, Skeleton, StatusBadge } from "../components/ui";
+import { Button, Card, EmptyState, SelectDropdown, Skeleton, StatusBadge } from "../components/ui";
 import { Icon } from "../components/Icon";
 import { ModeTag, ScoreCell } from "../components/runbits";
+import { ConfirmDialog } from "../components/ConfirmDialog";
+import { SelectionBar } from "../components/SelectionBar";
 
 type ModeFilter = RunMode | "any";
-const RUN_MODE_OPTIONS = Object.keys(MODE_LABELS) as RunMode[];
+const RUN_MODE_OPTIONS = (Object.keys(MODE_LABELS) as RunMode[]).filter((m) => m !== "batch");
+const RUN_STATUS_OPTIONS = (Object.keys(STATUS_LABELS) as RunStatus[]).filter((s) => s !== "null");
 
 export default function Runs() {
   const nav = useNavigate();
-  const { data: runs, loading } = useAsync(() => api.listRuns(), [], 5000);
+  const { data: runs, loading, reload } = useAsync(() => api.listRuns(), [], 5000);
   const [q, setQ] = useState("");
   const [mode, setMode] = useState<ModeFilter>("any");
   const [status, setStatus] = useState<RunStatus | "all">("all");
 
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirm, setConfirm] = useState(false);
+  const [archiving, setArchiving] = useState(false);
+
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
     return (runs ?? []).filter((r) => {
-      if (mode !== "any" && r.mode !== mode) {
-        return false;
-      }
+      if (mode !== "any" && r.mode !== mode) return false;
       if (status !== "all" && r.status !== status) return false;
-      if (term && !`${r.shortId} ${r.model} ${r.dataset} ${r.batchId ?? ""}`.toLowerCase().includes(term)) return false;
+      if (term && !`${r.shortId} ${r.model} ${r.task} ${r.batchId ?? ""}`.toLowerCase().includes(term)) return false;
       return true;
     });
   }, [runs, q, mode, status]);
 
+  function toggleSelect(id: string) {
+    setSelected((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  const allFilteredSelected = filtered.length > 0 && filtered.every((r) => selected.has(r.id));
+
+  function toggleSelectAll() {
+    setSelected((s) => {
+      const next = new Set(s);
+      if (allFilteredSelected) {
+        filtered.forEach((r) => next.delete(r.id));
+      } else {
+        filtered.forEach((r) => next.add(r.id));
+      }
+      return next;
+    });
+  }
+
+  function cancelSelect() {
+    setSelecting(false);
+    setSelected(new Set());
+  }
+
+  async function doArchive() {
+    setArchiving(true);
+    try {
+      await api.archiveRuns([...selected]);
+      setConfirm(false);
+      cancelSelect();
+      reload();
+    } finally {
+      setArchiving(false);
+    }
+  }
+
+  const toolbarEl = document.getElementById("toolbar-portal");
+
   return (
-    <div>
-      <div className="filters">
-        <div className="search">
-          <Icon name="search" size={17} />
-          <input className="input" placeholder="Поиск по ID, модели, датасету…" value={q} onChange={(e) => setQ(e.target.value)} />
+    <div className="stack" style={{ gap: 18 }}>
+      {toolbarEl && createPortal(<Card className="dataset-toolbar">
+        <div className="filters" style={{ marginBottom: 0 }}>
+          <div className="search">
+            <Icon name="search" size={17} />
+            <input className="input" placeholder="Поиск по ID, модели, датасету…" value={q} onChange={(e) => setQ(e.target.value)} />
+          </div>
+          <SelectDropdown
+            value={mode}
+            options={[{ value: "any", label: "Все режимы" }, ...RUN_MODE_OPTIONS.map((m) => ({ value: m, label: MODE_LABELS[m] }))]}
+            onChange={(v) => setMode(v as ModeFilter)}
+          />
+          <SelectDropdown
+            value={status}
+            options={[{ value: "all", label: "Все статусы" }, ...RUN_STATUS_OPTIONS.map((s) => ({ value: s, label: STATUS_LABELS[s] }))]}
+            onChange={(v) => setStatus(v as RunStatus | "all")}
+          />
+          {selecting ? (
+            <>
+              <Button variant="secondary" onClick={toggleSelectAll}>
+                {allFilteredSelected ? "Снять выделение" : "Выбрать все"}
+              </Button>
+              <Button variant="secondary" onClick={cancelSelect}>Отмена</Button>
+            </>
+          ) : (
+            <Button variant="secondary" onClick={() => setSelecting(true)}>Выбрать</Button>
+          )}
         </div>
-        <select className="select-sm" value={mode} onChange={(e) => setMode(e.target.value as ModeFilter)}>
-          <option value="any">Все режимы</option>
-          {RUN_MODE_OPTIONS.map((m) => <option key={m} value={m}>{MODE_LABELS[m]}</option>)}
-        </select>
-        <select className="select-sm" value={status} onChange={(e) => setStatus(e.target.value as RunStatus | "all")}>
-          <option value="all">Все статусы</option>
-          {(Object.keys(STATUS_LABELS) as RunStatus[]).map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
-        </select>
-      </div>
+      </Card>, toolbarEl)}
 
       <Card style={{ padding: 0 }}>
         {loading && !runs ? (
@@ -53,15 +115,27 @@ export default function Runs() {
           <div className="table-wrap">
             <table className="data">
               <thead>
-                <tr><th>ID</th><th>Модель</th><th>Режим</th><th>Датасет</th><th>Скор</th><th>Статус</th><th>Шагов</th><th>Токены</th><th>Когда</th></tr>
+                <tr>
+                  {selecting && <th style={{ width: 36 }} />}
+                  <th>ID</th><th>Модель</th><th>Режим</th><th>Датасет</th><th>Скор</th><th>Статус</th><th>Шагов</th><th>Токены</th><th>Когда</th>
+                </tr>
               </thead>
               <tbody>
                 {filtered.map((r: Run) => (
-                  <tr key={r.id} className="clickable" onClick={() => nav(`/runs/${r.id}`)}>
+                  <tr
+                    key={r.id}
+                    className={`clickable${selecting && selected.has(r.id) ? " row-selected" : ""}`}
+                    onClick={() => selecting ? toggleSelect(r.id) : nav(`/runs/${r.id}`)}
+                  >
+                    {selecting && (
+                      <td onClick={(e) => { e.stopPropagation(); toggleSelect(r.id); }}>
+                        <input type="checkbox" className="row-checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} />
+                      </td>
+                    )}
                     <td className="mono faint">{r.shortId}</td>
                     <td className="mono">{r.model}</td>
                     <td><ModeTag mode={r.mode} /></td>
-                    <td>{r.dataset}</td>
+                    <td>{r.task}</td>
                     <td><ScoreCell run={r} /></td>
                     <td><StatusBadge status={r.status} /></td>
                     <td className="mono faint">{r.step}{r.steps ? `/${r.steps}` : ""}</td>
@@ -81,6 +155,35 @@ export default function Runs() {
           />
         )}
       </Card>
+
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <button className="archive-link" onClick={() => nav("/runs/archive")}>
+          <Icon name="archive" size={15} /> Архив
+        </button>
+      </div>
+
+      {selecting && selected.size > 0 && (
+        <SelectionBar
+          count={selected.size}
+          noun="прогон"
+          actionLabel="Архивировать"
+          actionIcon="archive"
+          busy={archiving}
+          onAction={() => setConfirm(true)}
+          onCancel={cancelSelect}
+        />
+      )}
+
+      {confirm && (
+        <ConfirmDialog
+          title="Архивировать прогоны?"
+          description={`${selected.size === 1 ? "1 прогон будет перемещён в архив." : `${selected.size} прогонов будут перемещены в архив.`} Вернуть можно из раздела «Архив».`}
+          confirmLabel="Архивировать"
+          busy={archiving}
+          onConfirm={doArchive}
+          onCancel={() => setConfirm(false)}
+        />
+      )}
     </div>
   );
 }

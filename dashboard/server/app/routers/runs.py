@@ -1,4 +1,4 @@
-"""Runs API: history (MLflow) + live launches, plus per-tab detail.
+﻿"""Runs API: history (MLflow) + live launches, plus per-tab detail.
 
 Detail tabs are served from the run's *episode directory*: the live
 `data/runs/<id>/workspace` dir while a run is in progress (the gym flushes
@@ -13,7 +13,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from ..services import dataset_store, mlflow_store, run_launcher
+from ..services import archive_store, task_store, mlflow_store, run_launcher
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 
@@ -21,9 +21,9 @@ router = APIRouter(prefix="/runs", tags=["runs"])
 class LaunchPayload(BaseModel):
     modelId: str | None = None
     model: str | None = None
-    mode: str  # single | repeated | iterative | gym | fixed | batch
+    mode: str  # single | repeated | free | directive | fixed | batch
     modes: list[str] | None = None
-    datasetId: str
+    taskId: str
     budgetMode: str = "local"  # local | cloud
     maxSteps: int | None = None
     maxTokens: int | None = None
@@ -31,15 +31,15 @@ class LaunchPayload(BaseModel):
     temp: float | None = None
     seed: int | None = None
     execution: str | None = None  # "server" | "local" | None (use default)
-    enableThoughts: bool | None = None  # agent scratchpad (gym/iterative only)
-    hintCooldown: int | None = None  # steps between checklist hints (gym only)
+    enableThoughts: bool | None = None  # agent scratchpad (directive/free only)
+    hintCooldown: int | None = None  # steps between checklist hints (directive only)
 
 
-def _target_col(dataset_id: str | None) -> str:
-    if not dataset_id:
+def _target_col(task_id: str | None) -> str:
+    if not task_id:
         return ""
-    ds = dataset_store.get_dataset(dataset_id)
-    if ds and ds.get("target") and ds["target"] != "—":
+    ds = task_store.get_task(task_id)
+    if ds and ds.get("target") and ds["target"] != "вЂ”":
         return ds["target"]
     return ""
 
@@ -53,10 +53,12 @@ def _target_for_run(run: dict) -> str:
 def _episode_dir(run_id: str) -> Path | None:
     """Where this run's episode artifacts live (workspace for live, else MLflow)."""
     if run_id.startswith("live_"):
+        meta = run_launcher.get_live(run_id)
+        if meta and meta.get("mlflowId") and meta.get("status") != "running":
+            return mlflow_store.mlflow_episode_dir(meta["mlflowId"])
         wd = run_launcher.workspace_dir(run_id)
         if wd:
             return wd
-        meta = run_launcher.get_live(run_id)
         if meta and meta.get("mlflowId"):
             return mlflow_store.mlflow_episode_dir(meta["mlflowId"])
         return None
@@ -82,27 +84,59 @@ def _enrich_live(meta: dict) -> dict:
     return merged
 
 
+class BulkPayload(BaseModel):
+    ids: list[str]
+
+
 @router.get("")
 def list_runs() -> list[dict]:
-    live = [_enrich_live(m) for m in run_launcher.list_live()]
-    # Hide the MLflow run each live launch produces (matched by id or run-name),
-    # so a dashboard launch never shows up twice — including while it runs.
+    archived = archive_store.list_archived()
+    live = [_enrich_live(m) for m in run_launcher.list_live() if m["id"] not in archived]
     live_mlflow_ids = {m["mlflowId"] for m in live if m.get("mlflowId")}
     live_run_names = {m.get("runName") for m in live if m.get("runName")}
     history = [
         r for r in mlflow_store.list_runs()
-        if r["id"] not in live_mlflow_ids and r.get("runName") not in live_run_names
+        if r["id"] not in live_mlflow_ids
+        and r.get("runName") not in live_run_names
+        and r["id"] not in archived
     ]
     return live + history
 
 
+@router.get("/archived")
+def list_archived_runs() -> list[dict]:
+    archived = archive_store.list_archived()
+    live = [_enrich_live(m) for m in run_launcher.list_live() if m["id"] in archived]
+    live_mlflow_ids = {m["mlflowId"] for m in live if m.get("mlflowId")}
+    live_run_names = {m.get("runName") for m in live if m.get("runName")}
+    history = [
+        r for r in mlflow_store.list_runs()
+        if r["id"] not in live_mlflow_ids
+        and r.get("runName") not in live_run_names
+        and r["id"] in archived
+    ]
+    return live + history
+
+
+@router.post("/archive")
+def bulk_archive(payload: BulkPayload) -> dict:
+    archive_store.archive(payload.ids)
+    return {"archived": payload.ids}
+
+
+@router.post("/unarchive")
+def bulk_unarchive(payload: BulkPayload) -> dict:
+    archive_store.unarchive(payload.ids)
+    return {"unarchived": payload.ids}
+
+
 @router.post("")
 def launch(payload: LaunchPayload) -> dict:
-    ds = dataset_store.get_dataset(payload.datasetId)
+    ds = task_store.get_task(payload.taskId)
     if ds is None:
-        raise HTTPException(404, f"Dataset '{payload.datasetId}' not found")
+        raise HTTPException(404, f"Task '{payload.taskId}' not found")
     if not ds.get("prepared"):
-        raise HTTPException(400, f"Dataset '{payload.datasetId}' is not prepared (no train/val/test).")
+        raise HTTPException(400, f"Task '{payload.taskId}' is not prepared (no train/val/test).")
     base = payload.model_dump()
     selected_modes = [m for m in (base.get("modes") or [base["mode"]]) if m and m != "batch"]
     if not selected_modes:
@@ -199,12 +233,22 @@ def logs(run_id: str) -> dict:
 @router.get("/{run_id}/checklist")
 def checklist(run_id: str) -> dict:
     target = ""
+    artifact_dir = None
     if run_id.startswith("live_"):
         meta = run_launcher.get_live(run_id) or {}
         target = _target_for_run(meta)
         fallback = meta.get("checklistCoverage")
+        if meta.get("mlflowId"):
+            artifact_dir = mlflow_store.mlflow_artifacts_dir(meta["mlflowId"])
     else:
         rec = mlflow_store.get_run(run_id) or {}
         target = _target_col(rec.get("dataset"))
         fallback = rec.get("checklistCoverage")
-    return mlflow_store.checklist(_episode_dir(run_id), target_col=target, fallback_coverage=fallback)
+        artifact_dir = mlflow_store.mlflow_artifacts_dir(run_id)
+    return mlflow_store.checklist(
+        _episode_dir(run_id),
+        target_col=target,
+        fallback_coverage=fallback,
+        artifact_dir=artifact_dir,
+    )
+

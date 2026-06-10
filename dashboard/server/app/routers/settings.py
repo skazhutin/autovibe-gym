@@ -18,10 +18,13 @@ DEFAULTS = {
     "mlflow_tracking_uri": "",
     "datasets_dir": "",
     "default_mode": "local",
-    "default_episode": "gym_with_checklist",
+    "default_episode": "directive_gym",
+    "date_format": "mdy",
+    "language": "ru",
     "theme": "light",
     "accent": "#FFDD2D",
     "radius": 18,
+    "animations": "on",
     # Remote execution: run the gym ON the server over SSH (site stays local).
     "remote_enabled": False,
     "remote_ssh": "",          # user@host  (e.g. booml@10.8.52.11)
@@ -38,9 +41,12 @@ class SettingsPayload(BaseModel):
     datasets_dir: str | None = None
     default_mode: str | None = None
     default_episode: str | None = None
+    date_format: str | None = None
+    language: str | None = None
     theme: str | None = None
     accent: str | None = None
     radius: int | None = None
+    animations: str | None = None
     remote_enabled: bool | None = None
     remote_ssh: str | None = None
     remote_ssh_opts: str | None = None

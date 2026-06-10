@@ -1,7 +1,7 @@
 /** Typed client for the dashboard backend (FastAPI on /api, proxied in dev). */
 
-export type RunMode = "single" | "repeated" | "iterative" | "gym" | "fixed" | "batch";
-export type LaunchRunMode = "single" | "repeated" | "iterative" | "gym" | "fixed";
+export type RunMode = "single" | "repeated" | "free" | "directive" | "fixed" | "batch";
+export type LaunchRunMode = "single" | "repeated" | "free" | "directive" | "fixed";
 export type RunStatus = "success" | "failed" | "null" | "running";
 
 export interface Run {
@@ -16,8 +16,8 @@ export interface Run {
   productMode?: string | null;
   modeLabel?: string | null;
   modeOrder?: number | null;
-  dataset: string;
-  datasetDir?: string;
+  task: string;
+  taskDir?: string;
   status: RunStatus;
   score: number | null;
   metric?: string | null;
@@ -51,14 +51,14 @@ export interface ModelRec {
   provider: string;
   baseUrl: string;
   ctx: number;
-  temp?: number;
   maxTokens?: number;
   online: boolean | null;
   hasApiKey?: boolean;
   apiKeyEnv?: string;
+  createdAt?: string | null;
 }
 
-export interface Dataset {
+export interface Task {
   id: string;
   name: string;
   task: string;
@@ -71,8 +71,8 @@ export interface Dataset {
   source: string;
   desc: string;
   prepared: boolean;
-  status?: DatasetStatus;
-  datasetDir: string;
+  status?: TaskStatus;
+  taskDir: string;
   seed?: number;
   tags?: string[];
   createdAt?: string | null;
@@ -83,13 +83,13 @@ export interface Dataset {
   rawFiles?: UploadedFileNode[];
   warnings?: string[];
   warningsCount?: number;
-  sources?: DatasetSource[];
-  splits?: Record<string, DatasetSplitFile | null>;
+  sources?: TaskSource[];
+  splits?: Record<string, TaskSplitFile | null>;
 }
 
-export type DatasetStatus = "prepared" | "partial" | "unprepared";
+export type TaskStatus = "prepared" | "partial" | "unprepared";
 
-export interface DatasetSource {
+export interface TaskSource {
   name?: string;
   url?: string;
   license?: string;
@@ -110,7 +110,7 @@ export interface AgentNotes {
   visible_to_agent: boolean;
 }
 
-export interface DatasetTaskConfig {
+export interface TaskTypeConfig {
   task_type: "auto" | "classification" | "regression";
   target_col: string;
   metric_name: string;
@@ -128,18 +128,18 @@ export interface DatasetTaskConfig {
   constraints?: string;
 }
 
-export interface DatasetSplitFile {
+export interface TaskSplitFile {
   path: string;
   source_path?: string | null;
   rows: number;
   cols: number;
 }
 
-export interface DatasetSplitConfig {
+export interface TaskSplitConfig {
   mode: "raw_split" | "prepared_files";
-  train?: DatasetSplitFile | null;
-  val?: DatasetSplitFile | null;
-  test?: DatasetSplitFile | null;
+  train?: TaskSplitFile | null;
+  val?: TaskSplitFile | null;
+  test?: TaskSplitFile | null;
   raw_path?: string;
   mapping?: Record<string, string>;
   ratios?: { train: number; val: number; test: number } | null;
@@ -166,36 +166,36 @@ export interface UploadedFileNode {
   original_name?: string;
 }
 
-export interface DatasetConfig {
+export interface TaskConfig {
   id: string;
   name: string;
   created_at?: string | null;
   updated_at?: string | null;
   version: number;
-  status: DatasetStatus;
-  task: DatasetTaskConfig;
-  splits: DatasetSplitConfig;
+  status: TaskStatus;
+  task: TaskTypeConfig;
+  splits: TaskSplitConfig;
   raw_files: UploadedFileNode[];
   agent_notes: AgentNotes;
-  sources: DatasetSource[];
+  sources: TaskSource[];
   tags: string[];
   warnings: string[];
 }
 
-export interface DatasetCreatePayload {
+export interface TaskCreatePayload {
   id: string;
   name: string;
   uploadId?: string | null;
-  task: DatasetTaskConfig;
-  splits: DatasetSplitConfig;
+  task: TaskTypeConfig;
+  splits: TaskSplitConfig;
   agentNotes: AgentNotes;
-  sources: DatasetSource[];
+  sources: TaskSource[];
   tags: string[];
   warnings?: string[];
   desc?: string;
 }
 
-export interface DatasetPreview {
+export interface TaskPreview {
   columns: string[];
   rows: unknown[][];
   total: number | null;
@@ -205,7 +205,7 @@ export interface DatasetPreview {
   warnings?: string[];
 }
 
-export interface DatasetColumnStats {
+export interface TaskColumnStats {
   name: string;
   dtype: string;
   kind: "numeric" | "categorical";
@@ -217,7 +217,7 @@ export interface DatasetColumnStats {
   idColumn?: boolean;
 }
 
-export interface DatasetUpload {
+export interface TaskUpload {
   upload_id: string;
   file?: UploadedFileNode;
   files: UploadedFileNode[];
@@ -262,6 +262,12 @@ export interface ChecklistItem {
   desc: string;
   closed: boolean;
   closedStep: number | null;
+  evidence?: ChecklistEvidence[];
+}
+export interface ChecklistEvidence {
+  step: number | null;
+  reason?: string;
+  cellId?: string | null;
 }
 export interface ChecklistData {
   items: ChecklistItem[];
@@ -305,11 +311,14 @@ export interface Health {
 export interface Settings {
   mlflow_tracking_uri: string;
   datasets_dir: string;
-  default_mode: string;
   default_episode: string;
+  date_format: "mdy" | "dmy";
+  language: "ru" | "en";
   theme: string;
   accent: string;
   radius: number;
+  animations: "on" | "off";
+  overlay_opacity?: number;
   remote_enabled: boolean;
   remote_ssh: string;
   remote_ssh_opts: string;
@@ -325,8 +334,8 @@ export interface LaunchPayload {
   model?: string;
   mode: LaunchRunMode | "batch";
   modes?: LaunchRunMode[];
-  datasetId: string;
-  budgetMode: "local" | "cloud";
+  taskId: string;
+
   maxSteps?: number;
   maxTokens?: number;
   shots?: number;
@@ -384,12 +393,15 @@ export const api = {
   saveSettings: (s: Partial<Settings>) =>
     req<Settings>("/settings", { method: "PUT", body: JSON.stringify(s) }),
   remoteCheck: () =>
-    req<{ ok: boolean; repo?: boolean; gym?: boolean; output?: string; error?: string }>(
+    req<{ ok: boolean; repo?: boolean; runtime?: boolean; output?: string; error?: string }>(
       "/settings/remote-check",
       { method: "POST" }
     ),
 
   listRuns: () => req<Run[]>("/runs"),
+  listArchivedRuns: () => req<Run[]>("/runs/archived"),
+  archiveRuns: (ids: string[]) => req<{ archived: string[] }>("/runs/archive", { method: "POST", body: JSON.stringify({ ids }) }),
+  unarchiveRuns: (ids: string[]) => req<{ unarchived: string[] }>("/runs/unarchive", { method: "POST", body: JSON.stringify({ ids }) }),
   getRun: (id: string) => req<Run>(`/runs/${id}`),
   launchRun: (p: LaunchPayload) =>
     req<Run>("/runs", { method: "POST", body: JSON.stringify(p) }),
@@ -406,50 +418,56 @@ export const api = {
   errors: (id: string) => req<RunError[]>(`/runs/${id}/errors`),
   logs: (id: string) => req<LogsData>(`/runs/${id}/logs`),
 
-  listDatasets: () => req<Dataset[]>("/datasets"),
-  getDataset: (id: string) => req<Dataset>(`/datasets/${id}`),
-  getDatasetConfig: (id: string) => req<DatasetConfig>(`/datasets/${id}/config`),
-  updateDatasetConfig: (id: string, body: Partial<DatasetConfig>) =>
-    req<DatasetConfig>(`/datasets/${id}/config`, { method: "PUT", body: JSON.stringify(body) }),
-  uploadDatasetFile: (file: File, uploadId?: string | null) => {
+  listTasks: () => req<Task[]>("/tasks"),
+  listArchivedTasks: () => req<Task[]>("/tasks/archived"),
+  archiveTasks: (ids: string[]) => req<{ archived: string[] }>("/tasks/archive", { method: "POST", body: JSON.stringify({ ids }) }),
+  unarchiveTasks: (ids: string[]) => req<{ unarchived: string[] }>("/tasks/unarchive", { method: "POST", body: JSON.stringify({ ids }) }),
+  getTask: (id: string) => req<Task>(`/tasks/${id}`),
+  getTaskConfig: (id: string) => req<TaskConfig>(`/tasks/${id}/config`),
+  updateTaskConfig: (id: string, body: Partial<TaskConfig>) =>
+    req<TaskConfig>(`/tasks/${id}/config`, { method: "PUT", body: JSON.stringify(body) }),
+  uploadTaskFile: (file: File, uploadId?: string | null) => {
     const form = new FormData();
     form.append("file", file);
     if (uploadId) form.append("upload_id", uploadId);
-    return reqForm<DatasetUpload>("/datasets/uploads", form);
+    return reqForm<TaskUpload>("/tasks/uploads", form);
   },
-  uploadDatasetFromUrl: (url: string, uploadId?: string | null) =>
-    req<DatasetUpload>("/datasets/uploads/from-url", {
+  uploadTaskFromUrl: (url: string, uploadId?: string | null) =>
+    req<TaskUpload>("/tasks/uploads/from-url", {
       method: "POST",
       body: JSON.stringify({ url, uploadId }),
     }),
-  listUploadedFiles: (uploadId: string) => req<DatasetUpload>(`/datasets/uploads/${uploadId}/files`),
+  listUploadedFiles: (uploadId: string) => req<TaskUpload>(`/tasks/uploads/${uploadId}/files`),
   extractUploadedArchive: (uploadId: string, path?: string) =>
-    req<DatasetUpload>(`/datasets/uploads/${uploadId}/extract`, {
+    req<TaskUpload>(`/tasks/uploads/${uploadId}/extract`, {
       method: "POST",
       body: JSON.stringify({ path }),
     }),
   previewUploadedTable: (uploadId: string, path: string, limit = 50) =>
-    req<DatasetPreview>(
-      `/datasets/uploads/${uploadId}/preview?path=${encodeURIComponent(path)}&limit=${limit}`
+    req<TaskPreview>(
+      `/tasks/uploads/${uploadId}/preview?path=${encodeURIComponent(path)}&limit=${limit}`
     ),
-  createDatasetFromConfig: (body: DatasetCreatePayload) =>
-    req<Dataset>("/datasets/create-from-config", { method: "POST", body: JSON.stringify(body) }),
-  prepareDataset: (id: string) =>
-    req<Dataset>(`/datasets/${id}/prepare`, { method: "POST", body: JSON.stringify({}) }),
-  datasetPreview: (id: string, split = "train", limit = 50) =>
-    req<DatasetPreview>(
-      `/datasets/${id}/preview?split=${split}&limit=${limit}`
+  createTaskFromConfig: (body: TaskCreatePayload) =>
+    req<Task>("/tasks/create-from-config", { method: "POST", body: JSON.stringify(body) }),
+  prepareTask: (id: string) =>
+    req<Task>(`/tasks/${id}/prepare`, { method: "POST", body: JSON.stringify({}) }),
+  taskPreview: (id: string, split = "train", limit = 50) =>
+    req<TaskPreview>(
+      `/tasks/${id}/preview?split=${split}&limit=${limit}`
     ),
-  datasetColumns: (id: string, split = "train") =>
-    req<DatasetColumnStats[]>(`/datasets/${id}/columns?split=${split}`),
-  updateDataset: (id: string, body: Record<string, unknown>) =>
-    req<Dataset>(`/datasets/${id}`, { method: "PUT", body: JSON.stringify(body) }),
-  deleteDataset: (id: string) =>
-    req<{ deleted: string }>(`/datasets/${id}`, { method: "DELETE" }),
-  uploadDataset: (form: FormData) =>
-    reqForm<Dataset>("/datasets", form),
+  taskColumns: (id: string, split = "train") =>
+    req<TaskColumnStats[]>(`/tasks/${id}/columns?split=${split}`),
+  updateTask: (id: string, body: Record<string, unknown>) =>
+    req<Task>(`/tasks/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  deleteTask: (id: string) =>
+    req<{ deleted: string }>(`/tasks/${id}`, { method: "DELETE" }),
+  uploadTask: (form: FormData) =>
+    reqForm<Task>("/tasks", form),
 
   listModels: () => req<ModelRec[]>("/models"),
+  listArchivedModels: () => req<ModelRec[]>("/models/archived"),
+  archiveModels: (ids: string[]) => req<{ archived: string[] }>("/models/archive", { method: "POST", body: JSON.stringify({ ids }) }),
+  unarchiveModels: (ids: string[]) => req<{ unarchived: string[] }>("/models/unarchive", { method: "POST", body: JSON.stringify({ ids }) }),
   providers: () => req<string[]>("/models/providers"),
   createModel: (m: Partial<ModelRec> & { apiKey?: string }) =>
     req<ModelRec>("/models", { method: "POST", body: JSON.stringify(m) }),

@@ -86,7 +86,7 @@ Closes the environment. Only one submit is allowed per session.
 ### Gym Tool Actions
 
 The gym has five product modes; these are actions inside the
-existing flexible/fixed gym protocol, not new modes.
+existing directive/fixed gym protocol, not new modes.
 
 ```json
 {"type": "validate", "stage": "validation_analysis", "model_var": "auto"}
@@ -205,7 +205,7 @@ Model Selection=6, HPT=5 (total=22 + 5 buffer).
 
 ---
 
-### Mode 4 — Flexible Transitions
+### Mode 4 — Directive Gym
 
 | Property | Value |
 |----------|-------|
@@ -224,7 +224,7 @@ still declares its current deterministic `stage`.
 
 ## Feedback Taxonomy
 
-| Signal | Single-shot | Repeated SS | Fixed | Flexible |
+| Signal | Single-shot | Repeated SS | Fixed | Directive |
 |--------|:-----------:|:-----------:|:-----:|:--------:|
 | Task description | ✅ | ✅ | ✅ | ✅ |
 | Previous best val score | ❌ | ✅ | ❌ | ❌ |
@@ -242,7 +242,7 @@ still declares its current deterministic `stage`.
 
 The environment implicitly tracks 8 DS pipeline stages and returns hints (not
 instructions) when a stage has not been addressed. Hints are returned only in
-interactive modes (Fixed and Flexible).
+interactive modes (Fixed and Directive).
 
 | Stage | Hint text |
 |-------|-----------|

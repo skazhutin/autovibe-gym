@@ -95,7 +95,7 @@ def test_runtime_error_and_contract_blocker_suppress_new_checklist_hint():
     assert contract == []
 
 
-def test_failed_or_non_output_cell_does_not_satisfy_check_by_keyword_alone():
+def test_failed_cell_does_not_satisfy_check_by_keyword_alone():
     checklist = NotebookChecklist(target_col="target")
 
     checklist.record_execution(
@@ -108,23 +108,32 @@ def test_failed_or_non_output_cell_does_not_satisfy_check_by_keyword_alone():
     )
     assert "missing_values_audit" not in checklist.covered
 
+
+def test_successful_source_only_execution_records_behavioral_evidence():
+    checklist = NotebookChecklist(target_col="target")
+
     checklist.record_execution(
-        source="train_df.isna().sum()",
+        source="""
+target_col = "target"
+print(train_df.columns)
+cat_cols = train_df.select_dtypes(include=["object", "category"]).columns
+X_train = train_df.drop(columns=[target_col])
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.model_selection import GridSearchCV
+model = GridSearchCV(pipe, param_grid={"clf__n_estimators": [50, 100]})
+""",
         stdout="",
         cell_id="cell_02",
         step=2,
         execution_success=True,
     )
-    assert "missing_values_audit" not in checklist.covered
 
-    checklist.record_execution(
-        source="train_df.isna().sum()",
-        stdout="x    0",
-        cell_id="cell_03",
-        step=3,
-        execution_success=True,
-    )
-    assert "missing_values_audit" in checklist.covered
+    assert "task_understanding" in checklist.covered
+    assert "schema_review" in checklist.covered
+    assert "target_exclusion" in checklist.covered
+    assert "categorical_features_audit" in checklist.covered
+    assert "attempted_controlled_tuning" in checklist.optional_tags
+    assert "attempted_feature_engineering" in checklist.optional_tags
 
 
 def test_feedback_item_serializes_channel_metadata():

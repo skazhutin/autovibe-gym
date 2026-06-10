@@ -39,7 +39,7 @@ self-hosted runner or standard runner with Docker available).
 **Status:** `run_fixed.py` still uses the legacy `GymEnv` / `CodeExecutor` stack.
 It is marked as legacy in MLflow params.
 **What remains:** Port to `NotebookGymEnv` if fixed-stage experiments are needed
-in the notebook era. Low priority — fixed transitions scored worst in all experiments.
+in the notebook era. Low priority — fixed gym scored worst in all experiments.
 
 ---
 
