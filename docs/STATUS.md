@@ -1,15 +1,27 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-06-08 (gym now beats single-shot: validation-improvement nudge + unknown-cell-id robustness guard, both experiment-validated; run summary polish; model registry is source of truth for LLM config; ML toolbox deps added)
-**Phase:** Hardening after first full H200 recon + building the local control-panel dashboard for configuring/launching/inspecting runs.
+**Last updated:** 2026-08-13 (Paper V1 protocol and research PR governance prepared from fresh `origin/main`; no runner behavior or confirmatory results changed)
+**Phase:** Paper V1 protocol definition alongside product hardening.
 
 ---
 
 ## Current Sprint Goal
 
-Harden the merged real Jupyter + Docker-backed kernel environment with
-behavioral privacy tests, deterministic PR CI, and minimal fixes for discovered
-test, sandbox, and logging gaps.
+Freeze an auditable, result-blind Paper V1 protocol before changing experiment
+mechanics. Preserve current product behavior while documenting the exact gaps
+that block a budget-matched confirmatory study.
+
+## Paper V1 Research Protocol
+
+| Item | Status | Notes |
+|---|---|---|
+| Phase 0 code audit | Done | Audited freshly fetched `origin/main` commit `1504cc0`; mapped five modes, per-call token semantics, host autofit, step/tool counters, artifact paths, hidden-score privacy, hidden retry loop, and current tests |
+| `research/protocol-v1` scaffold | Done | Machine-readable protocol, hypotheses, analysis plan, failure policy, selection gates, validator, and offline tests |
+| Protocol freeze | Blocked | Exact models/endpoints, dataset 4, final budget, artifact storage, second annotator, monetary cap, and frozen dataset/reference values remain human decisions |
+| Confirmatory execution | Not started | Existing outputs remain pilot-only; no expensive API runs authorized in this cycle |
+| Runner behavior changes | Not started | Planned for PR 2–4; PR 1 intentionally changes no experiment behavior |
+| Research PR policy | Done | `docs/RESEARCH_PR_POLICY.md` defines authorization, identity, Draft/Ready/Merge gates, PR 1–6 timing, pilot/freeze/confirmatory boundaries, PR body, commit evidence, and post-merge rules |
+| Commit/PR identity | Enforced by policy/config | Commits use `JapanDino <klim.i.rumyantsev@gmail.com>`; PR author must be GitHub login `JapanDino`; identity is checked independently before commit and before PR |
 
 ---
 
@@ -69,6 +81,26 @@ test, sandbox, and logging gaps.
 ---
 
 ## Current Verification
+
+Paper V1 protocol cycle (2026-08-12/13):
+
+- `python -m research.validate_protocol research/protocols/protocol_v1.yaml` ->
+  valid structure, 120 provisional confirmatory runs, 7 open freeze blockers,
+  status `draft_unfrozen`.
+- `python -m pytest tests/test_research_protocol.py -q` -> `3 passed`.
+- Focused offline suite (episode modes, agent, protocol, experiments) ->
+  `66 passed`, one Jupyter path deprecation warning.
+- Initial full `python -m pytest -q` -> `267 passed, 2 failed`, one warning; both
+  failures were Docker integrations caused by the missing local
+  `autovibe-gym-sandbox:latest` image.
+- `docker build -f Dockerfile.sandbox -t autovibe-gym-sandbox:latest .` -> passed
+  on the second attempt after one external PyPI read timeout.
+- The two previously failing Docker integrations were rerun explicitly ->
+  `2 passed`, one warning. Together these completed runs cover all 269 collected
+  tests; a later monolithic repeat exceeded the local wrapper timeout and is not
+  represented as a passing run.
+- No API experiments, hidden-test research runs, stage, commit, push, or PR
+  creation occurred in this cycle.
 
 Last local run:
 
@@ -312,6 +344,16 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 
 ## Blocked / Needs Decision
 
+- Paper V1 protocol freeze is blocked on seven required decisions: exact model
+  IDs/endpoints, dataset 4, final global budget, immutable large-artifact
+  storage, second checklist annotator, monetary/API hard stop, and frozen
+  dataset hashes/splits/dummy/reference values. Optional decisions about the
+  plain one-shot reference and paper venue/template are also still open.
+- The current product runners are not confirmatory-ready: token limits are
+  per-call, single/repeated controls have host-side autofit, event budgets differ,
+  failures lack one taxonomy/ledger, and notebook hidden-test failures can trigger
+  multiple hidden attempts. These are documented gaps for PR 2–4, not findings
+  from confirmatory evidence.
 - Local Docker CLI is available in this Windows workspace as of 2026-06-02; the
   Docker-backed notebook integration test passed locally. GitHub Actions still
   verifies the Linux sandbox image path.
@@ -325,10 +367,25 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 
 ## Next Actions
 
-1. [x] Все PR смержены в main
-2. [x] TZ.md, PROTOCOL.md, EXPERIMENT_REPORT.md синхронизированы
-3. [ ] Запустить `python -m experiments.run_matrix --mode local` на H200 → получить notebook-era experiment results и подтвердить fixed single-shot/repeated multishot сабмиты
-4. [ ] Обновить EXPERIMENT_REPORT.md с новыми результатами после п.3
+1. [ ] Human review and approval of `research/protocols/protocol_v1.yaml`, with
+       named owners resolving the freeze-blocking TODOs by 2026-09-07.
+2. [ ] PR 2: add stable `condition_id`, unique `run_id`, atomic `RunManifest`,
+       per-call usage ledger, execution ledger, and unified failure taxonomy
+       without changing arm behavior.
+3. [ ] PR 3: enforce one fair global budget across A/B/C, disable research-mode
+       host autofit, use one common submission validator, and permit at most one
+       hidden evaluation per terminal agent outcome.
+4. [ ] PR 4: precompute and hash the complete condition matrix, add blocked
+       randomization, resume/idempotency, replacement queue, and acceptance checks.
+5. [ ] PR 5a: preregister FANU, completeness, paired analysis, and synthetic
+       fixtures before protocol freeze or confirmatory outcome inspection.
+6. [ ] Run only a labeled availability/budget pilot after PR 2–5a and before
+       protocol freeze; do not run confirmatory episodes or inspect confirmatory
+       outcomes in the meantime.
+7. [ ] Keep the earlier H200 notebook-era matrix rerun and experiment-report
+       refresh as product/pilot validation, clearly separated from Paper V1.
+8. [x] Existing product PRs were merged to `main`; TZ/PROTOCOL/EXPERIMENT_REPORT
+       were synchronized before this Paper V1 cycle.
 
 ---
 
@@ -336,6 +393,8 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 
 | Date | Change |
 |------|--------|
+| 2026-08-12 | Codified mandatory authorship and publication rules: every commit must use `JapanDino <klim.i.rumyantsev@gmail.com>`, every PR must be authored by GitHub login `JapanDino`, and stage/commit/push/PR/merge require separate explicit authorization. Added `docs/RESEARCH_PR_POLICY.md` with Draft/Ready/Merge timing, PR 1–6 sequencing, preregistered PR 5a before freeze, pilot/confirmatory gates, PR-body evidence requirements, and post-merge provenance rules. |
+| 2026-08-12 | Prepared the unfrozen Paper V1 research package from freshly fetched `origin/main` commit `1504cc0`: Phase 0 evidence-backed code audit, canonical machine-readable protocol, hypotheses, analysis plan, failure/retry policy, dataset/model selection gates, offline validator, and focused tests. Confirmed current per-call token semantics, host autofit in single/repeated controls, separate step/tool accounting, private hidden score, three-attempt hidden failure loop, and 8-vs-12 checklist documentation drift. No runner behavior, API experiment, commit, push, or PR was performed. |
 | 2026-06-08 | Gym now beats single-shot (experiment-validated, gemma-4-26b): (1) validation-improvement nudge — after `validate`, NotebookGymEnv reports best-so-far + remaining budget and pushes the agent to beat its own baseline (honest, val-split only, feedback modes only); flips student_dropout from −0.004 (gym lost) to +0.013 over single-shot. (1b) unknown-cell-id guard — targeting a non-existent cell is now a recoverable blocker instead of a KeyError that crashed the whole episode, restoring valid-submit rate to 1.0. Measured-but-rejected: per-class-recall diagnostic and candidate-list nudge both hurt (extra feedback verbosity inflates the trajectory → more clean-run failures) |
 | 2026-06-06 | Tightened run-summary UX: the prompt remains English-only, normalization no longer chops already-short section bodies mid-sentence, and the Run Detail «Саммари решения» card now renders parsed summary sections (plus inline code) as a structured two-column report instead of raw markdown paragraphs |
 | 2026-06-06 | Post-run self-summary: once the model solved the task (reached a final submit for gym/fixed — even if the hidden test rejected it — or produced a usable candidate for single/repeated) one extra best-effort LLM call asks the model to summarize its own solution; saved as `run_summary.json` (`gym/run_summary.py`), served via `GET /runs/{id}/summary` + `hasSummary` on `get_run`, and rendered as a standalone report card (accent side-stripe, neutral surface — deliberately not styled like a step thought) above a «Ход рассуждений по шагам» section on the «Мысли» tab, which now shows for any run with a summary even when thoughts mode is off (old/unsolved runs without either stay hidden). Privacy preserved: the summarizer only sees the conversation it already had, never the hidden test score |
