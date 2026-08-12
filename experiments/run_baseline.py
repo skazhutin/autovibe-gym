@@ -21,6 +21,15 @@ except ImportError:
 
 from experiments.mlflow_config import configure_mlflow_tracking
 from experiments.modes import add_mode_metadata_args, mode_metadata_params
+from research.runner_integration import (
+    add_research_artifact_args,
+    dataset_source_hash,
+    finalize_research_run,
+    research_mlflow_params,
+    start_research_run,
+    wrap_executor,
+    wrap_llm,
+)
 from gym.data_profile import build_dataset_card
 from gym.datasets import load_dataset_splits, resolve_metric
 from gym.executor import CodeExecutor
@@ -83,6 +92,7 @@ def main():
     parser.add_argument("--experiment-name", default="autovibe-gym")
     parser.add_argument("--run-name", default=None)
     add_mode_metadata_args(parser)
+    add_research_artifact_args(parser)
     args = parser.parse_args()
 
     max_tokens = args.max_tokens or (8192 if args.mode == "local" else 4096)
@@ -115,7 +125,23 @@ def main():
         "Assign your best trained model to: model"
     )
 
-    client = make_llm_client()
+    recorder = start_research_run(
+        args,
+        arm="single_shot",
+        dataset_id=dataset_name,
+        dataset_hash=dataset_source_hash(dataset=args.dataset, dataset_dir=args.dataset_dir),
+        split_seed=splits.metadata.seed,
+        default_split_id=splits.metadata.split_strategy or f"seed-{args.seed}",
+        model_id=model_name,
+        prompt_template={"system": SYSTEM_PROMPT, "task": task_prompt},
+        decoding_config={"max_tokens": max_tokens},
+        budget_policy={"logical_llm_calls": 1, "max_tokens_per_call": max_tokens},
+        execution_policy={
+            "backend": args.executor_backend or os.getenv("AUTOVIBE_EXECUTOR_BACKEND", "docker"),
+            "timeout_seconds": args.sandbox_timeout,
+        },
+    )
+    client = wrap_llm(make_llm_client(), recorder, model=model_name)
     configure_mlflow_tracking(mlflow)
     mlflow.set_experiment(args.experiment_name)
     started = time.time()
@@ -132,6 +158,7 @@ def main():
             "max_tokens": max_tokens,
             "executor_backend": args.executor_backend or os.getenv("AUTOVIBE_EXECUTOR_BACKEND", "docker"),
             **mode_metadata_params(args, "single_shot"),
+            **research_mlflow_params(recorder),
         })
 
         response = client.complete(
@@ -142,10 +169,13 @@ def main():
         )
         code = extract_code(response.text)
 
-        executor = CodeExecutor(
-            timeout=args.sandbox_timeout,
-            backend=args.executor_backend,
-            docker_image=args.sandbox_image,
+        executor = wrap_executor(
+            CodeExecutor(
+                timeout=args.sandbox_timeout,
+                backend=args.executor_backend,
+                docker_image=args.sandbox_image,
+            ),
+            recorder,
         )
         namespace = {
             "train_df": train.copy(),
@@ -257,6 +287,8 @@ def main():
                     solution_code=code,
                     max_tokens=min(max_tokens, 700),
                 )
+
+        finalize_research_run(recorder, summary)
 
         metrics = {
             "has_test_metric": int(test_metric is not None),

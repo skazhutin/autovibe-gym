@@ -12,6 +12,7 @@ import os
 from experiments.mlflow_config import configure_mlflow_tracking
 from experiments.modes import add_mode_metadata_args, mode_metadata_params
 from gym import GymAgent, NotebookGymEnv
+from gym.agent import SYSTEM_PROMPT
 from gym.datasets import (
     DatasetSplits,
     load_dataset_splits,
@@ -19,6 +20,15 @@ from gym.datasets import (
     resolve_metric,
 )
 from gym.model_config import apply_model_reference
+from gym.llm import make_llm_client
+from research.runner_integration import (
+    add_research_artifact_args,
+    dataset_source_hash,
+    finalize_research_run,
+    research_mlflow_params,
+    start_research_run,
+    wrap_llm,
+)
 
 try:
     from dotenv import load_dotenv
@@ -101,6 +111,7 @@ def main():
     parser.add_argument("--experiment-name", default="autovibe-gym")
     parser.add_argument("--run-name", default=None)
     add_mode_metadata_args(parser)
+    add_research_artifact_args(parser)
     args = parser.parse_args()
 
     defaults = MODE_DEFAULTS[args.mode]
@@ -121,6 +132,31 @@ def main():
     dataset_name = _dataset_name(splits, args.dataset)
     model_name = apply_model_reference(args.model)
     run_name = args.run_name or f"gym_{dataset_name}_{model_name.split('/')[-1]}"
+    recorder = start_research_run(
+        args,
+        arm=args.episode_mode,
+        dataset_id=dataset_name,
+        dataset_hash=dataset_source_hash(dataset=args.dataset, dataset_dir=args.dataset_dir),
+        split_seed=splits.metadata.seed,
+        default_split_id=splits.metadata.split_strategy or f"seed-{args.seed}",
+        model_id=model_name,
+        prompt_template={
+            "system": SYSTEM_PROMPT,
+            "protocol_version": NotebookGymEnv.protocol_version,
+            "checklist_version": NotebookGymEnv.checklist_version,
+            "feedback_policy_version": NotebookGymEnv.feedback_policy_version,
+        },
+        decoding_config={"max_tokens": max_tokens},
+        budget_policy={
+            "max_agent_turns": max_steps,
+            "max_tokens_per_call": max_tokens,
+        },
+        execution_policy={
+            "backend": _kernel_backend_label(),
+            "timeout_seconds": sandbox_timeout,
+        },
+    )
+    client = wrap_llm(make_llm_client(), recorder, model=model_name)
 
     import mlflow
 
@@ -151,6 +187,7 @@ def main():
             "dataset_role": splits.metadata.role,
             "dataset_sampled": str(splits.metadata.sampled),
             **mode_metadata_params(args, args.episode_mode),
+            **research_mlflow_params(recorder),
         })
 
         env = NotebookGymEnv(
@@ -168,10 +205,11 @@ def main():
             hint_cooldown=args.hint_cooldown,
         )
 
-        agent = GymAgent(env=env, model=model_name, max_tokens=max_tokens)
+        agent = GymAgent(env=env, model=model_name, max_tokens=max_tokens, client=client)
         try:
             summary = agent.run()
         finally:
+            notebook_events = list(env.events)
             env.close()
         summary.update(mode_metadata_params(args, args.episode_mode))
 
@@ -192,6 +230,8 @@ def main():
                 ),
                 max_tokens=min(max_tokens, 700),
             )
+
+        finalize_research_run(recorder, summary, notebook_events=notebook_events)
 
         has_test_metric = summary.get("final_test_metric") is not None
         metrics = {

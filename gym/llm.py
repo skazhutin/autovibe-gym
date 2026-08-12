@@ -2,7 +2,7 @@ import os
 import time
 from dataclasses import dataclass
 from http import HTTPStatus
-from typing import Protocol
+from typing import Callable, Protocol
 
 
 @dataclass(frozen=True)
@@ -51,7 +51,17 @@ def _is_transient(exc: Exception) -> bool:
     return status in _TRANSIENT_STATUS
 
 
-def _create_with_retries(client, **kwargs):
+def _emit_attempt(hook: Callable | None, **event) -> None:
+    if hook is None:
+        return
+    try:
+        hook(event)
+    except Exception:
+        # Research observability must never alter provider behavior.
+        return
+
+
+def _create_with_retries(client, *, request_attempt_hook=None, **kwargs):
     """Call chat.completions.create with exponential backoff on transient
     errors (rate limits / 5xx / timeouts). Tunable via env:
     AUTOVIBE_LLM_MAX_RETRIES (default 5), AUTOVIBE_LLM_RETRY_BASE (default 2s)."""
@@ -64,15 +74,38 @@ def _create_with_retries(client, **kwargs):
     except ValueError:
         base = 2.0
     for attempt in range(max_retries + 1):
+        started = time.perf_counter()
         try:
-            return client.chat.completions.create(**kwargs)
+            response = client.chat.completions.create(**kwargs)
         except Exception as exc:  # noqa: BLE001 - retry only on transient errors
+            _emit_attempt(
+                request_attempt_hook,
+                retry_index=attempt,
+                success=False,
+                duration_seconds=time.perf_counter() - started,
+                error_type=type(exc).__name__,
+                http_status=getattr(exc, "status_code", None) or getattr(exc, "code", None),
+                request_id=getattr(exc, "request_id", None),
+            )
             if attempt >= max_retries or not _is_transient(exc):
                 raise
             delay = min(base * (2 ** attempt), 30.0)
             print(f"[llm] transient error ({type(exc).__name__}); retry "
                   f"{attempt + 1}/{max_retries} in {delay:.0f}s", flush=True)
             time.sleep(delay)
+        else:
+            usage = getattr(response, "usage", None)
+            _emit_attempt(
+                request_attempt_hook,
+                retry_index=attempt,
+                success=True,
+                duration_seconds=time.perf_counter() - started,
+                input_tokens=getattr(usage, "prompt_tokens", 0) if usage else 0,
+                output_tokens=getattr(usage, "completion_tokens", 0) if usage else 0,
+                request_id=getattr(response, "id", None),
+                finish_reason=getattr(response.choices[0], "finish_reason", None),
+            )
+            return response
 
 
 class LiteLLMClient:
@@ -85,6 +118,12 @@ class LiteLLMClient:
 
     See: https://docs.litellm.ai/docs/providers
     """
+
+    def __init__(self):
+        self._research_attempt_hook = None
+
+    def set_request_attempt_hook(self, hook: Callable | None) -> None:
+        self._research_attempt_hook = hook
 
     def complete(
         self,
@@ -104,8 +143,31 @@ class LiteLLMClient:
         api_key = os.getenv("AUTOVIBE_LITELLM_API_KEY")
         if api_key:
             kwargs["api_key"] = api_key
-        response = litellm.completion(**kwargs)
+        started = time.perf_counter()
+        try:
+            response = litellm.completion(**kwargs)
+        except Exception as exc:
+            _emit_attempt(
+                self._research_attempt_hook,
+                retry_index=0,
+                success=False,
+                duration_seconds=time.perf_counter() - started,
+                error_type=type(exc).__name__,
+                http_status=getattr(exc, "status_code", None) or getattr(exc, "code", None),
+                request_id=getattr(exc, "request_id", None),
+            )
+            raise
         usage = response.usage
+        _emit_attempt(
+            self._research_attempt_hook,
+            retry_index=0,
+            success=True,
+            duration_seconds=time.perf_counter() - started,
+            input_tokens=getattr(usage, "prompt_tokens", 0) if usage else 0,
+            output_tokens=getattr(usage, "completion_tokens", 0) if usage else 0,
+            request_id=getattr(response, "id", None),
+            finish_reason=getattr(response.choices[0], "finish_reason", None),
+        )
         text = _message_text(response.choices[0].message)
         return LLMResponse(
             text=text.strip(),
@@ -140,6 +202,10 @@ class OpenAICompatibleLLMClient:
             timeout=timeout,
             max_retries=0,
         )
+        self._research_attempt_hook = None
+
+    def set_request_attempt_hook(self, hook: Callable | None) -> None:
+        self._research_attempt_hook = hook
 
     def complete(
         self,
@@ -151,6 +217,7 @@ class OpenAICompatibleLLMClient:
     ) -> LLMResponse:
         response = _create_with_retries(
             self._client,
+            request_attempt_hook=self._research_attempt_hook,
             model=model,
             max_tokens=max_tokens,
             messages=[{"role": "system", "content": system}] + messages,
@@ -184,6 +251,10 @@ class GoogleAIStudioLLMClient:
             )
         self._client = genai.Client(api_key=resolved_api_key)
         self._last_request_at = 0.0
+        self._research_attempt_hook = None
+
+    def set_request_attempt_hook(self, hook: Callable | None) -> None:
+        self._research_attempt_hook = hook
 
     def complete(
         self,
@@ -204,7 +275,8 @@ class GoogleAIStudioLLMClient:
                     system_instruction=system,
                     max_output_tokens=max_tokens,
                 ),
-            )
+            ),
+            request_attempt_hook=self._research_attempt_hook,
         )
         self._last_request_at = time.monotonic()
         usage = getattr(response, "usage_metadata", None)
@@ -273,20 +345,43 @@ def _google_response_text(response: object) -> str:
     return "".join(parts_text).strip()
 
 
-def _call_with_retries(operation):
+def _call_with_retries(operation, *, request_attempt_hook=None):
     attempts = int(os.getenv("LLM_RETRY_ATTEMPTS", "3"))
     delay = float(os.getenv("LLM_RETRY_INITIAL_DELAY", "2"))
     last_error = None
 
     for attempt in range(max(attempts, 1)):
+        started = time.perf_counter()
         try:
-            return operation()
+            response = operation()
         except Exception as exc:
             last_error = exc
+            _emit_attempt(
+                request_attempt_hook,
+                retry_index=attempt,
+                success=False,
+                duration_seconds=time.perf_counter() - started,
+                error_type=type(exc).__name__,
+                http_status=getattr(exc, "status_code", None) or getattr(exc, "code", None),
+                request_id=getattr(exc, "request_id", None),
+            )
             if attempt == attempts - 1 or not _is_transient_error(exc):
                 raise
             time.sleep(delay)
             delay *= 2
+        else:
+            usage = getattr(response, "usage_metadata", None)
+            _emit_attempt(
+                request_attempt_hook,
+                retry_index=attempt,
+                success=True,
+                duration_seconds=time.perf_counter() - started,
+                input_tokens=_usage_count(usage, "prompt_token_count"),
+                output_tokens=_usage_count(usage, "candidates_token_count"),
+                request_id=getattr(response, "response_id", None),
+                finish_reason=None,
+            )
+            return response
 
     raise last_error
 
