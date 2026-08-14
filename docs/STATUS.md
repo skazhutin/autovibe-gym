@@ -1,7 +1,7 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-08-13 (Paper V1 protocol and research PR governance prepared from fresh `origin/main`; no runner behavior or confirmatory results changed)
-**Phase:** Paper V1 protocol definition alongside product hardening.
+**Last updated:** 2026-08-13 (Paper V1 PR 2 adds opt-in auditable run artifacts; causal runner behavior and confirmatory results remain unchanged)
+**Phase:** Paper V1 provenance infrastructure alongside product hardening.
 
 ---
 
@@ -19,7 +19,8 @@ that block a budget-matched confirmatory study.
 | `research/protocol-v1` scaffold | Done | Machine-readable protocol, hypotheses, analysis plan, failure policy, selection gates, validator, and offline tests |
 | Protocol freeze | Blocked | Exact models/endpoints, dataset 4, final budget, artifact storage, second annotator, monetary cap, and frozen dataset/reference values remain human decisions |
 | Confirmatory execution | Not started | Existing outputs remain pilot-only; no expensive API runs authorized in this cycle |
-| Runner behavior changes | Not started | Planned for PR 2–4; PR 1 intentionally changes no experiment behavior |
+| Auditable run artifacts (PR 2) | In review | Implemented on a stacked Draft branch over PR 1: stable condition IDs, unique non-overwriting run IDs, atomic manifests, append-only usage/execution ledgers, provider-attempt hooks, redaction, rerun linkage, and one terminal failure class are integrated behind opt-in flags; Ready/merge remains blocked until PR 1 merges |
+| Causal runner behavior changes | Not started | Fair global budget and common submit mechanics remain PR 3; PR 2 only records existing behavior |
 | Research PR policy | Done | `docs/RESEARCH_PR_POLICY.md` defines authorization, identity, Draft/Ready/Merge gates, PR 1–6 timing, pilot/freeze/confirmatory boundaries, PR body, commit evidence, and post-merge rules |
 | Commit/PR identity | Enforced by policy/config | Commits use `JapanDino <klim.i.rumyantsev@gmail.com>`; PR author must be GitHub login `JapanDino`; identity is checked independently before commit and before PR |
 
@@ -51,6 +52,7 @@ that block a budget-matched confirmatory study.
 | `run_baseline.py` | Done | single-shot control preserved; prompts require raw-DataFrame pipelines; missing score is not logged as zero |
 | `run_multishot.py` | Done | logged as `repeated_single_shot`; prompts require raw-DataFrame pipelines; not the fair checklist control |
 | `run_fixed.py` | Done | fixed-transition control preserved; failed submit is not logged as real score 0.0 |
+| Paper V1 recorder integration | Done | all four `run_*` entrypoints accept opt-in research artifact flags and link MLflow to experiment/condition/run IDs without changing default execution |
 | `run.py` | Done | common single-dataset entrypoint; `--mode all` expands to five separate product runs with shared `batch_id`; `--modes ...` runs a selected batch of up to five modes |
 | `compare.py` | Done | handles missing metrics without zero substitution |
 
@@ -99,8 +101,29 @@ Paper V1 protocol cycle (2026-08-12/13):
   `2 passed`, one warning. Together these completed runs cover all 269 collected
   tests; a later monolithic repeat exceeded the local wrapper timeout and is not
   represented as a passing run.
-- No API experiments, hidden-test research runs, stage, commit, push, or PR
-  creation occurred in this cycle.
+- No API experiments or hidden-test research runs occurred in this protocol
+  cycle; the protocol is under review in Draft PR 1.
+
+Paper V1 auditable-manifest cycle (2026-08-13):
+
+- `python -m pytest tests/test_research_run_artifacts.py -q` -> `19 passed`.
+- `python -m pytest tests/test_llm.py tests/test_research_run_artifacts.py -q`
+  -> `40 passed`, one existing Jupyter path deprecation warning.
+- The offline smoke creates an atomic manifest and append-only ledgers, links
+  condition/run IDs, redacts secret-shaped values/private notebook fields, and
+  classifies unsuccessful outcomes without any API or hidden-test run.
+- Provider retry hooks were verified to emit each attempted request and to be
+  fail-open for observability, preserving the existing provider return/retry
+  behavior.
+- Focused experiments/LLM/protocol/research suite -> `70 passed`, one existing
+  Jupyter path deprecation warning.
+- Full `python -m pytest -q` -> `291 passed`, one existing Jupyter path
+  deprecation warning.
+- No expensive API experiment or confirmatory run was executed; generated run
+  artifacts were confined to pytest temporary directories.
+- PR 2 is intentionally a stacked Draft over PR 1 for early review; it cannot
+  become Ready or merge until PR 1 is reviewed and merged, then rebased onto
+  fresh `origin/main` and reverified.
 
 Last local run:
 

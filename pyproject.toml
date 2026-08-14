@@ -56,7 +56,7 @@ diagnostics = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["gym*", "experiments*"]
+include = ["gym*", "experiments*", "research*"]
 namespaces = true
 
 [tool.pytest.ini_options]

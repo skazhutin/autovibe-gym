@@ -167,6 +167,41 @@ def test_retry_helper_retries_transient_errors(monkeypatch):
     assert calls["count"] == 2
 
 
+def test_retry_helper_reports_each_provider_attempt_without_changing_retries(monkeypatch):
+    calls = {"count": 0}
+    attempts = []
+
+    class ConnectError(Exception):
+        pass
+
+    def operation():
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise ConnectError("temporary")
+        usage = types.SimpleNamespace(prompt_token_count=5, candidates_token_count=2)
+        return types.SimpleNamespace(usage_metadata=usage, response_id="response-1")
+
+    monkeypatch.setenv("LLM_RETRY_ATTEMPTS", "2")
+    monkeypatch.setattr("gym.llm.time.sleep", lambda delay: None)
+
+    response = _call_with_retries(operation, request_attempt_hook=attempts.append)
+
+    assert response.response_id == "response-1"
+    assert [attempt["retry_index"] for attempt in attempts] == [0, 1]
+    assert [attempt["success"] for attempt in attempts] == [False, True]
+    assert attempts[1]["input_tokens"] == 5
+    assert attempts[1]["output_tokens"] == 2
+
+
+def test_retry_observability_hook_cannot_change_provider_behavior(monkeypatch):
+    monkeypatch.setenv("LLM_RETRY_ATTEMPTS", "1")
+
+    assert _call_with_retries(
+        lambda: "ok",
+        request_attempt_hook=lambda event: (_ for _ in ()).throw(RuntimeError("ledger down")),
+    ) == "ok"
+
+
 def test_transient_error_detection_checks_status_code():
     error = RuntimeError("service unavailable")
     error.status_code = 503

@@ -23,6 +23,15 @@ except ImportError:
 
 from experiments.mlflow_config import configure_mlflow_tracking
 from experiments.modes import add_mode_metadata_args, mode_metadata_params
+from research.runner_integration import (
+    add_research_artifact_args,
+    dataset_source_hash,
+    finalize_research_run,
+    research_mlflow_params,
+    start_research_run,
+    wrap_executor,
+    wrap_llm,
+)
 from gym.data_profile import build_dataset_card
 from gym.datasets import load_dataset_splits, resolve_metric
 from gym.executor import CodeExecutor
@@ -121,6 +130,7 @@ def main():
     parser.add_argument("--experiment-name", default="autovibe-gym")
     parser.add_argument("--run-name", default=None)
     add_mode_metadata_args(parser)
+    add_research_artifact_args(parser)
     args = parser.parse_args()
 
     defaults = MODE_DEFAULTS[args.mode]
@@ -150,13 +160,6 @@ def main():
     model_name = apply_model_reference(args.model)
     run_name = args.run_name or f"repeated_single_shot{max_attempts}_{dataset_name}_{model_name.split('/')[-1]}"
 
-    client = make_llm_client()
-    executor = CodeExecutor(
-        timeout=sandbox_timeout,
-        backend=args.executor_backend,
-        docker_image=args.sandbox_image,
-    )
-
     dataset_card = build_dataset_card(train, val, target_col, metric_name, max_chars=4500)
     task_prompt = (
         f"Solve a supervised ML task.\n"
@@ -165,6 +168,35 @@ def main():
         f"{dataset_card}\n\n"
         "Workspace variables: train_df, val_df, target_col, pd, np\n"
         "Assign your trained model to variable: model"
+    )
+
+    recorder = start_research_run(
+        args,
+        arm="repeated_single_shot",
+        dataset_id=dataset_name,
+        dataset_hash=dataset_source_hash(dataset=args.dataset, dataset_dir=args.dataset_dir),
+        split_seed=splits.metadata.seed,
+        default_split_id=splits.metadata.split_strategy or f"seed-{args.seed}",
+        model_id=model_name,
+        prompt_template={"system": SYSTEM_PROMPT, "task": task_prompt},
+        decoding_config={"max_tokens": max_tokens},
+        budget_policy={
+            "logical_llm_calls": max_attempts,
+            "max_tokens_per_call": max_tokens,
+        },
+        execution_policy={
+            "backend": args.executor_backend or os.getenv("AUTOVIBE_EXECUTOR_BACKEND", "docker"),
+            "timeout_seconds": sandbox_timeout,
+        },
+    )
+    client = wrap_llm(make_llm_client(), recorder, model=model_name)
+    executor = wrap_executor(
+        CodeExecutor(
+            timeout=sandbox_timeout,
+            backend=args.executor_backend,
+            docker_image=args.sandbox_image,
+        ),
+        recorder,
     )
 
     configure_mlflow_tracking(mlflow)
@@ -185,6 +217,7 @@ def main():
             "dataset_role": splits.metadata.role,
             "dataset_sampled": str(splits.metadata.sampled),
             **mode_metadata_params(args, "repeated_single_shot"),
+            **research_mlflow_params(recorder),
         })
 
         best_val: float | None = None
@@ -416,6 +449,7 @@ def main():
         "output_tokens": total_output_tokens,
         "elapsed_seconds": elapsed,
     }
+    finalize_research_run(recorder, summary)
     print("\n=== Repeated Single-Shot Summary ===")
     print(json.dumps(summary, indent=2))
 

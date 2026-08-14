@@ -14,9 +14,10 @@ pilot evidence and must not be merged with the future confirmatory series.
 - Phase 0 code audit: complete at Git commit `1504cc0` (`origin/main` on
   2026-08-12).
 - Confirmatory runs: not authorized and not technically ready.
-- Runner behavior: unchanged by this protocol PR.
-- Global budget, manifest/ledger, failure classifier, and confirmatory runner:
-  scheduled for later PRs.
+- Runner causal behavior: unchanged; opt-in Paper V1 artifacts do not alter
+  prompts, budgets, submit behavior, or provider retry decisions.
+- Manifest/ledger and failure-classification infrastructure: implemented in
+  PR 2; fair global budgets and the confirmatory planner remain later PRs.
 
 The protocol cannot be frozen until every freeze-blocking TODO in
 [`protocol_v1.yaml`](protocols/protocol_v1.yaml) is resolved by a human owner.
@@ -66,12 +67,48 @@ Confirmatory execution must satisfy all of the following:
   dataset and model eligibility gates.
 - [`audits/2026-08-12-phase0.md`](audits/2026-08-12-phase0.md): evidence-backed
   map of the current implementation and gaps.
+- [`run_artifacts.py`](run_artifacts.py): stable condition IDs, unique run IDs,
+  atomic manifests, append-only usage/execution ledgers, redaction, and terminal
+  failure classification.
+- [`schemas/run_manifest.schema.json`](schemas/run_manifest.schema.json):
+  versioned manifest interchange schema.
+
+## Opt-in run artifacts
+
+Existing product runs remain unchanged unless both research flags are present:
+
+```powershell
+python -m experiments.run_gym `
+  --dataset-dir datasets/demo/prepared `
+  --model <registry-model-id> `
+  --research-run-dir outputs/paper-v1-pilot `
+  --research-experiment-id paper-v1-availability-pilot
+```
+
+Each attempt creates a new `run_<uuid>/` directory. An explicit duplicate
+`--research-run-id` fails instead of overwriting prior evidence. Technical
+reruns additionally require `--research-rerun-of` and
+`--research-rerun-reason`. The generated artifacts are:
+
+- `run_manifest.json` — atomically replaced state document with condition,
+  code/config/data/prompt hashes, terminal category, and ledger totals;
+- `usage_ledger.jsonl` — append-only logical calls plus provider request
+  attempts and retry indices where the provider adapter exposes them;
+- `execution_ledger.jsonl` — append-only baseline executions or public
+  notebook events, with private evaluator fields removed;
+- `manifest_events.jsonl` — append-only lifecycle audit.
+
+The current provider retry limits and backoff are only observed. PR 2 does not
+change them or enforce the future common global budget. The default model
+version is recorded honestly as `unversioned`; such runs are pilot-only and
+cannot satisfy the later freeze gate.
 
 ## Offline validation
 
 ```powershell
 python -m research.validate_protocol research/protocols/protocol_v1.yaml
 python -m pytest tests/test_research_protocol.py -q
+python -m pytest tests/test_research_run_artifacts.py tests/test_llm.py -q
 ```
 
 The validator checks structural consistency only. A passing validation does not

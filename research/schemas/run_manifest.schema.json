@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://autovibe-gym.local/schemas/run_manifest.schema.json",
+  "title": "AutoVibe Gym Paper V1 Run Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "experiment_id",
+    "condition_id",
+    "run_id",
+    "rerun_of",
+    "rerun_reason",
+    "state",
+    "started_at",
+    "completed_at",
+    "condition",
+    "provenance",
+    "failure_category",
+    "final_status",
+    "summary",
+    "ledger_totals",
+    "artifacts"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "experiment_id": { "type": "string", "minLength": 1 },
+    "condition_id": { "type": "string", "pattern": "^cond_[0-9a-f]{24}$" },
+    "run_id": { "type": "string", "pattern": "^run_[A-Za-z0-9._-]+$" },
+    "rerun_of": { "type": ["string", "null"] },
+    "rerun_reason": { "type": ["string", "null"] },
+    "state": { "enum": ["running", "completed"] },
+    "started_at": { "type": "string" },
+    "completed_at": { "type": ["string", "null"] },
+    "condition": { "type": "object" },
+    "provenance": { "type": "object" },
+    "failure_category": {
+      "type": ["string", "null"],
+      "enum": [
+        null,
+        "success",
+        "invalid_submission",
+        "agent_code_failure",
+        "budget_exhausted",
+        "execution_timeout",
+        "provider_rate_limit",
+        "provider_auth",
+        "provider_capacity",
+        "provider_other",
+        "sandbox_failure",
+        "orchestrator_failure"
+      ]
+    },
+    "final_status": { "type": ["string", "null"] },
+    "summary": { "type": "object" },
+    "ledger_totals": { "type": "object" },
+    "artifacts": { "type": "object" }
+  }
+}

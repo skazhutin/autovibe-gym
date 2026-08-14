@@ -24,6 +24,14 @@ from gym.datasets import DatasetSplits, load_dataset_splits, metric_from_name, r
 from gym.llm import make_llm_client
 from gym.model_config import apply_model_reference
 from gym.protocol import ACTION_JSON_SCHEMA, Action, ActionParseError
+from research.runner_integration import (
+    add_research_artifact_args,
+    dataset_source_hash,
+    finalize_research_run,
+    research_mlflow_params,
+    start_research_run,
+    wrap_llm,
+)
 
 try:
     from dotenv import load_dotenv
@@ -446,6 +454,7 @@ def main():
     parser.add_argument("--experiment-name", default="autovibe-gym")
     parser.add_argument("--run-name", default=None)
     add_mode_metadata_args(parser)
+    add_research_artifact_args(parser)
     args = parser.parse_args()
 
     defaults = MODE_DEFAULTS[args.mode]
@@ -468,6 +477,27 @@ def main():
     dataset_name = _dataset_name(splits, args.dataset_dir or args.dataset)
     model_name = apply_model_reference(args.model)
     run_name = args.run_name or f"fixed_{dataset_name}_{model_name.split('/')[-1]}"
+    recorder = start_research_run(
+        args,
+        arm="fixed_transitions",
+        dataset_id=dataset_name,
+        dataset_hash=dataset_source_hash(dataset=args.dataset, dataset_dir=args.dataset_dir),
+        split_seed=splits.metadata.seed,
+        default_split_id=splits.metadata.split_strategy or f"seed-{args.seed}",
+        model_id=model_name,
+        prompt_template={"system": SYSTEM_PROMPT, "stages": stages},
+        decoding_config={"max_tokens": max_tokens},
+        budget_policy={
+            "max_steps": max_steps,
+            "stage_budgets": {stage["name"]: stage["budget"] for stage in stages},
+            "max_tokens_per_call": max_tokens,
+        },
+        execution_policy={
+            "backend": os.getenv("AUTOVIBE_KERNEL_BACKEND", "local"),
+            "timeout_seconds": sandbox_timeout,
+        },
+    )
+    client = wrap_llm(make_llm_client(), recorder, model=model_name)
 
     import mlflow
 
@@ -492,6 +522,7 @@ def main():
             "dataset_role": splits.metadata.role,
             "dataset_sampled": str(splits.metadata.sampled),
             **mode_metadata_params(args, "fixed_transitions"),
+            **research_mlflow_params(recorder),
         })
 
         env = NotebookGymEnv(
@@ -513,6 +544,7 @@ def main():
             stages=stages,
             model=model_name,
             max_tokens=max_tokens,
+            client=client,
         )
         summary = agent.run()
         summary.update(mode_metadata_params(args, "fixed_transitions"))
@@ -533,6 +565,8 @@ def main():
                 solution_code=read_solution_code(episode_workspace or args.workspace_dir),
                 max_tokens=min(max_tokens, 700),
             )
+
+        finalize_research_run(recorder, summary, notebook_events=list(env.events))
 
         if episode_workspace and os.path.isdir(episode_workspace):
             mlflow.log_artifacts(episode_workspace, artifact_path="episode")
