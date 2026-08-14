@@ -1,0 +1,358 @@
+schema_version: "1.0"
+protocol_id: autovibe-gym-paper-v1
+title: "When Does Feedback Pay Off? A Budget-Matched, Failure-Aware Evaluation of LLM Agents for Tabular Machine Learning"
+status: draft_unfrozen
+prepared_at: "2026-08-12"
+target_first_version: "2026-10-15"
+
+freeze:
+  allowed: false
+  tag: null
+  rule: Resolve every freeze_blocking TODO before confirmatory runs begin.
+  required_clean_worktree: true
+  existing_outputs_are_pilot_only: true
+
+research_questions:
+  primary: >-
+    Under the same global LLM-token and execution budget, does stateful
+    execution feedback improve reliability and final tabular-ML solution quality
+    relative to budget-matched best-of-N single-shot?
+  secondary: >-
+    Does checklist feedback add value beyond runtime, contract, and validation
+    feedback in the same iterative environment?
+
+hypotheses:
+  H1:
+    status: confirmatory
+    label: feedback_reliability
+    comparison: B_vs_A
+    primary_outcome: failure_adjusted_normalized_utility
+  H2:
+    status: confirmatory_key_secondary
+    label: checklist_effect
+    comparison: C_vs_B
+    outcomes:
+      - failure_adjusted_normalized_utility
+      - valid_submission
+      - checklist_coverage
+      - clean_replay_success
+  H3:
+    status: confirmatory_heterogeneity
+    label: task_dependence
+    interpretation: Dataset-level estimates are required; aggregate effects alone are insufficient.
+  H4:
+    status: exploratory
+    label: fixed_workflow
+    comparison: D_vs_other_arms
+
+arms:
+  A:
+    analysis_id: budget_matched_best_of_n_single_shot
+    current_product_mode: repeated_single_shot
+    confirmatory: true
+    stateful_execution_feedback: false
+    checklist_feedback: false
+    selection_signal: validation_score_only
+  B:
+    analysis_id: iterative_no_checklist
+    current_product_mode: iterative_no_checklist
+    confirmatory: true
+    stateful_execution_feedback: true
+    checklist_feedback: false
+    selection_signal: validation_score_and_execution_feedback
+  C:
+    analysis_id: gym_with_checklist
+    current_product_mode: gym_with_checklist
+    confirmatory: true
+    stateful_execution_feedback: true
+    checklist_feedback: true
+    selection_signal: validation_score_execution_and_checklist_feedback
+  D:
+    analysis_id: fixed_transitions
+    current_product_mode: fixed_transitions
+    confirmatory: false
+    exploratory_only: true
+
+reference_arms:
+  plain_single_shot:
+    current_product_mode: single_shot
+    include: null
+    role_if_included: cost_pareto_reference_only
+    decision_todo: D04
+
+unit_of_analysis:
+  name: independent_agent_episode
+  required_identity_fields:
+    - experiment_id
+    - condition_id
+    - run_id
+    - git_commit
+    - dataset_id
+    - dataset_hash
+    - split_id
+    - split_seed
+    - model_provider
+    - model_id
+    - model_version
+    - decoding_config_hash
+    - arm
+    - replicate_index
+    - budget_policy_hash
+    - execution_policy_hash
+    - prompt_template_hash
+  rerun_rule: Every intentional rerun receives a new run_id, rerun_of, and reason; condition_id remains stable.
+
+matrix:
+  status: provisional_pending_freeze_decisions
+  models:
+    - slot: strong_model
+      provider: TODO
+      id: TODO
+      version: TODO
+      decision_todo: D01
+    - slot: compact_or_mid_model
+      provider: TODO
+      id: TODO
+      version: TODO
+      decision_todo: D01
+  datasets:
+    - id: air_quality
+      task_type: regression
+      status: candidate_requires_frozen_card_hash_and_split
+    - id: diabetes
+      task_type: binary_classification
+      status: candidate_requires_frozen_card_hash_and_split
+    - id: student_dropout
+      task_type: multiclass_classification
+      status: candidate_requires_frozen_card_hash_and_split
+    - id: dataset_4_tbd
+      candidates:
+        - bank_marketing
+        - phishing
+      status: unresolved
+      decision_todo: D02
+  confirmatory_arms:
+    - A
+    - B
+    - C
+  replicates_per_cell: 5
+  planned_confirmatory_runs: 120
+  block_keys:
+    - dataset_id
+    - model_id
+    - replicate_index
+  within_block_order: seeded_random_permutation_of_A_B_C
+  randomization_seed: 20260812
+  digits_role: infrastructure_smoke_only
+
+budget:
+  status: pilot_default_not_frozen
+  token_accounting: raw_input_plus_raw_output_plus_reported_reasoning
+  cached_input_policy: count_as_raw_input_for_context_budget
+  monetary_cost_policy: report_separately_from_token_budget
+  total_token_limit: 64000
+  max_output_tokens_per_call: 4096
+  max_llm_calls: 12
+  max_code_executions: 20
+  max_tool_calls: 20
+  wall_clock_limit_seconds: 1800
+  cpu_and_ram_limits_equal_across_confirmatory_arms: true
+  pre_call_enforcement_required: true
+  stop_before_overshoot: true
+  include_decision_affecting_calls:
+    - agent_turn
+    - parse_or_contract_repair
+    - model_finalization
+  post_outcome_llm_summary_in_confirmatory: disabled
+  final_budget_decision_todo: D03
+
+submission_policy:
+  common_validator_across_confirmatory_arms: true
+  host_side_autofit: false
+  agent_must_fit_submission: true
+  clean_replay_required: true
+  validation_can_drive_selection: true
+  hidden_score_can_drive_selection: false
+  max_hidden_evaluations_per_agent_outcome: 1
+  hidden_diagnostics_exposed_to_agent: false
+  feedback_after_hidden_evaluation_can_change_outcome: false
+  hidden_evaluation_failure_class: invalid_submission
+  confirmatory_kernel_backend: docker
+  hidden_files_and_host_secrets_must_be_inaccessible: true
+
+endpoints:
+  primary:
+    id: failure_adjusted_normalized_utility
+    abbreviation: FANU
+    higher_is_better_formula: (S_agent - S_dummy) / (S_reference - S_dummy)
+    lower_is_better_formula: (S_dummy - S_agent) / (S_dummy - S_reference)
+    agent_failure_score: S_dummy
+    clip: false
+    infrastructure_censored: true
+    required_pre_freeze_values:
+      - metric_direction
+      - S_dummy
+      - S_reference
+  key_secondary:
+    - valid_submission_rate
+    - hidden_test_score_all_agent_outcomes
+    - hidden_test_score_successful_only
+    - total_input_output_reasoning_tokens
+    - wall_clock_seconds
+    - cpu_time_seconds
+    - llm_calls
+    - code_executions
+    - tool_calls
+    - validation_to_test_gap
+    - error_recovery_rate
+    - checklist_coverage
+    - clean_replay_success
+    - cost_quality_pareto_frontier
+
+analysis:
+  primary_comparison:
+    treatment: B
+    control: A
+    outcome: failure_adjusted_normalized_utility
+  key_secondary_comparison:
+    treatment: C
+    control: B
+    outcome: failure_adjusted_normalized_utility
+  paired_block_keys:
+    - dataset_id
+    - model_id
+    - replicate_index
+  aggregate_weighting: equal_weight_per_dataset_model_stratum
+  confidence_interval:
+    method: paired_stratified_percentile_bootstrap
+    level: 0.95
+    resamples: 10000
+    seed: 20260812
+  hypothesis_test:
+    method: two_sided_paired_permutation
+    monte_carlo_draws_if_not_exact: 100000
+    seed: 20260812
+    familywise_correction: holm_for_H1_and_H2_FANU_tests
+    alpha: 0.05
+  valid_submission_test: exact_mcnemar
+  report_dataset_level_results: true
+  mixed_effects_model_role: exploratory_only
+  inspect_confirmatory_results_before_freeze: false
+
+failure_policy:
+  categories:
+    - success
+    - agent_code_failure
+    - invalid_submission
+    - budget_exhausted
+    - execution_timeout
+    - sandbox_failure
+    - provider_rate_limit
+    - provider_capacity
+    - provider_auth
+    - provider_other
+    - orchestrator_failure
+  provider_or_infrastructure_categories:
+    - sandbox_failure
+    - provider_rate_limit
+    - provider_capacity
+    - provider_auth
+    - provider_other
+    - orchestrator_failure
+  agent_categories:
+    - agent_code_failure
+    - invalid_submission
+    - budget_exhausted
+    - execution_timeout
+  max_automatic_provider_retries_per_call: 3
+  provider_retry_backoff: exponential_capped
+  unresolved_infrastructure_run: censored_and_replacement_queued
+  agent_failure_rerun: forbidden
+  overwrite_attempt_artifacts: false
+  replacement_rule: same_condition_new_run_id_with_rerun_of_and_reason
+
+checklist_validation:
+  mandatory_detector_items: 12
+  trajectory_sample_fraction_min: 0.20
+  trajectory_sample_fraction_max: 0.25
+  stratify_by:
+    - model_id
+    - dataset_id
+    - arm
+  independent_annotators: 2
+  detector_metrics:
+    - precision_per_item
+    - recall_per_item
+    - f1_per_item
+  inter_annotator_metric:
+    - cohens_kappa_or_krippendorffs_alpha
+  low_accuracy_interpretation: checklist_coverage_is_process_proxy_not_quality_outcome
+  second_annotator_todo: D06
+
+exclusions:
+  allowed:
+    - predeclared_infrastructure_censoring
+    - predeclared_dataset_or_condition_invalidity_discovered_without_viewing_arm_outcomes
+  forbidden:
+    - selecting_only_successful_runs_for_primary_FANU
+    - selecting_runs_by_hidden_score
+    - dropping_agent_failures
+    - changing_hypotheses_after_confirmatory_result_inspection
+    - mixing_pilot_and_confirmatory_runs
+  log_required: true
+
+todos:
+  - id: D01
+    decision: Freeze two exact model IDs, versions, providers, endpoints, and decoding configurations after availability pilot.
+    owner: project_owner
+    deadline: "2026-09-07"
+    status: open
+    freeze_blocking: true
+  - id: D02
+    decision: Select and freeze the fourth dataset as bank_marketing or phishing.
+    owner: project_owner
+    deadline: "2026-09-07"
+    status: open
+    freeze_blocking: true
+  - id: D03
+    decision: Freeze the final global token and execution budget after a result-blind availability/budget pilot.
+    owner: project_owner
+    deadline: "2026-09-07"
+    status: open
+    freeze_blocking: true
+  - id: D04
+    decision: Decide whether plain single_shot remains as a separate cost/Pareto reference arm.
+    owner: project_owner
+    deadline: "2026-09-07"
+    status: open
+    freeze_blocking: false
+  - id: D05
+    decision: Select immutable storage for large trajectories and MLflow artifacts.
+    owner: project_owner
+    deadline: "2026-09-07"
+    status: open
+    freeze_blocking: true
+  - id: D06
+    decision: Name the second independent checklist annotator.
+    owner: project_owner
+    deadline: "2026-09-07"
+    status: open
+    freeze_blocking: true
+  - id: D07
+    decision: Select arXiv-style report or a specific workshop/conference template.
+    owner: project_owner
+    deadline: "2026-09-07"
+    status: open
+    freeze_blocking: false
+  - id: D08
+    decision: Approve the monetary/API budget and hard cost stop for the main series.
+    owner: project_owner
+    deadline: "2026-09-07"
+    status: open
+    freeze_blocking: true
+  - id: D09
+    decision: Freeze dataset hashes, splits, metric directions, S_dummy, and S_reference values for all four datasets.
+    owner: research_lead
+    deadline: "2026-09-07"
+    status: open
+    freeze_blocking: true

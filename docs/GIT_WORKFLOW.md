@@ -10,10 +10,80 @@ AI-generated коду. Обновляйте его в том же PR, где м�
 3. Одна ветка - одна понятная задача или один эксперимент.
 4. Общие feature-ветки запрещены без явной договоренности команды.
 5. Перед готовностью PR ветка должна быть rebased на свежий `origin/main`.
-6. В конце каждой рабочей сессии ветку нужно push'ить, даже если PR остается draft.
-7. Секреты, локальные датасеты, кеши и outputs экспериментов не коммитятся.
-8. В конце каждого PR-цикла обновляется `docs/STATUS.md`.
-9. Если меняется командный Git/PR-процесс, обновляется этот файл.
+6. Все commits создаются только с author/committer identity
+   `JapanDino <klim.i.rumyantsev@gmail.com>`.
+7. Все pull requests создаются только из GitHub-аккаунта `JapanDino`.
+8. Stage, commit, push, создание/редактирование PR и merge выполняются только
+   после отдельного явного разрешения владельца; подготовленный diff не означает
+   автоматическое разрешение на публикацию.
+9. Push выполняется в согласованных checkpoint'ах. Требование «push в конце
+   каждой сессии» больше не действует без явного разрешения.
+10. Секреты, локальные датасеты, кеши и outputs экспериментов не коммитятся.
+11. В конце каждого PR-цикла обновляется `docs/STATUS.md`.
+12. Если меняется командный Git/PR-процесс, обновляется этот файл.
+13. Для исследовательских PR обязательны дополнительные правила из
+   `docs/RESEARCH_PR_POLICY.md`.
+
+## Обязательная Git/GitHub Identity
+
+Единственная разрешенная commit identity:
+
+```text
+JapanDino <klim.i.rumyantsev@gmail.com>
+```
+
+Перед каждым commit проверить одновременно author и committer:
+
+```bash
+git config --get user.name
+git config --get user.email
+git var GIT_AUTHOR_IDENT
+git var GIT_COMMITTER_IDENT
+```
+
+Ожидаемые name/email во всех четырех проверках: `JapanDino` и
+`klim.i.rumyantsev@gmail.com`. Если checkout содержит другой local override,
+commit запрещен до исправления конфигурации.
+
+После commit проверить фактическую запись:
+
+```bash
+git show -s --format=fuller HEAD
+```
+
+Перед push и созданием PR проверить:
+
+```bash
+git remote -v
+gh auth status
+gh api user --jq .login
+```
+
+Ожидаемый GitHub login: `JapanDino`. Нельзя создавать PR из сессии другого
+GitHub-аккаунта, даже если у нее есть доступ к репозиторию. Если upstream
+принадлежит другой организации/пользователю, ветка публикуется credentials
+`JapanDino` как collaborator либо через fork `JapanDino`; автором PR все равно
+должен оставаться `JapanDino`.
+
+GitHub web/API author и локальный Git author — две независимые проверки. Одной
+правильной локальной подписи недостаточно, чтобы считать PR созданным от нужного
+аккаунта.
+
+## Human Authorization Gates
+
+Разрешения не наследуются автоматически между этапами:
+
+| Этап | Что можно делать без нового разрешения | Что требует явного разрешения |
+|---|---|---|
+| Подготовка | читать, редактировать task files, запускать offline checks, показывать diff | stage |
+| Commit checkpoint | повторно проверить scope/identity/diff/tests | `git add`, `git commit` |
+| Publish checkpoint | проверить remote, branch, GitHub login и отсутствие секретов | `git push` |
+| PR checkpoint | подготовить title/body/checklist и показать их владельцу | создать или существенно изменить Draft/Ready PR |
+| Merge checkpoint | проверить approvals, CI, fresh base и research gates | merge, tag, release |
+
+Фраза «подготовь PR» разрешает подготовить branch/diff/title/body, но не commit,
+push или создание PR, если пользователь явно не попросил выполнить эти действия.
+Фраза «сделай commit» не разрешает push. Фраза «push» не разрешает открыть PR.
 
 ## Что Читать Перед Работой
 
@@ -22,6 +92,8 @@ AI-generated коду. Обновляйте его в том же PR, где м�
 - `docs/PROJECT.md` - цели, архитектура, ограничения;
 - `docs/STATUS.md` - текущий статус, блокеры, ближайшие действия;
 - `docs/GIT_WORKFLOW.md` - правила веток, коммитов, PR и review.
+- `docs/RESEARCH_PR_POLICY.md` - дополнительные правила research/Paper V1 PR,
+  preregistration, freeze, pilot/confirmatory boundary и evidence.
 
 Для AI-агентов `AGENTS.md` и `CLAUDE.md` могут добавлять tool-specific
 инструкции, но Git workflow определяется этим файлом.
@@ -218,6 +290,11 @@ PR обязателен для попадания в `main`.
 - verification: какие команды запущены и с каким результатом;
 - risks: что не проверено, заблокировано или требует внимания.
 
+Research PR дополнительно обязан включать protocol/hypothesis/invariant,
+evidence boundary, provenance, human decisions и отдельный блок «What this PR
+does not prove». Полный шаблон и момент создания каждого Paper V1 PR описаны в
+`docs/RESEARCH_PR_POLICY.md`.
+
 Checklist перед Ready for review:
 
 - ветка rebased на свежий `origin/main`;
@@ -271,6 +348,12 @@ AI-агенты быстро генерируют большие diff'ы, поэ
 - обновлять `docs/GIT_WORKFLOW.md`, если меняется сам процесс;
 - показывать или кратко описывать final diff перед merge;
 - держать изменения в рамках поставленной задачи.
+- никогда не подменять commit author/committer и PR author другой учетной
+  записью; обязательны `JapanDino <klim.i.rumyantsev@gmail.com>` и GitHub login
+  `JapanDino`;
+- не считать разрешение на редактирование разрешением на stage/commit/push/PR;
+- до публикации проверять фактический base branch: PR с unrelated ancestry или
+  чужими коммитами запрещен, даже если task diff сам по себе корректен.
 
 Для Codex проектные инструкции лежат в `AGENTS.md`.
 Для Claude Code tool-specific инструкции лежат в `CLAUDE.md`.
@@ -284,6 +367,7 @@ AI-агенты быстро генерируют большие diff'ы, поэ
 | `docs/STATUS.md` | Сверять актуальный статус вручную; changelog entries не удалять |
 | `docs/PROJECT.md` | Менять только при изменении scope или архитектуры |
 | `docs/GIT_WORKFLOW.md` | Менять только при изменении командного процесса |
+| `docs/RESEARCH_PR_POLICY.md` | Менять вместе с research PR/freeze/evidence процессом |
 | `gym/env.py` | Согласовывать, потому что это core runtime contract |
 | `gym/checklist.py` | Хинты должны оставаться implicit, без прямых инструкций LLM |
 | `gym/agent.py` | Не hardcode'ить secrets, provider-specific local paths |
