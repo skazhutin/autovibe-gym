@@ -31,6 +31,7 @@ from research.runner_integration import (
     wrap_executor,
     wrap_llm,
 )
+from research.budget import BudgetExhausted
 from research.submission import HiddenEvaluationGate, validate_submission_candidate
 from gym.data_profile import build_dataset_card
 from gym.datasets import load_dataset_splits, resolve_metric
@@ -176,13 +177,22 @@ def main():
             **research_mlflow_params(recorder),
         })
 
-        response = client.complete(
-            model=model_name,
-            max_tokens=max_tokens,
-            system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": task_prompt}],
-        )
-        code = extract_code(response.text)
+        response = None
+        code = ""
+        stdout = ""
+        stderr = ""
+        budget_stop_reason = None
+        try:
+            response = client.complete(
+                model=model_name,
+                max_tokens=max_tokens,
+                system=SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": task_prompt}],
+            )
+            code = extract_code(response.text)
+        except BudgetExhausted as exc:
+            budget_stop_reason = exc.reason
+            stderr = f"[budget exhausted] {exc.reason}"
 
         executor = wrap_executor(
             CodeExecutor(
@@ -200,7 +210,12 @@ def main():
             "pd": pd,
             "np": np,
         }
-        stdout, stderr, namespace = executor.run(code, namespace)
+        if response is not None:
+            try:
+                stdout, stderr, namespace = executor.run(code, namespace)
+            except BudgetExhausted as exc:
+                budget_stop_reason = exc.reason
+                stderr = f"[budget exhausted] {exc.reason}"
 
         test_metric = None
         final_status = "no_candidate_found"
@@ -209,7 +224,14 @@ def main():
         finalize_path = "failed"
         submit_error = ""
         hidden_gate = HiddenEvaluationGate()
-        model_obj = namespace.get("model") or namespace.get("best_model")
+        if budget_stop_reason is not None:
+            final_status = "budget_exhausted"
+            null_reason = f"Episode stopped before a valid candidate: {budget_stop_reason}."
+            submit_failure_type = "budget_exhausted"
+            finalize_path = "budget_stop"
+        model_obj = None if budget_stop_reason is not None else (
+            namespace.get("model") or namespace.get("best_model")
+        )
         if model_obj is None:
             for value in namespace.values():
                 if callable(getattr(value, "predict", None)):
@@ -285,9 +307,10 @@ def main():
             "final_test_metric": test_metric,
             "submit_failure_type": submit_failure_type,
             "finalize_path": finalize_path,
-            "input_tokens": response.input_tokens,
-            "output_tokens": response.output_tokens,
-            "reasoning_tokens": response.reasoning_tokens,
+            "input_tokens": response.input_tokens if response is not None else 0,
+            "output_tokens": response.output_tokens if response is not None else 0,
+            "reasoning_tokens": response.reasoning_tokens if response is not None else 0,
+            "budget_stop_reason": budget_stop_reason,
             "hidden_evaluations": int(hidden_gate.attempted),
             "elapsed_seconds": elapsed,
             "has_error": bool(stderr.strip()),
@@ -299,12 +322,13 @@ def main():
         from experiments.dashboard_artifacts import checklist_coverage, write_episode_artifacts
         coverage = checklist_coverage(code, stdout, target_col)
         summary["checklist_coverage"] = coverage
-        summary["steps_used"] = 1
+        steps_used = int(response is not None)
+        summary["steps_used"] = steps_used
         if args.workspace_dir:
             err_name = (submit_failure_type or "Error") if (test_metric is None and stderr.strip()) else None
             write_episode_artifacts(args.workspace_dir, code=code, stdout=stdout,
                                     stderr=stderr, error_name=err_name,
-                                    target_col=target_col, coverage=coverage, steps=1)
+                                    target_col=target_col, coverage=coverage, steps=steps_used)
             # Best-effort self-summary from the single-shot exchange (no hidden
             # score in scope), persisted for the dashboard «Мысли» tab. Generated
             # once the model produced a usable solution (a predict-capable
@@ -333,7 +357,7 @@ def main():
             "input_tokens": summary["input_tokens"],
             "output_tokens": summary["output_tokens"],
             "elapsed_seconds": elapsed,
-            "steps_used": 1,
+            "steps_used": steps_used,
         }
         if coverage is not None:
             metrics["checklist_coverage"] = coverage

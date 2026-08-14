@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-08-14 (Paper V1 PR 1 and PR 2 are merged; PR 3 is published for review as PR #65, and no research run was executed)
+**Last updated:** 2026-08-14 (Paper V1 PR 1 and PR 2 are merged; PR 3 review fixes are published in PR #65, and no research run was executed)
 **Phase:** Paper V1 provenance infrastructure alongside product hardening.
 
 ---
@@ -20,7 +20,7 @@ that block a budget-matched confirmatory study.
 | Protocol freeze | Blocked | Exact models/endpoints, dataset 4, final budget, artifact storage, second annotator, monetary cap, and frozen dataset/reference values remain human decisions |
 | Confirmatory execution | Not started | Existing outputs remain pilot-only; no expensive API runs authorized in this cycle |
 | Auditable run artifacts (PR 2) | Merged | PR 2 was rebased onto merged PR 1, reverified (`289 passed, 2 skipped` locally plus required GitHub `Python tests` success), and squash-merged as `67069a3` |
-| Causal runner behavior changes (PR 3) | In review as PR #65 | Research-mode A/B/C runners share one pre-call-enforced episode budget, common no-autofit submission validation, and at most one hidden evaluation. Default product behavior remains compatible. The branch is based on merged PR 2 and passed `304 passed, 2 skipped` locally; required GitHub CI is pending |
+| Causal runner behavior changes (PR 3) | In review as PR #65 | Research-mode A/B/C runners share one pre-call-enforced episode budget, common no-autofit submission validation, and at most one hidden evaluation. Default product behavior remains compatible. The branch is based on merged PR 2 and passed `307 passed, 2 skipped` locally; required GitHub `Python tests` passed. The additional Docker integration job remains flaky at kernel readiness and is tracked as infrastructure work outside this PR's research scope |
 | Research PR policy | Done | `docs/RESEARCH_PR_POLICY.md` defines authorization, identity, Draft/Ready/Merge gates, PR 1–6 timing, pilot/freeze/confirmatory boundaries, PR body, commit evidence, and post-merge rules |
 | Commit/PR identity | Enforced by policy/config | Commits use `JapanDino <klim.i.rumyantsev@gmail.com>`; PR author must be GitHub login `JapanDino`; identity is checked independently before commit and before PR |
 
@@ -152,8 +152,21 @@ Paper V1 fair-budget cycle (local PR 3 preparation, 2026-08-14):
 - `pytest -q tests/test_notebook_env.py` -> `33 passed, 1 skipped`, one existing
   Jupyter path deprecation warning; the skipped case is the Docker integration
   because Docker was not available to that test process.
-- Full `pytest -q` -> `304 passed, 2 skipped`, one existing Jupyter path
+- Review follow-up normalizes OpenAI-compatible usage so reasoning tokens remain
+  a separately reported subset of completion tokens rather than being charged
+  twice. A regression test fixes the expected visible-output/reasoning split.
+- A pre-call or pre-execution budget stop in the single-shot control is now a
+  recorded `budget_exhausted` terminal outcome and reaches manifest
+  finalization without provider access or hidden evaluation.
+- Focused review regression -> `77 passed`, one existing Jupyter path
+  deprecation warning.
+- Full `pytest -q` -> `307 passed, 2 skipped`, one existing Jupyter path
   deprecation warning. `git diff --check` passed.
+- Required GitHub `Python tests` passed on PR #65. The additional Docker sandbox
+  integration job failed twice on a kernel-readiness timeout, alternating
+  between its two integration cases; the production code and focused local
+  suites did not reproduce a deterministic failure. CI handshake hardening is
+  intentionally not mixed into this research PR without separate approval.
 - No API calls, pilot episodes, or hidden-test research runs occurred. PR 3 was
   rebased onto merged `origin/main`, reverified, and published as PR #65.
 
@@ -448,7 +461,7 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 
 | Date | Change |
 |------|--------|
-| 2026-08-14 | Merged Paper V1 PR 1 (`6bb75d1`) and PR 2 (`67069a3`) in order after required checks. Published PR 3 as #65: pre-call global episode budgets and audit events, common no-autofit submission validation, one-shot hidden evaluation without repair feedback, reasoning/cached-token observability, and research-only suppression of post-outcome LLM summaries. Full offline suite: `304 passed, 2 skipped`; no API/pilot/confirmatory run occurred. |
+| 2026-08-14 | Merged Paper V1 PR 1 (`6bb75d1`) and PR 2 (`67069a3`) in order after required checks. Published PR 3 as #65: pre-call global episode budgets and audit events, common no-autofit submission validation, one-shot hidden evaluation without repair feedback, reasoning/cached-token observability, and research-only suppression of post-outcome LLM summaries. Review follow-up removed reasoning-token double counting and ensured budget exhaustion still finalizes the single-shot manifest. Full offline suite: `307 passed, 2 skipped`; required GitHub `Python tests` passed; the separate Docker integration job remains flaky at kernel readiness. No API/pilot/confirmatory run occurred. |
 | 2026-08-12 | Codified mandatory authorship and publication rules: every commit must use `JapanDino <klim.i.rumyantsev@gmail.com>`, every PR must be authored by GitHub login `JapanDino`, and stage/commit/push/PR/merge require separate explicit authorization. Added `docs/RESEARCH_PR_POLICY.md` with Draft/Ready/Merge timing, PR 1–6 sequencing, preregistered PR 5a before freeze, pilot/confirmatory gates, PR-body evidence requirements, and post-merge provenance rules. |
 | 2026-08-12 | Prepared the unfrozen Paper V1 research package from freshly fetched `origin/main` commit `1504cc0`: Phase 0 evidence-backed code audit, canonical machine-readable protocol, hypotheses, analysis plan, failure/retry policy, dataset/model selection gates, offline validator, and focused tests. Confirmed current per-call token semantics, host autofit in single/repeated controls, separate step/tool accounting, private hidden score, three-attempt hidden failure loop, and 8-vs-12 checklist documentation drift. No runner behavior, API experiment, commit, push, or PR was performed. |
 | 2026-06-08 | Gym now beats single-shot (experiment-validated, gemma-4-26b): (1) validation-improvement nudge — after `validate`, NotebookGymEnv reports best-so-far + remaining budget and pushes the agent to beat its own baseline (honest, val-split only, feedback modes only); flips student_dropout from −0.004 (gym lost) to +0.013 over single-shot. (1b) unknown-cell-id guard — targeting a non-existent cell is now a recoverable blocker instead of a KeyError that crashed the whole episode, restoring valid-submit rate to 1.0. Measured-but-rejected: per-class-recall diagnostic and candidate-list nudge both hurt (extra feedback verbosity inflates the trajectory → more clean-run failures) |

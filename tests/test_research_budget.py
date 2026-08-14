@@ -67,6 +67,19 @@ def test_budgeted_llm_caps_output_and_records_reported_usage():
     assert budget.snapshot()["reasoning_tokens"] == 2
 
 
+def test_reasoning_and_visible_output_share_the_reserved_output_cap():
+    budget = EpisodeBudget(_policy(max_output_tokens_per_call=10))
+    client = _Client(_Response(input_tokens=10, output_tokens=8, reasoning_tokens=2))
+
+    BudgetedLLMClient(client, budget).complete(
+        system="s", messages=[], model="m", max_tokens=10
+    )
+
+    assert budget.total_tokens == 20
+    assert budget.snapshot()["output_tokens"] == 8
+    assert budget.snapshot()["reasoning_tokens"] == 2
+
+
 def test_pre_call_enforcement_stops_without_invoking_provider():
     messages = [{"role": "user", "content": "x" * 100}]
     reservation = conservative_input_token_bound("system", messages) + 50

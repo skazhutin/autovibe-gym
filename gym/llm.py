@@ -19,10 +19,12 @@ def _openai_usage_counts(usage: object | None) -> tuple[int, int, int, int]:
         return 0, 0, 0, 0
     prompt_details = getattr(usage, "prompt_tokens_details", None)
     completion_details = getattr(usage, "completion_tokens_details", None)
+    completion_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
+    reasoning_tokens = int(getattr(completion_details, "reasoning_tokens", 0) or 0)
     return (
         int(getattr(usage, "prompt_tokens", 0) or 0),
-        int(getattr(usage, "completion_tokens", 0) or 0),
-        int(getattr(completion_details, "reasoning_tokens", 0) or 0),
+        max(completion_tokens - reasoning_tokens, 0),
+        reasoning_tokens,
         int(getattr(prompt_details, "cached_tokens", 0) or 0),
     )
 

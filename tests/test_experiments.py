@@ -1,6 +1,8 @@
 import json
 import re
 import sys
+import types
+from contextlib import nullcontext
 from pathlib import Path
 
 import pandas as pd
@@ -68,6 +70,78 @@ def test_run_baseline_extract_code_prefers_python_fence():
 def test_run_baseline_extract_code_accepts_plain_fence_and_plain_text():
     assert run_baseline.extract_code("```\nx = 1\n```") == "x = 1"
     assert run_baseline.extract_code("x = 2") == "x = 2"
+
+
+def test_run_baseline_finalizes_manifest_when_budget_stops_before_llm(monkeypatch):
+    frame = pd.DataFrame({"x": range(12), "target": [0, 1] * 6})
+    metadata = types.SimpleNamespace(
+        name="fixture",
+        seed=42,
+        split_strategy="fixture-split",
+        role="test",
+        sampled=False,
+    )
+    splits = types.SimpleNamespace(
+        train=frame.copy(),
+        val=frame.copy(),
+        test=frame.copy(),
+        target_col="target",
+        metadata=metadata,
+    )
+
+    class FailIfCalledClient:
+        def complete(self, **_kwargs):
+            raise AssertionError("provider call must be stopped by the global budget")
+
+    finalized = []
+    fake_mlflow = types.SimpleNamespace(
+        set_experiment=lambda *_args, **_kwargs: None,
+        start_run=lambda **_kwargs: nullcontext(),
+        log_params=lambda *_args, **_kwargs: None,
+        set_tags=lambda *_args, **_kwargs: None,
+        log_metrics=lambda *_args, **_kwargs: None,
+        log_text=lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(run_baseline, "mlflow", fake_mlflow)
+    monkeypatch.setattr(run_baseline, "configure_mlflow_tracking", lambda *_args: None)
+    monkeypatch.setattr(run_baseline, "load_dataset_splits", lambda **_kwargs: splits)
+    monkeypatch.setattr(run_baseline, "resolve_metric", lambda *_args: (lambda *_a: 1.0, "accuracy"))
+    monkeypatch.setattr(run_baseline, "build_dataset_card", lambda *_args, **_kwargs: "card")
+    monkeypatch.setattr(run_baseline, "dataset_source_hash", lambda **_kwargs: "hash")
+    monkeypatch.setattr(run_baseline, "apply_model_reference", lambda model: model)
+    monkeypatch.setattr(run_baseline, "make_llm_client", FailIfCalledClient)
+    monkeypatch.setattr(run_baseline, "start_research_run", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        run_baseline,
+        "finalize_research_run",
+        lambda _recorder, summary, **_kwargs: finalized.append(dict(summary)),
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_baseline",
+            "--dataset",
+            "fixture.csv",
+            "--target",
+            "target",
+            "--model",
+            "fixture-model",
+            "--research-run-dir",
+            "runs",
+            "--research-experiment-id",
+            "paper-v1",
+            "--research-total-token-limit",
+            "1",
+        ],
+    )
+
+    run_baseline.main()
+
+    assert finalized[0]["final_status"] == "budget_exhausted"
+    assert finalized[0]["finalize_path"] == "budget_stop"
+    assert finalized[0]["steps_used"] == 0
+    assert finalized[0]["hidden_evaluations"] == 0
 
 
 def test_run_multishot_extract_code_and_feedback():

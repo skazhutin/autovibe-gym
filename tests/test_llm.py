@@ -12,6 +12,7 @@ from gym.llm import (
     _google_response_text,
     _is_transient_error,
     _messages_to_google_contents,
+    _openai_usage_counts,
     _usage_count,
     _wait_for_min_request_interval,
     default_model_name,
@@ -78,6 +79,17 @@ def test_openai_compatible_client_uses_env_and_prepends_system_message(monkeypat
 def test_llm_response_defaults_to_zero_token_counts():
     assert LLMResponse(text="ok").input_tokens == 0
     assert LLMResponse(text="ok").output_tokens == 0
+
+
+def test_openai_usage_separates_reasoning_from_completion_total():
+    usage = types.SimpleNamespace(
+        prompt_tokens=11,
+        completion_tokens=9,
+        completion_tokens_details=types.SimpleNamespace(reasoning_tokens=4),
+        prompt_tokens_details=types.SimpleNamespace(cached_tokens=3),
+    )
+
+    assert _openai_usage_counts(usage) == (11, 5, 4, 3)
 
 
 def test_make_llm_client_defaults_to_openai(monkeypatch):
