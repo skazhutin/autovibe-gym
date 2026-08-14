@@ -23,6 +23,7 @@ from gym.model_config import apply_model_reference
 from gym.llm import make_llm_client
 from research.runner_integration import (
     add_research_artifact_args,
+    create_episode_budget,
     dataset_source_hash,
     finalize_research_run,
     research_mlflow_params,
@@ -118,6 +119,9 @@ def main():
     max_steps = args.max_steps or defaults["max_steps"]
     max_tokens = args.max_tokens or defaults["max_tokens"]
     sandbox_timeout = args.sandbox_timeout or defaults["sandbox_timeout"]
+    episode_budget = create_episode_budget(args)
+    if episode_budget is not None:
+        max_tokens = min(max_tokens, episode_budget.policy.max_output_tokens_per_call)
 
     splits = load_dataset_splits(
         dataset=args.dataset,
@@ -147,16 +151,23 @@ def main():
             "feedback_policy_version": NotebookGymEnv.feedback_policy_version,
         },
         decoding_config={"max_tokens": max_tokens},
-        budget_policy={
-            "max_agent_turns": max_steps,
-            "max_tokens_per_call": max_tokens,
-        },
+        budget_policy=(
+            episode_budget.policy.to_dict()
+            if episode_budget is not None
+            else {"max_agent_turns": max_steps, "max_tokens_per_call": max_tokens}
+        ),
         execution_policy={
             "backend": _kernel_backend_label(),
             "timeout_seconds": sandbox_timeout,
         },
+        episode_budget=episode_budget,
     )
-    client = wrap_llm(make_llm_client(), recorder, model=model_name)
+    client = wrap_llm(
+        make_llm_client(),
+        recorder,
+        model=model_name,
+        episode_budget=episode_budget,
+    )
 
     import mlflow
 
@@ -203,6 +214,8 @@ def main():
             kernel_timeout=sandbox_timeout,
             enable_thoughts=args.enable_thoughts,
             hint_cooldown=args.hint_cooldown,
+            episode_budget=episode_budget,
+            research_submission=episode_budget is not None,
         )
 
         agent = GymAgent(env=env, model=model_name, max_tokens=max_tokens, client=client)
@@ -217,7 +230,7 @@ def main():
         # submit — even if the hidden test later rejected it), ask the model to
         # summarize its own solution and persist it as run_summary.json so the
         # dashboard «Мысли» tab can show it on top.
-        if summary.get("submitted"):
+        if summary.get("submitted") and episode_budget is None:
             from gym.run_summary import generate_and_write, read_solution_code
 
             generate_and_write(
@@ -231,7 +244,12 @@ def main():
                 max_tokens=min(max_tokens, 700),
             )
 
-        finalize_research_run(recorder, summary, notebook_events=notebook_events)
+        finalize_research_run(
+            recorder,
+            summary,
+            notebook_events=notebook_events,
+            episode_budget=episode_budget,
+        )
 
         has_test_metric = summary.get("final_test_metric") is not None
         metrics = {

@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-08-13 (Paper V1 PR 2 adds opt-in auditable run artifacts; causal runner behavior and confirmatory results remain unchanged)
+**Last updated:** 2026-08-14 (Paper V1 PR 1 and PR 2 are merged; PR 3 is locally implemented and verified before publication, and no research run was executed)
 **Phase:** Paper V1 provenance infrastructure alongside product hardening.
 
 ---
@@ -19,8 +19,8 @@ that block a budget-matched confirmatory study.
 | `research/protocol-v1` scaffold | Done | Machine-readable protocol, hypotheses, analysis plan, failure policy, selection gates, validator, and offline tests |
 | Protocol freeze | Blocked | Exact models/endpoints, dataset 4, final budget, artifact storage, second annotator, monetary cap, and frozen dataset/reference values remain human decisions |
 | Confirmatory execution | Not started | Existing outputs remain pilot-only; no expensive API runs authorized in this cycle |
-| Auditable run artifacts (PR 2) | In review | Implemented on a stacked Draft branch over PR 1: stable condition IDs, unique non-overwriting run IDs, atomic manifests, append-only usage/execution ledgers, provider-attempt hooks, redaction, rerun linkage, and one terminal failure class are integrated behind opt-in flags; Ready/merge remains blocked until PR 1 merges |
-| Causal runner behavior changes | Not started | Fair global budget and common submit mechanics remain PR 3; PR 2 only records existing behavior |
+| Auditable run artifacts (PR 2) | Merged | PR 2 was rebased onto merged PR 1, reverified (`289 passed, 2 skipped` locally plus required GitHub `Python tests` success), and squash-merged as `67069a3` |
+| Causal runner behavior changes (PR 3) | Locally implemented and verified | Research-mode A/B/C runners share one pre-call-enforced episode budget, common no-autofit submission validation, and at most one hidden evaluation. Default product behavior remains compatible. Publication requires moving the isolated PR 3 commit onto merged `origin/main` and rerunning verification |
 | Research PR policy | Done | `docs/RESEARCH_PR_POLICY.md` defines authorization, identity, Draft/Ready/Merge gates, PR 1–6 timing, pilot/freeze/confirmatory boundaries, PR body, commit evidence, and post-merge rules |
 | Commit/PR identity | Enforced by policy/config | Commits use `JapanDino <klim.i.rumyantsev@gmail.com>`; PR author must be GitHub login `JapanDino`; identity is checked independently before commit and before PR |
 
@@ -121,9 +121,42 @@ Paper V1 auditable-manifest cycle (2026-08-13):
   deprecation warning.
 - No expensive API experiment or confirmatory run was executed; generated run
   artifacts were confined to pytest temporary directories.
-- PR 2 is intentionally a stacked Draft over PR 1 for early review; it cannot
-  become Ready or merge until PR 1 is reviewed and merged, then rebased onto
-  fresh `origin/main` and reverified.
+- PR 1 and PR 2 were merged in order on 2026-08-14. PR 2 was rebased onto the
+  merged PR 1, passed `289 passed, 2 skipped` locally and the required GitHub
+  `Python tests` check, then squash-merged as `67069a3`.
+
+Paper V1 fair-budget cycle (local PR 3 preparation, 2026-08-14):
+
+- Added an opt-in research `EpisodeBudget` with protocol defaults of 64,000
+  total reported tokens, 4,096 output tokens per call, 12 logical LLM calls,
+  20 code executions, 20 host-tool calls, and 1,800 seconds. Limits are checked
+  before the affected provider, execution, or tool call and emit audit events.
+- Research-mode repeated single-shot, iterative no-checklist, and gym-with-
+  checklist now use the same budget object. Reported reasoning tokens are
+  included in total usage; cached-input usage is recorded separately while the
+  provider's raw input total remains the budget input count.
+- Added one common no-repair submission validator for serializability, raw-row
+  prediction, output length, and non-null predictions. Research mode disables
+  host-side autofit and host finalization repair/replay; the agent must leave an
+  already-fitted candidate that passed clean replay and validation.
+- Hidden evaluation is limited to one attempt per terminal candidate outcome.
+  A hidden-evaluation failure is terminal and provides no repair feedback to the
+  agent. Product-mode retry/autofit compatibility remains unchanged outside the
+  opt-in research path.
+- Post-outcome LLM summaries are disabled for research runs so they cannot
+  consume decision-adjacent budget after the outcome.
+- `pytest -q tests/test_research_budget.py tests/test_research_submission.py tests/test_research_run_artifacts.py tests/test_research_protocol.py`
+  -> `34 passed`, one existing Jupyter path deprecation warning.
+- `pytest -q tests/test_llm.py tests/test_experiments.py tests/test_agent.py tests/test_env.py tests/test_env_protocol.py tests/test_episode_modes.py tests/test_run_summary.py`
+  -> `89 passed`, one existing Jupyter path deprecation warning.
+- `pytest -q tests/test_notebook_env.py` -> `33 passed, 1 skipped`, one existing
+  Jupyter path deprecation warning; the skipped case is the Docker integration
+  because Docker was not available to that test process.
+- Full `pytest -q` -> `304 passed, 2 skipped`, one existing Jupyter path
+  deprecation warning. `git diff --check` passed.
+- No API calls, pilot episodes, or hidden-test research runs occurred. PR 3
+  remains local at this checkpoint and must be rebuilt/rebased on merged
+  `origin/main`, reverified, and published for review.
 
 Last local run:
 
@@ -392,12 +425,12 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 
 1. [ ] Human review and approval of `research/protocols/protocol_v1.yaml`, with
        named owners resolving the freeze-blocking TODOs by 2026-09-07.
-2. [ ] PR 2: add stable `condition_id`, unique `run_id`, atomic `RunManifest`,
-       per-call usage ledger, execution ledger, and unified failure taxonomy
-       without changing arm behavior.
-3. [ ] PR 3: enforce one fair global budget across A/B/C, disable research-mode
-       host autofit, use one common submission validator, and permit at most one
-       hidden evaluation per terminal agent outcome.
+2. [x] PR 1 and PR 2 were reviewed through their required gates and merged in
+       order; PR 2 passed local and required GitHub verification after rebase.
+3. [ ] Rebase the isolated PR 3 implementation onto merged `origin/main`, rerun
+       its acceptance suite, and publish it for review: one fair global budget
+       across A/B/C, research-mode no-autofit validation, and one hidden
+       evaluation per terminal agent outcome.
 4. [ ] PR 4: precompute and hash the complete condition matrix, add blocked
        randomization, resume/idempotency, replacement queue, and acceptance checks.
 5. [ ] PR 5a: preregister FANU, completeness, paired analysis, and synthetic
@@ -416,6 +449,7 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 
 | Date | Change |
 |------|--------|
+| 2026-08-14 | Merged Paper V1 PR 1 (`6bb75d1`) and PR 2 (`67069a3`) in order after required checks. Locally prepared PR 3: pre-call global episode budgets and audit events, common no-autofit submission validation, one-shot hidden evaluation without repair feedback, reasoning/cached-token observability, and research-only suppression of post-outcome LLM summaries. Full offline suite: `304 passed, 2 skipped`; no API/pilot/confirmatory run occurred. |
 | 2026-08-12 | Codified mandatory authorship and publication rules: every commit must use `JapanDino <klim.i.rumyantsev@gmail.com>`, every PR must be authored by GitHub login `JapanDino`, and stage/commit/push/PR/merge require separate explicit authorization. Added `docs/RESEARCH_PR_POLICY.md` with Draft/Ready/Merge timing, PR 1–6 sequencing, preregistered PR 5a before freeze, pilot/confirmatory gates, PR-body evidence requirements, and post-merge provenance rules. |
 | 2026-08-12 | Prepared the unfrozen Paper V1 research package from freshly fetched `origin/main` commit `1504cc0`: Phase 0 evidence-backed code audit, canonical machine-readable protocol, hypotheses, analysis plan, failure/retry policy, dataset/model selection gates, offline validator, and focused tests. Confirmed current per-call token semantics, host autofit in single/repeated controls, separate step/tool accounting, private hidden score, three-attempt hidden failure loop, and 8-vs-12 checklist documentation drift. No runner behavior, API experiment, commit, push, or PR was performed. |
 | 2026-06-08 | Gym now beats single-shot (experiment-validated, gemma-4-26b): (1) validation-improvement nudge — after `validate`, NotebookGymEnv reports best-so-far + remaining budget and pushes the agent to beat its own baseline (honest, val-split only, feedback modes only); flips student_dropout from −0.004 (gym lost) to +0.013 over single-shot. (1b) unknown-cell-id guard — targeting a non-existent cell is now a recoverable blocker instead of a KeyError that crashed the whole episode, restoring valid-submit rate to 1.0. Measured-but-rejected: per-class-recall diagnostic and candidate-list nudge both hurt (extra feedback verbosity inflates the trajectory → more clean-run failures) |

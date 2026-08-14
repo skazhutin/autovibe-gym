@@ -159,6 +159,8 @@ def test_offline_smoke_writes_atomic_manifest_and_append_only_ledgers(tmp_path):
         "provider_request_attempts": 0,
         "input_tokens": 11,
         "output_tokens": 7,
+        "reasoning_tokens": 0,
+        "cached_input_tokens": 0,
         "execution_events": 2,
     }
     usage = _read_jsonl(recorder.run_dir / "usage_ledger.jsonl")

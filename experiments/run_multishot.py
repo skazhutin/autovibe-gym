@@ -25,6 +25,7 @@ from experiments.mlflow_config import configure_mlflow_tracking
 from experiments.modes import add_mode_metadata_args, mode_metadata_params
 from research.runner_integration import (
     add_research_artifact_args,
+    create_episode_budget,
     dataset_source_hash,
     finalize_research_run,
     research_mlflow_params,
@@ -32,6 +33,8 @@ from research.runner_integration import (
     wrap_executor,
     wrap_llm,
 )
+from research.budget import BudgetExhausted
+from research.submission import HiddenEvaluationGate, validate_submission_candidate
 from gym.data_profile import build_dataset_card
 from gym.datasets import load_dataset_splits, resolve_metric
 from gym.executor import CodeExecutor
@@ -137,6 +140,10 @@ def main():
     max_attempts = args.shots or defaults["max_attempts"]
     max_tokens = args.max_tokens or defaults["max_tokens"]
     sandbox_timeout = args.sandbox_timeout or defaults["sandbox_timeout"]
+    episode_budget = create_episode_budget(args)
+    if episode_budget is not None:
+        max_attempts = episode_budget.policy.max_llm_calls
+        max_tokens = min(max_tokens, episode_budget.policy.max_output_tokens_per_call)
 
     splits = load_dataset_splits(
         dataset=args.dataset,
@@ -180,16 +187,26 @@ def main():
         model_id=model_name,
         prompt_template={"system": SYSTEM_PROMPT, "task": task_prompt},
         decoding_config={"max_tokens": max_tokens},
-        budget_policy={
-            "logical_llm_calls": max_attempts,
-            "max_tokens_per_call": max_tokens,
-        },
+        budget_policy=(
+            episode_budget.policy.to_dict()
+            if episode_budget is not None
+            else {
+                "logical_llm_calls": max_attempts,
+                "max_tokens_per_call": max_tokens,
+            }
+        ),
         execution_policy={
             "backend": args.executor_backend or os.getenv("AUTOVIBE_EXECUTOR_BACKEND", "docker"),
             "timeout_seconds": sandbox_timeout,
         },
+        episode_budget=episode_budget,
     )
-    client = wrap_llm(make_llm_client(), recorder, model=model_name)
+    client = wrap_llm(
+        make_llm_client(),
+        recorder,
+        model=model_name,
+        episode_budget=episode_budget,
+    )
     executor = wrap_executor(
         CodeExecutor(
             timeout=sandbox_timeout,
@@ -197,6 +214,7 @@ def main():
             docker_image=args.sandbox_image,
         ),
         recorder,
+        episode_budget=episode_budget,
     )
 
     configure_mlflow_tracking(mlflow)
@@ -226,21 +244,29 @@ def main():
         best_stdout = ""
         total_input_tokens = 0
         total_output_tokens = 0
+        total_reasoning_tokens = 0
         errors_count = 0
         attempt_log = []
         attempt_records: list[dict] = []
         best_attempt_idx = -1
+        budget_stop_reason = None
+        hidden_gate = HiddenEvaluationGate()
 
         for attempt in range(max_attempts):
             prompt = _build_attempt_prompt(task_prompt, best_val, attempt)
-            response = client.complete(
-                model=model_name,
-                max_tokens=max_tokens,
-                system=SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": prompt}],
-            )
+            try:
+                response = client.complete(
+                    model=model_name,
+                    max_tokens=max_tokens,
+                    system=SYSTEM_PROMPT,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+            except BudgetExhausted as exc:
+                budget_stop_reason = exc.reason
+                break
             total_input_tokens += response.input_tokens
             total_output_tokens += response.output_tokens
+            total_reasoning_tokens += response.reasoning_tokens
 
             try:
                 action = Action.from_llm_response(response.text)
@@ -259,7 +285,11 @@ def main():
                 "pd": pd,
                 "np": np,
             }
-            stdout, stderr, namespace = executor.run(code, namespace)
+            try:
+                stdout, stderr, namespace = executor.run(code, namespace)
+            except BudgetExhausted as exc:
+                budget_stop_reason = exc.reason
+                break
             attempt_error = stderr.strip() or None
             if attempt_error:
                 errors_count += 1
@@ -277,13 +307,23 @@ def main():
             if model_obj is not None:
                 X_val = val.drop(columns=[target_col])
                 y_val = val[target_col]
+                validation = None
                 try:
-                    try:
-                        val_preds = model_obj.predict(X_val)
-                    except Exception:
-                        # Safety net: fit the LLM's model if it was left unfitted.
-                        model_obj.fit(train.drop(columns=[target_col]), train[target_col])
-                        val_preds = model_obj.predict(X_val)
+                    if episode_budget is not None:
+                        validation = validate_submission_candidate(model_obj, X_val)
+                        if not validation.valid:
+                            raise RuntimeError(
+                                f"{validation.error_type or 'SubmissionValidationError'}: "
+                                f"{validation.error_message or 'candidate is not submit-ready'}"
+                            )
+                        val_preds = validation.predictions
+                    else:
+                        try:
+                            val_preds = model_obj.predict(X_val)
+                        except Exception:
+                            # Preserve the product runner's existing autofit compatibility path.
+                            model_obj.fit(train.drop(columns=[target_col]), train[target_col])
+                            val_preds = model_obj.predict(X_val)
                     raw_validation_ready = True
                     val_metric = score_with_coercion(metric_fn, y_val, val_preds)
                     if best_val is None or val_metric > best_val:
@@ -340,7 +380,18 @@ def main():
         finalize_path = "failed"
         if best_model is not None:
             try:
-                best_model.predict(val.drop(columns=[target_col]).head(32))
+                if episode_budget is not None:
+                    validation = validate_submission_candidate(
+                        best_model,
+                        val.drop(columns=[target_col]),
+                    )
+                    if not validation.valid:
+                        raise RuntimeError(
+                            f"{validation.error_type or 'SubmissionValidationError'}: "
+                            f"{validation.error_message or 'candidate is not submit-ready'}"
+                        )
+                else:
+                    best_model.predict(val.drop(columns=[target_col]).head(32))
             except Exception as exc:
                 final_status = "submit_blocked_preflight"
                 null_reason = f"{type(exc).__name__}: {exc}"
@@ -352,8 +403,11 @@ def main():
                 try:
                     X_test = test.drop(columns=[target_col])
                     y_test = test[target_col]
-                    test_preds = best_model.predict(X_test)
-                    test_metric = score_with_coercion(metric_fn, y_test, test_preds)
+                    if episode_budget is not None:
+                        test_metric = hidden_gate.evaluate(best_model, X_test, y_test, metric_fn)
+                    else:
+                        test_preds = best_model.predict(X_test)
+                        test_metric = score_with_coercion(metric_fn, y_test, test_preds)
                     final_status = "submitted_clean"
                     null_reason = None
                     submit_failure_type = None
@@ -365,6 +419,11 @@ def main():
                     finalize_path = "hidden_test"
                     errors_count += 1
                     print(f"[submit error] {exc}")
+        elif budget_stop_reason is not None:
+            final_status = "budget_exhausted"
+            null_reason = f"Episode stopped before a valid candidate: {budget_stop_reason}."
+            submit_failure_type = "budget_exhausted"
+            finalize_path = "budget_stop"
 
         elapsed = round(time.time() - started, 1)
         mlflow.log_text(json.dumps(attempt_log, indent=2), "attempt_log.json")
@@ -376,6 +435,7 @@ def main():
             "submit_failed": int(test_metric is None),
             "input_tokens": total_input_tokens,
             "output_tokens": total_output_tokens,
+            "reasoning_tokens": total_reasoning_tokens,
             "elapsed_seconds": elapsed,
         }
         from experiments.dashboard_artifacts import checklist_coverage, write_attempts_episode
@@ -395,7 +455,7 @@ def main():
         # hidden), persisted as run_summary.json for the dashboard «Мысли» tab.
         # Generated once the model produced a usable solution (best_code is set
         # only for a raw-validation-ready model), even if the hidden test failed.
-        if args.workspace_dir and best_code:
+        if args.workspace_dir and best_code and episode_budget is None:
             from gym.run_summary import generate_and_write
 
             convo = [
@@ -447,9 +507,12 @@ def main():
         "errors_count": errors_count,
         "input_tokens": total_input_tokens,
         "output_tokens": total_output_tokens,
+        "reasoning_tokens": total_reasoning_tokens,
+        "hidden_evaluations": int(hidden_gate.attempted),
+        "budget_stop_reason": budget_stop_reason,
         "elapsed_seconds": elapsed,
     }
-    finalize_research_run(recorder, summary)
+    finalize_research_run(recorder, summary, episode_budget=episode_budget)
     print("\n=== Repeated Single-Shot Summary ===")
     print(json.dumps(summary, indent=2))
 

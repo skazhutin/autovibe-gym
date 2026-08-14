@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import os
 
+from research.budget import BudgetExhausted
+
 from .env import GymEnv
 from .llm import LLMClient, default_model_name, make_llm_client
 from .notebook_env import NotebookGymEnv
@@ -146,6 +148,7 @@ class GymAgent:
         self.messages: list[dict] = []
         self.total_input_tokens = 0
         self.total_output_tokens = 0
+        self.total_reasoning_tokens = 0
 
     def run(self) -> dict:
         context = self.env.reset()
@@ -157,14 +160,18 @@ class GymAgent:
         )
 
         for turn in range(max_agent_turns):
-            response = self.client.complete(
-                model=self.model,
-                max_tokens=self.max_tokens,
-                system=system_prompt,
-                messages=self._messages_for_llm(),
-            )
+            try:
+                response = self.client.complete(
+                    model=self.model,
+                    max_tokens=self.max_tokens,
+                    system=system_prompt,
+                    messages=self._messages_for_llm(),
+                )
+            except BudgetExhausted as exc:
+                return self._finish_budget_exhaustion(exc)
             self.total_input_tokens += response.input_tokens
             self.total_output_tokens += response.output_tokens
+            self.total_reasoning_tokens += response.reasoning_tokens
             self.messages.append({"role": "assistant", "content": response.text})
 
             try:
@@ -195,7 +202,10 @@ class GymAgent:
                 )
                 continue
 
-            observation = self.env.step(action)
+            try:
+                observation = self.env.step(action)
+            except BudgetExhausted as exc:
+                return self._finish_budget_exhaustion(exc)
             self._record_agent_trace(
                 {
                     "turn": turn + 1,
@@ -238,7 +248,20 @@ class GymAgent:
         summary = self.env.get_summary()
         summary["input_tokens"] = self.total_input_tokens
         summary["output_tokens"] = self.total_output_tokens
+        summary["reasoning_tokens"] = self.total_reasoning_tokens
         summary["model"] = self.model
+        return summary
+
+    def _finish_budget_exhaustion(self, exc: BudgetExhausted) -> dict:
+        forced_observation = self._try_forced_submit()
+        if forced_observation is not None:
+            self.messages.append(
+                {"role": "user", "content": self._build_feedback(forced_observation)}
+            )
+        summary = self._build_summary()
+        summary["forced_submit"] = True
+        summary["stopped_reason"] = "budget_exhausted"
+        summary["budget_stop_reason"] = exc.reason
         return summary
 
     def _build_feedback(self, observation: Observation) -> str:

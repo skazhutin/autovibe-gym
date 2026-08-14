@@ -10,6 +10,21 @@ class LLMResponse:
     text: str
     input_tokens: int = 0
     output_tokens: int = 0
+    reasoning_tokens: int = 0
+    cached_input_tokens: int = 0
+
+
+def _openai_usage_counts(usage: object | None) -> tuple[int, int, int, int]:
+    if usage is None:
+        return 0, 0, 0, 0
+    prompt_details = getattr(usage, "prompt_tokens_details", None)
+    completion_details = getattr(usage, "completion_tokens_details", None)
+    return (
+        int(getattr(usage, "prompt_tokens", 0) or 0),
+        int(getattr(usage, "completion_tokens", 0) or 0),
+        int(getattr(completion_details, "reasoning_tokens", 0) or 0),
+        int(getattr(prompt_details, "cached_tokens", 0) or 0),
+    )
 
 
 def _message_text(message) -> str:
@@ -95,13 +110,18 @@ def _create_with_retries(client, *, request_attempt_hook=None, **kwargs):
             time.sleep(delay)
         else:
             usage = getattr(response, "usage", None)
+            input_tokens, output_tokens, reasoning_tokens, cached_input_tokens = (
+                _openai_usage_counts(usage)
+            )
             _emit_attempt(
                 request_attempt_hook,
                 retry_index=attempt,
                 success=True,
                 duration_seconds=time.perf_counter() - started,
-                input_tokens=getattr(usage, "prompt_tokens", 0) if usage else 0,
-                output_tokens=getattr(usage, "completion_tokens", 0) if usage else 0,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                reasoning_tokens=reasoning_tokens,
+                cached_input_tokens=cached_input_tokens,
                 request_id=getattr(response, "id", None),
                 finish_reason=getattr(response.choices[0], "finish_reason", None),
             )
@@ -158,21 +178,28 @@ class LiteLLMClient:
             )
             raise
         usage = response.usage
+        input_tokens, output_tokens, reasoning_tokens, cached_input_tokens = (
+            _openai_usage_counts(usage)
+        )
         _emit_attempt(
             self._research_attempt_hook,
             retry_index=0,
             success=True,
             duration_seconds=time.perf_counter() - started,
-            input_tokens=getattr(usage, "prompt_tokens", 0) if usage else 0,
-            output_tokens=getattr(usage, "completion_tokens", 0) if usage else 0,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            reasoning_tokens=reasoning_tokens,
+            cached_input_tokens=cached_input_tokens,
             request_id=getattr(response, "id", None),
             finish_reason=getattr(response.choices[0], "finish_reason", None),
         )
         text = _message_text(response.choices[0].message)
         return LLMResponse(
             text=text.strip(),
-            input_tokens=getattr(usage, "prompt_tokens", 0) if usage else 0,
-            output_tokens=getattr(usage, "completion_tokens", 0) if usage else 0,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            reasoning_tokens=reasoning_tokens,
+            cached_input_tokens=cached_input_tokens,
         )
 
 
@@ -223,11 +250,16 @@ class OpenAICompatibleLLMClient:
             messages=[{"role": "system", "content": system}] + messages,
         )
         usage = response.usage
+        input_tokens, output_tokens, reasoning_tokens, cached_input_tokens = (
+            _openai_usage_counts(usage)
+        )
         text = _message_text(response.choices[0].message)
         return LLMResponse(
             text=text.strip(),
-            input_tokens=usage.prompt_tokens if usage else 0,
-            output_tokens=usage.completion_tokens if usage else 0,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            reasoning_tokens=reasoning_tokens,
+            cached_input_tokens=cached_input_tokens,
         )
 
 
@@ -284,6 +316,8 @@ class GoogleAIStudioLLMClient:
             text=_google_response_text(response),
             input_tokens=_usage_count(usage, "prompt_token_count"),
             output_tokens=_usage_count(usage, "candidates_token_count"),
+            reasoning_tokens=_usage_count(usage, "thoughts_token_count"),
+            cached_input_tokens=_usage_count(usage, "cached_content_token_count"),
         )
 
 
@@ -378,6 +412,8 @@ def _call_with_retries(operation, *, request_attempt_hook=None):
                 duration_seconds=time.perf_counter() - started,
                 input_tokens=_usage_count(usage, "prompt_token_count"),
                 output_tokens=_usage_count(usage, "candidates_token_count"),
+                reasoning_tokens=_usage_count(usage, "thoughts_token_count"),
+                cached_input_tokens=_usage_count(usage, "cached_content_token_count"),
                 request_id=getattr(response, "response_id", None),
                 finish_reason=None,
             )

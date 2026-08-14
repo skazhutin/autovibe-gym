@@ -23,6 +23,7 @@ from experiments.mlflow_config import configure_mlflow_tracking
 from experiments.modes import add_mode_metadata_args, mode_metadata_params
 from research.runner_integration import (
     add_research_artifact_args,
+    create_episode_budget,
     dataset_source_hash,
     finalize_research_run,
     research_mlflow_params,
@@ -30,6 +31,7 @@ from research.runner_integration import (
     wrap_executor,
     wrap_llm,
 )
+from research.submission import HiddenEvaluationGate, validate_submission_candidate
 from gym.data_profile import build_dataset_card
 from gym.datasets import load_dataset_splits, resolve_metric
 from gym.executor import CodeExecutor
@@ -96,6 +98,9 @@ def main():
     args = parser.parse_args()
 
     max_tokens = args.max_tokens or (8192 if args.mode == "local" else 4096)
+    episode_budget = create_episode_budget(args)
+    if episode_budget is not None:
+        max_tokens = min(max_tokens, episode_budget.policy.max_output_tokens_per_call)
     splits = load_dataset_splits(
         dataset=args.dataset,
         dataset_dir=args.dataset_dir,
@@ -135,13 +140,23 @@ def main():
         model_id=model_name,
         prompt_template={"system": SYSTEM_PROMPT, "task": task_prompt},
         decoding_config={"max_tokens": max_tokens},
-        budget_policy={"logical_llm_calls": 1, "max_tokens_per_call": max_tokens},
+        budget_policy=(
+            episode_budget.policy.to_dict()
+            if episode_budget is not None
+            else {"logical_llm_calls": 1, "max_tokens_per_call": max_tokens}
+        ),
         execution_policy={
             "backend": args.executor_backend or os.getenv("AUTOVIBE_EXECUTOR_BACKEND", "docker"),
             "timeout_seconds": args.sandbox_timeout,
         },
+        episode_budget=episode_budget,
     )
-    client = wrap_llm(make_llm_client(), recorder, model=model_name)
+    client = wrap_llm(
+        make_llm_client(),
+        recorder,
+        model=model_name,
+        episode_budget=episode_budget,
+    )
     configure_mlflow_tracking(mlflow)
     mlflow.set_experiment(args.experiment_name)
     started = time.time()
@@ -176,6 +191,7 @@ def main():
                 docker_image=args.sandbox_image,
             ),
             recorder,
+            episode_budget=episode_budget,
         )
         namespace = {
             "train_df": train.copy(),
@@ -192,6 +208,7 @@ def main():
         submit_failure_type = "no_candidate_found"
         finalize_path = "failed"
         submit_error = ""
+        hidden_gate = HiddenEvaluationGate()
         model_obj = namespace.get("model") or namespace.get("best_model")
         if model_obj is None:
             for value in namespace.values():
@@ -199,31 +216,48 @@ def main():
                     model_obj = value
                     break
         if model_obj is not None:
-            X_val = val.drop(columns=[target_col]).head(32)
+            X_val = val.drop(columns=[target_col])
             preflight_ok = True
-            try:
-                model_obj.predict(X_val)
-            except Exception:
-                # Safety net: the LLM defined the model but may not have fitted it.
-                # Fit the chosen architecture on train and retry before rejecting.
+            validation = None
+            if episode_budget is None:
                 try:
-                    model_obj.fit(train.drop(columns=[target_col]), train[target_col])
                     model_obj.predict(X_val)
-                    finalize_path = "single_shot_autofit"
-                except Exception as exc:
-                    preflight_ok = False
-                    final_status = "submit_blocked_preflight"
-                    null_reason = f"{type(exc).__name__}: {exc}"
-                    submit_failure_type = type(exc).__name__
-                    finalize_path = "submit_preflight"
-                    submit_error = null_reason
-                    stderr += f"\n[submit preflight error] {submit_error}"
-            if preflight_ok:
+                except Exception:
+                    try:
+                        # Preserve the product runner's existing autofit compatibility path.
+                        model_obj.fit(train.drop(columns=[target_col]), train[target_col])
+                        model_obj.predict(X_val)
+                        finalize_path = "single_shot_autofit"
+                    except Exception as exc:
+                        preflight_ok = False
+                        validation_error = f"{type(exc).__name__}: {exc}"
+            else:
+                validation = validate_submission_candidate(model_obj, X_val)
+                preflight_ok = validation.valid
+                validation_error = (
+                    f"{validation.error_type or 'SubmissionValidationError'}: "
+                    f"{validation.error_message or 'candidate is not submit-ready'}"
+                )
+            if not preflight_ok:
+                final_status = "submit_blocked_preflight"
+                null_reason = validation_error
+                submit_failure_type = (
+                    validation.error_type
+                    if validation is not None and validation.error_type
+                    else validation_error.split(":", 1)[0]
+                )
+                finalize_path = "submit_preflight"
+                submit_error = null_reason
+                stderr += f"\n[submit preflight error] {submit_error}"
+            else:
                 try:
                     X_test = test.drop(columns=[target_col])
                     y_test = test[target_col]
-                    preds = model_obj.predict(X_test)
-                    test_metric = score_with_coercion(metric_fn, y_test, preds)
+                    if episode_budget is not None:
+                        test_metric = hidden_gate.evaluate(model_obj, X_test, y_test, metric_fn)
+                    else:
+                        preds = model_obj.predict(X_test)
+                        test_metric = score_with_coercion(metric_fn, y_test, preds)
                     final_status = "submitted_clean"
                     null_reason = None
                     submit_failure_type = None
@@ -253,6 +287,8 @@ def main():
             "finalize_path": finalize_path,
             "input_tokens": response.input_tokens,
             "output_tokens": response.output_tokens,
+            "reasoning_tokens": response.reasoning_tokens,
+            "hidden_evaluations": int(hidden_gate.attempted),
             "elapsed_seconds": elapsed,
             "has_error": bool(stderr.strip()),
             "code_length": len(code),
@@ -273,7 +309,7 @@ def main():
             # score in scope), persisted for the dashboard «Мысли» tab. Generated
             # once the model produced a usable solution (a predict-capable
             # candidate), even if the hidden test later rejected it.
-            if model_obj is not None:
+            if model_obj is not None and episode_budget is None:
                 from gym.run_summary import generate_and_write
 
                 generate_and_write(
@@ -288,7 +324,7 @@ def main():
                     max_tokens=min(max_tokens, 700),
                 )
 
-        finalize_research_run(recorder, summary)
+        finalize_research_run(recorder, summary, episode_budget=episode_budget)
 
         metrics = {
             "has_test_metric": int(test_metric is not None),

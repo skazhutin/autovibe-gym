@@ -8,6 +8,12 @@ import subprocess
 from pathlib import Path
 from typing import Any, Mapping
 
+from research.budget import (
+    BudgetedExecutor,
+    BudgetedLLMClient,
+    EpisodeBudget,
+    EpisodeBudgetPolicy,
+)
 from research.run_artifacts import (
     RecordingExecutor,
     RecordingLLMClient,
@@ -27,6 +33,27 @@ def add_research_artifact_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--research-run-id", default=None)
     parser.add_argument("--research-rerun-of", default=None)
     parser.add_argument("--research-rerun-reason", default=None)
+    parser.add_argument("--research-total-token-limit", type=int, default=64_000)
+    parser.add_argument("--research-max-output-tokens", type=int, default=4_096)
+    parser.add_argument("--research-max-llm-calls", type=int, default=12)
+    parser.add_argument("--research-max-code-executions", type=int, default=20)
+    parser.add_argument("--research-max-tool-calls", type=int, default=20)
+    parser.add_argument("--research-wall-clock-limit", type=float, default=1_800.0)
+
+
+def create_episode_budget(args: argparse.Namespace) -> EpisodeBudget | None:
+    if not args.research_run_dir:
+        return None
+    return EpisodeBudget(
+        EpisodeBudgetPolicy(
+            total_token_limit=args.research_total_token_limit,
+            max_output_tokens_per_call=args.research_max_output_tokens,
+            max_llm_calls=args.research_max_llm_calls,
+            max_code_executions=args.research_max_code_executions,
+            max_tool_calls=args.research_max_tool_calls,
+            wall_clock_limit_seconds=args.research_wall_clock_limit,
+        )
+    )
 
 
 def dataset_source_hash(*, dataset: str | None, dataset_dir: str | None) -> str:
@@ -79,6 +106,7 @@ def start_research_run(
     decoding_config: Mapping[str, Any],
     budget_policy: Mapping[str, Any],
     execution_policy: Mapping[str, Any],
+    episode_budget: EpisodeBudget | None = None,
 ) -> RunRecorder | None:
     if not args.research_run_dir:
         return None
@@ -103,7 +131,7 @@ def start_research_run(
         "execution_policy_hash": canonical_hash(execution_policy),
         "prompt_template_hash": canonical_hash(prompt_template),
     }
-    return RunRecorder.create(
+    recorder = RunRecorder.create(
         args.research_run_dir,
         condition,
         expected_condition_id=args.research_condition_id,
@@ -112,17 +140,37 @@ def start_research_run(
         rerun_reason=args.research_rerun_reason,
         git_dirty=dirty,
     )
+    if episode_budget is not None:
+        episode_budget.set_event_sink(recorder.record_execution)
+    return recorder
 
 
-def wrap_llm(client: Any, recorder: RunRecorder | None, *, model: str) -> Any:
-    if recorder is None:
-        return client
-    provider = str(recorder.manifest["condition"]["model_provider"])
-    return RecordingLLMClient(client, recorder, provider=provider, model=model)
+def wrap_llm(
+    client: Any,
+    recorder: RunRecorder | None,
+    *,
+    model: str,
+    episode_budget: EpisodeBudget | None = None,
+) -> Any:
+    wrapped = client
+    if recorder is not None:
+        provider = str(recorder.manifest["condition"]["model_provider"])
+        wrapped = RecordingLLMClient(wrapped, recorder, provider=provider, model=model)
+    if episode_budget is not None:
+        wrapped = BudgetedLLMClient(wrapped, episode_budget)
+    return wrapped
 
 
-def wrap_executor(executor: Any, recorder: RunRecorder | None) -> Any:
-    return RecordingExecutor(executor, recorder) if recorder else executor
+def wrap_executor(
+    executor: Any,
+    recorder: RunRecorder | None,
+    *,
+    episode_budget: EpisodeBudget | None = None,
+) -> Any:
+    wrapped = RecordingExecutor(executor, recorder) if recorder else executor
+    if episode_budget is not None:
+        wrapped = BudgetedExecutor(wrapped, episode_budget)
+    return wrapped
 
 
 def finalize_research_run(
@@ -130,6 +178,7 @@ def finalize_research_run(
     summary: dict[str, Any],
     *,
     notebook_events: list[Mapping[str, Any]] | None = None,
+    episode_budget: EpisodeBudget | None = None,
 ) -> dict[str, Any]:
     if recorder is None:
         return summary
@@ -138,6 +187,8 @@ def finalize_research_run(
     summary["research_condition_id"] = recorder.condition_id
     summary["research_run_id"] = recorder.run_id
     summary["research_manifest"] = str(recorder.manifest_path)
+    if episode_budget is not None:
+        summary["episode_budget"] = episode_budget.snapshot()
     recorder.finalize(summary)
     return summary
 

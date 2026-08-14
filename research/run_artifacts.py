@@ -306,6 +306,8 @@ class RunRecorder:
         model: str,
         input_tokens: int = 0,
         output_tokens: int = 0,
+        reasoning_tokens: int = 0,
+        cached_input_tokens: int = 0,
         duration_seconds: float | None = None,
         success: bool = True,
         error_category: FailureCategory | None = None,
@@ -321,6 +323,8 @@ class RunRecorder:
                 "model": model,
                 "input_tokens": int(input_tokens or 0),
                 "output_tokens": int(output_tokens or 0),
+                "reasoning_tokens": int(reasoning_tokens or 0),
+                "cached_input_tokens": int(cached_input_tokens or 0),
                 "duration_seconds": duration_seconds,
                 "success": success,
                 "error_category": error_category,
@@ -372,6 +376,12 @@ class RunRecorder:
                     ),
                     "output_tokens": sum(
                         int(item.get("output_tokens") or 0) for item in logical_calls
+                    ),
+                    "reasoning_tokens": sum(
+                        int(item.get("reasoning_tokens") or 0) for item in logical_calls
+                    ),
+                    "cached_input_tokens": sum(
+                        int(item.get("cached_input_tokens") or 0) for item in logical_calls
                     ),
                     "execution_events": len(executions),
                 },
@@ -433,6 +443,8 @@ class RecordingLLMClient:
             model=self._model,
             input_tokens=int(event.get("input_tokens") or 0),
             output_tokens=int(event.get("output_tokens") or 0),
+            reasoning_tokens=int(event.get("reasoning_tokens") or 0),
+            cached_input_tokens=int(event.get("cached_input_tokens") or 0),
             duration_seconds=event.get("duration_seconds"),
             success=bool(event.get("success")),
             error_category=error_category,
@@ -460,6 +472,8 @@ class RecordingLLMClient:
             model=self._model,
             input_tokens=getattr(response, "input_tokens", 0),
             output_tokens=getattr(response, "output_tokens", 0),
+            reasoning_tokens=getattr(response, "reasoning_tokens", 0),
+            cached_input_tokens=getattr(response, "cached_input_tokens", 0),
             duration_seconds=time.perf_counter() - started,
         )
         return response

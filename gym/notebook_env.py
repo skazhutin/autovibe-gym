@@ -18,6 +18,8 @@ from typing import Any, Callable
 import cloudpickle
 import numpy as np
 import pandas as pd
+from research.budget import EpisodeBudget
+from research.submission import HiddenEvaluationGate, validate_submission_candidate
 
 from .candidates import CandidateRecord, CandidateRegistry
 from .data_profile import (
@@ -177,6 +179,8 @@ class NotebookGymEnv:
         kernel_timeout: int = 60,
         enable_thoughts: bool = False,
         hint_cooldown: int = 2,
+        episode_budget: EpisodeBudget | None = None,
+        research_submission: bool = False,
     ):
         self.enable_thoughts = enable_thoughts
         # Steps to wait between consecutive checklist hints (gym mode).
@@ -229,6 +233,9 @@ class NotebookGymEnv:
         self.current_stage: str | None = None
         self._accepted_agent_actions = 0
         self._active_action: Action | None = None
+        self.episode_budget = episode_budget
+        self.research_submission = research_submission
+        self.hidden_evaluation_gate = HiddenEvaluationGate()
 
     def reset(self) -> dict:
         self.close()
@@ -281,6 +288,7 @@ class NotebookGymEnv:
         self.current_stage = None
         self._accepted_agent_actions = 0
         self._active_action = None
+        self.hidden_evaluation_gate = HiddenEvaluationGate()
         self._save_artifacts()
         return self._build_context_prompt()
 
@@ -319,6 +327,21 @@ class NotebookGymEnv:
                 model_var=parsed.model_var if parsed.type == "validate" else None,
                 cell_id=parsed.cell_id,
             )
+
+        if self.episode_budget is not None:
+            self.episode_budget.ensure_active()
+            if parsed.type in {
+                "inspect_data",
+                "profile_data",
+                "list_candidates",
+                "check_candidate",
+                "quick_validate",
+                "cleanlab_diagnose",
+                "tune_hyperparameters",
+                "validate",
+                "finalize",
+            }:
+                self.episode_budget.consume_tool_call(parsed.type)
 
         self._accept_action(parsed)
         if self.state.step >= self.state.max_steps and parsed.type not in {"submit", "finalize"}:
@@ -541,6 +564,8 @@ class NotebookGymEnv:
         for cell in self.notebook.notebook.cells:
             if cell.cell_type != "code":
                 continue
+            if self.episode_budget is not None:
+                self.episode_budget.consume_code_execution()
             cell_id = str(cell.get("id"))
             result = self.kernel.execute_cell(
                 str(cell.source),
@@ -782,8 +807,16 @@ class NotebookGymEnv:
         try:
             X_test = self.state.test.drop(columns=[self.state.target_col])
             y_test = self.state.test[self.state.target_col]
-            preds = model.predict(X_test)
-            score = _score_with_coercion(self.metric_fn, y_test, preds)
+            if self.research_submission:
+                score = self.hidden_evaluation_gate.evaluate(
+                    model,
+                    X_test,
+                    y_test,
+                    self.metric_fn,
+                )
+            else:
+                preds = model.predict(X_test)
+                score = _score_with_coercion(self.metric_fn, y_test, preds)
             candidate.submitted = True
             self.state.submitted = True
             self.private_summary["final_test_metric"] = score
@@ -814,6 +847,33 @@ class NotebookGymEnv:
             return self._record_observation(observation)
         except Exception as exc:
             self.hidden_submit_fail_count += 1
+            if self.research_submission:
+                self.state.submitted = True
+                self.private_summary["valid_submit"] = False
+                self.private_summary["final_test_metric"] = None
+                self.private_summary["submit_failure_type"] = type(exc).__name__
+                self.private_summary["final_status"] = "hidden_submit_failed"
+                self.private_summary["null_reason"] = (
+                    "Candidate failed the single private hidden evaluation."
+                )
+                self.private_summary.setdefault("finalize_path", "agent_submit")
+                self._record_event(
+                    action="submit_failed",
+                    model_var=model_var,
+                    candidate_id=candidate.candidate_id,
+                    private={
+                        "failure_type": type(exc).__name__,
+                        "can_retry": False,
+                        "hidden_submit_fail_count": self.hidden_submit_fail_count,
+                    },
+                )
+                observation = self._observation(
+                    action="submit",
+                    done=True,
+                    submitted=True,
+                    model_var=model_var,
+                )
+                return self._record_observation(observation)
             _max_retries = 3
             _steps_left = self.budget_remaining()
             _can_retry = _steps_left > 0 and self.hidden_submit_fail_count < _max_retries
@@ -916,6 +976,23 @@ class NotebookGymEnv:
             self.private_summary["finalize_path"] = "validated_clean_candidate"
             self.private_summary["reproducibility_level"] = "clean_replay"
             return self.submit_by_name(candidate.model_var)
+
+        if self.research_submission:
+            budget_reason = (
+                self.episode_budget.exhausted_reason
+                if self.episode_budget is not None
+                else None
+            )
+            return self._finalize_failure_observation(
+                final_status="budget_exhausted" if budget_reason else "invalid_submission",
+                null_reason=(
+                    f"Research budget stopped the episode: {budget_reason}."
+                    if budget_reason
+                    else "No already-validated clean candidate was available at finalization."
+                ),
+                finalize_path="research_no_repair",
+                attempted_vars=attempted_vars,
+            )
 
         # 2. Live-kernel fallback (tried before any restart, which would wipe the
         #    kernel). The agent often has a working fitted estimator in the live
@@ -1041,7 +1118,10 @@ class NotebookGymEnv:
             "final_status": final_status,
             "null_reason": null_reason,
             "finalize_path": finalize_path,
+            "hidden_evaluations": int(self.hidden_evaluation_gate.attempted),
         }
+        if self.episode_budget is not None:
+            summary["episode_budget"] = self.episode_budget.snapshot()
         summary.update(self.private_summary)
         summary["test_metric"] = final_test_metric
         summary["final_test_metric"] = final_test_metric
@@ -1214,6 +1294,8 @@ class NotebookGymEnv:
         cell = self.notebook.get_cell(cell_id)
         if cell.cell_type != "code":
             raise TypeError(f"Cell {cell_id} is not a code cell.")
+        if self.episode_budget is not None:
+            self.episode_budget.consume_code_execution()
         result = self.kernel.execute_cell(str(cell.source), timeout=self.kernel_timeout)
         self.cell_executions_total += 1
         self.notebook.set_cell_outputs(
@@ -1672,16 +1754,6 @@ print({marker!r} + _autovibe_json.dumps({{
                 self._record_candidate_diagnostic(diagnostic)
                 return diagnostic
 
-            try:
-                cloudpickle.dumps(model)
-                diagnostic.serializable = True
-            except Exception as exc:
-                diagnostic.serializable = False
-                diagnostic.error_type = type(exc).__name__
-                diagnostic.error_message = _clip(str(exc), 800)
-                self._record_candidate_diagnostic(diagnostic)
-                return diagnostic
-
             X_val = self.state.val.drop(columns=[self.state.target_col])
             y_val = self.state.val[self.state.target_col]
             if sample_rows is not None and sample_rows > 0:
@@ -1690,26 +1762,24 @@ print({marker!r} + _autovibe_json.dumps({{
             else:
                 X_eval = X_val
                 y_eval = y_val
-            try:
-                preds = model.predict(X_eval)
-                diagnostic.predictions = preds
-                diagnostic.raw_val_predict_ok = True
-                diagnostic.prediction_length_ok = _prediction_length(preds) == len(X_eval)
-                diagnostic.prediction_nan_free = _predictions_nan_free(preds)
-                if compute_metric and diagnostic.prediction_length_ok and diagnostic.prediction_nan_free:
-                    try:
-                        diagnostic.validation_metric = _score_with_coercion(
-                            self.metric_fn,
-                            y_eval,
-                            preds,
-                        )
-                    except Exception as exc:
-                        diagnostic.error_type = type(exc).__name__
-                        diagnostic.error_message = _clip(str(exc), 800)
-            except Exception as exc:
-                diagnostic.raw_val_predict_ok = False
-                diagnostic.error_type = type(exc).__name__
-                diagnostic.error_message = _clip(str(exc), 800)
+            validation = validate_submission_candidate(model, X_eval)
+            diagnostic.serializable = validation.serializable
+            diagnostic.raw_val_predict_ok = validation.raw_prediction_ok
+            diagnostic.prediction_length_ok = validation.prediction_length_ok
+            diagnostic.prediction_nan_free = validation.prediction_nan_free
+            diagnostic.predictions = validation.predictions
+            diagnostic.error_type = validation.error_type
+            diagnostic.error_message = _clip(validation.error_message or "", 800) or None
+            if compute_metric and validation.valid:
+                try:
+                    diagnostic.validation_metric = _score_with_coercion(
+                        self.metric_fn,
+                        y_eval,
+                        validation.predictions,
+                    )
+                except Exception as exc:
+                    diagnostic.error_type = type(exc).__name__
+                    diagnostic.error_message = _clip(str(exc), 800)
         except Exception as exc:
             diagnostic.error_type = type(exc).__name__
             diagnostic.error_message = _clip(str(exc), 800)

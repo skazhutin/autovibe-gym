@@ -11,13 +11,22 @@ import pytest
 from gym.jupyter_kernel import ContainerJupyterKernelBackend
 from gym.notebook_env import NotebookGymEnv
 from gym.protocol import Action
+from research.budget import BudgetExhausted, EpisodeBudget, EpisodeBudgetPolicy
 
 
 def _accuracy(y_true, y_pred):
     return sum(int(a == b) for a, b in zip(y_true, y_pred)) / len(y_true)
 
 
-def _make_env(tmp_path, *, mode="gym_with_checklist", hidden_green=False, enable_thoughts=False):
+def _make_env(
+    tmp_path,
+    *,
+    mode="gym_with_checklist",
+    hidden_green=False,
+    enable_thoughts=False,
+    episode_budget=None,
+    research_submission=False,
+):
     train = pd.DataFrame(
         {
             "color": ["red", "blue", "red", "blue"],
@@ -51,6 +60,8 @@ def _make_env(tmp_path, *, mode="gym_with_checklist", hidden_green=False, enable
         workspace_dir=tmp_path,
         mode=mode,
         enable_thoughts=enable_thoughts,
+        episode_budget=episode_budget,
+        research_submission=research_submission,
     )
     env.reset()
     return env
@@ -398,6 +409,83 @@ def test_hidden_submit_failure_is_generic(tmp_path):
         assert "hidden test split" in submit3.stderr
         assert "green" not in submit3.stderr
         assert env.get_summary()["submit_failure_type"]
+    finally:
+        env.close()
+
+
+def test_research_hidden_submit_is_terminal_and_one_shot_without_feedback(tmp_path):
+    budget = EpisodeBudget(EpisodeBudgetPolicy())
+    env = _make_env(
+        tmp_path,
+        hidden_green=True,
+        episode_budget=budget,
+        research_submission=True,
+    )
+    try:
+        env.step(
+            {
+                "type": "add_cell",
+                "stage": "feature_pipeline_building",
+                "cell_type": "code",
+                "source": _strict_one_hot_source(),
+                "execute": True,
+            }
+        )
+        env.step({"type": "restart_and_run_all", "stage": "reproducibility_check"})
+        env.step({"type": "validate", "stage": "validation_analysis", "model_var": "model"})
+
+        submit = env.step({"type": "submit", "stage": "submission", "model_var": "model"})
+
+        assert submit.submitted
+        assert submit.done
+        assert submit.stderr == ""
+        assert env.hidden_submit_fail_count == 1
+        summary = env.get_summary()
+        assert summary["hidden_evaluations"] == 1
+        assert summary["final_status"] == "hidden_submit_failed"
+    finally:
+        env.close()
+
+
+def test_research_finalize_never_repairs_or_replays_dirty_candidate(tmp_path):
+    budget = EpisodeBudget(EpisodeBudgetPolicy())
+    env = _make_env(
+        tmp_path,
+        episode_budget=budget,
+        research_submission=True,
+    )
+    try:
+        env.step(
+            {
+                "type": "add_cell",
+                "stage": "feature_pipeline_building",
+                "cell_type": "code",
+                "source": _constant_model_source(),
+                "execute": True,
+            }
+        )
+        executions_before = budget.code_executions
+        restarts_before = env.kernel_restarts_total
+
+        finalized = env.finalize()
+
+        assert finalized.done
+        assert finalized.final_status == "invalid_submission"
+        assert budget.code_executions == executions_before
+        assert env.kernel_restarts_total == restarts_before
+        assert env.get_summary()["finalize_path"] == "research_no_repair"
+    finally:
+        env.close()
+
+
+def test_research_tool_budget_is_enforced_before_overshoot(tmp_path):
+    budget = EpisodeBudget(EpisodeBudgetPolicy(max_tool_calls=1))
+    env = _make_env(tmp_path, episode_budget=budget, research_submission=True)
+    try:
+        env.step({"type": "inspect_data", "stage": "data_schema_inspection"})
+        with pytest.raises(BudgetExhausted, match="max_tool_calls"):
+            env.step({"type": "profile_data", "stage": "data_schema_inspection"})
+        assert budget.tool_calls == 1
     finally:
         env.close()
 
