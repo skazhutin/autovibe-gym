@@ -42,7 +42,7 @@ from research.submission import (
 from gym.data_profile import build_dataset_card
 from gym.datasets import load_dataset_splits, resolve_metric
 from gym.executor import CodeExecutor
-from gym.llm import make_llm_client
+from gym.llm import configured_temperature, make_llm_client
 from gym.model_config import apply_model_reference
 from gym.protocol import Action
 from gym.scoring import score_with_coercion
@@ -86,6 +86,18 @@ Rules:
 - Write only executable Python. Do not include markdown or explanations.
 """
 
+TASK_PROMPT_TEMPLATE = """Solve a supervised ML task.
+Target column: '{target_col}'
+Metric: {metric_name} (higher is better)
+
+{dataset_card}
+
+Workspace variables: train_df, val_df, target_col, pd, np
+Assign your trained model to variable: model"""
+
+ATTEMPT_FEEDBACK_TEMPLATE = """Previous best validation score across {attempt} attempt(s): {best_val:.4f}. \
+Try to beat it with a different or improved approach."""
+
 
 def _extract_code(text: str) -> str:
     m = re.search(r"```python\s*(.*?)```", text, re.DOTALL)
@@ -111,8 +123,11 @@ def _build_attempt_prompt(task_prompt: str, best_val: float | None, attempt: int
     parts = [task_prompt]
     if best_val is not None:
         parts.append(
-            f"\nPrevious best validation score across {attempt} attempt(s): {best_val:.4f}. "
-            "Try to beat it with a different or improved approach."
+            "\n"
+            + ATTEMPT_FEEDBACK_TEMPLATE.format(
+                attempt=attempt,
+                best_val=best_val,
+            )
         )
     return "\n".join(parts)
 
@@ -172,13 +187,10 @@ def main():
     run_name = args.run_name or f"repeated_single_shot{max_attempts}_{dataset_name}_{model_name.split('/')[-1]}"
 
     dataset_card = build_dataset_card(train, val, target_col, metric_name, max_chars=4500)
-    task_prompt = (
-        f"Solve a supervised ML task.\n"
-        f"Target column: '{target_col}'\n"
-        f"Metric: {metric_name} (higher is better)\n\n"
-        f"{dataset_card}\n\n"
-        "Workspace variables: train_df, val_df, target_col, pd, np\n"
-        "Assign your trained model to variable: model"
+    task_prompt = TASK_PROMPT_TEMPLATE.format(
+        target_col=target_col,
+        metric_name=metric_name,
+        dataset_card=dataset_card,
     )
 
     execution_backend = args.executor_backend or os.getenv(
@@ -193,8 +205,15 @@ def main():
         split_seed=splits.metadata.seed,
         default_split_id=splits.metadata.split_strategy or f"seed-{args.seed}",
         model_id=model_name,
-        prompt_template={"system": SYSTEM_PROMPT, "task": task_prompt},
-        decoding_config={"max_tokens": max_tokens},
+        prompt_template={
+            "system": SYSTEM_PROMPT,
+            "task": TASK_PROMPT_TEMPLATE,
+            "attempt_feedback": ATTEMPT_FEEDBACK_TEMPLATE,
+        },
+        decoding_config={
+            "max_tokens": max_tokens,
+            "temperature": configured_temperature(),
+        },
         budget_policy=(
             episode_budget.policy.to_dict()
             if episode_budget is not None
@@ -206,6 +225,10 @@ def main():
         execution_policy={
             "backend": execution_backend,
             "timeout_seconds": sandbox_timeout,
+            "candidate_prediction_backend": prediction_backend,
+            "candidate_prediction_network": (
+                "none" if prediction_backend == "docker" else "host"
+            ),
         },
         episode_budget=episode_budget,
     )

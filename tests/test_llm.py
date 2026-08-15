@@ -15,6 +15,7 @@ from gym.llm import (
     _openai_usage_counts,
     _usage_count,
     _wait_for_min_request_interval,
+    configured_temperature,
     default_model_name,
     make_llm_client,
 )
@@ -68,6 +69,7 @@ def test_openai_compatible_client_uses_env_and_prepends_system_message(monkeypat
     request = FakeOpenAI.last_instance.chat.completions.requests[0]
     assert request["model"] == "model-a"
     assert request["max_tokens"] == 99
+    assert request["temperature"] == 1.0
     assert request["messages"][0] == {"role": "system", "content": "system prompt"}
     assert response == LLMResponse(
         text='{"type": "submit"}',
@@ -294,6 +296,7 @@ def test_google_client_generates_content_with_system_instruction(monkeypatch):
     assert request["config"].kwargs == {
         "system_instruction": "system",
         "max_output_tokens": 77,
+        "temperature": 1.0,
     }
     assert response == LLMResponse(text="response", input_tokens=13, output_tokens=8)
 
@@ -323,6 +326,21 @@ def test_litellm_client_passes_registry_api_key(monkeypatch):
     assert response == LLMResponse(text="ok", input_tokens=3, output_tokens=4)
     assert requests[0]["api_key"] == "lite-key"
     assert requests[0]["model"] == "groq/llama-3.3-70b-versatile"
+    assert requests[0]["temperature"] == 1.0
+
+
+def test_configured_temperature_uses_frozen_environment_value(monkeypatch):
+    monkeypatch.setenv("AUTOVIBE_LLM_TEMPERATURE", "0.4")
+
+    assert configured_temperature() == 0.4
+
+
+@pytest.mark.parametrize("value", ["bad", "-0.1", "2.1"])
+def test_configured_temperature_rejects_invalid_values(monkeypatch, value):
+    monkeypatch.setenv("AUTOVIBE_LLM_TEMPERATURE", value)
+
+    with pytest.raises(ValueError, match="AUTOVIBE_LLM_TEMPERATURE"):
+        configured_temperature()
 
 
 def test_model_config_builds_provider_specific_env_without_env_keys(monkeypatch):

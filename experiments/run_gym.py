@@ -12,7 +12,7 @@ import os
 from experiments.mlflow_config import configure_mlflow_tracking
 from experiments.modes import add_mode_metadata_args, mode_metadata_params
 from gym import GymAgent, NotebookGymEnv
-from gym.agent import SYSTEM_PROMPT
+from gym.agent import SYSTEM_PROMPT, THOUGHTS_DISABLED_PROMPT, THOUGHTS_ENABLED_PROMPT
 from gym.datasets import (
     DatasetSplits,
     load_dataset_splits,
@@ -20,7 +20,7 @@ from gym.datasets import (
     resolve_metric,
 )
 from gym.model_config import apply_model_reference
-from gym.llm import make_llm_client
+from gym.llm import configured_temperature, make_llm_client
 from research.runner_integration import (
     add_research_artifact_args,
     create_episode_budget,
@@ -146,11 +146,20 @@ def main():
         model_id=model_name,
         prompt_template={
             "system": SYSTEM_PROMPT,
+            "thoughts_policy": (
+                THOUGHTS_ENABLED_PROMPT
+                if args.enable_thoughts
+                else THOUGHTS_DISABLED_PROMPT
+            ),
+            "episode_mode": args.episode_mode,
             "protocol_version": NotebookGymEnv.protocol_version,
             "checklist_version": NotebookGymEnv.checklist_version,
             "feedback_policy_version": NotebookGymEnv.feedback_policy_version,
         },
-        decoding_config={"max_tokens": max_tokens},
+        decoding_config={
+            "max_tokens": max_tokens,
+            "temperature": configured_temperature(),
+        },
         budget_policy=(
             episode_budget.policy.to_dict()
             if episode_budget is not None
@@ -159,6 +168,18 @@ def main():
         execution_policy={
             "backend": _kernel_backend_label(),
             "timeout_seconds": sandbox_timeout,
+            "candidate_prediction_backend": (
+                "docker"
+                if os.getenv("AUTOVIBE_KERNEL_BACKEND", "local").strip().lower()
+                == "docker"
+                else "process"
+            ),
+            "candidate_prediction_network": (
+                "none"
+                if os.getenv("AUTOVIBE_KERNEL_BACKEND", "local").strip().lower()
+                == "docker"
+                else "host"
+            ),
         },
         episode_budget=episode_budget,
     )

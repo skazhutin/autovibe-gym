@@ -40,7 +40,7 @@ from research.submission import (
 from gym.data_profile import build_dataset_card
 from gym.datasets import load_dataset_splits, resolve_metric
 from gym.executor import CodeExecutor
-from gym.llm import make_llm_client
+from gym.llm import configured_temperature, make_llm_client
 from gym.model_config import apply_model_reference
 from gym.scoring import score_with_coercion
 
@@ -70,6 +70,15 @@ Requirements for the final model:
   parameter, omit it and use the estimator's defaults.
 
 Output only a single ```python ... ``` block, nothing else."""
+
+TASK_PROMPT_TEMPLATE = """Solve a supervised ML task.
+Target column: '{target_col}'
+Metric: {metric_name}
+
+{dataset_card}
+
+Variables available: train_df, val_df, target_col, pd, np
+Assign your best trained model to: model"""
 
 
 def extract_code(text: str) -> str:
@@ -126,13 +135,10 @@ def main():
     run_name = args.run_name or f"baseline_{dataset_name}_{model_name.split('/')[-1]}"
 
     dataset_card = build_dataset_card(train, val, target_col, metric_name, max_chars=4500)
-    task_prompt = (
-        f"Solve a supervised ML task.\n"
-        f"Target column: '{target_col}'\n"
-        f"Metric: {metric_name}\n\n"
-        f"{dataset_card}\n\n"
-        "Variables available: train_df, val_df, target_col, pd, np\n"
-        "Assign your best trained model to: model"
+    task_prompt = TASK_PROMPT_TEMPLATE.format(
+        target_col=target_col,
+        metric_name=metric_name,
+        dataset_card=dataset_card,
     )
 
     execution_backend = args.executor_backend or os.getenv(
@@ -147,8 +153,11 @@ def main():
         split_seed=splits.metadata.seed,
         default_split_id=splits.metadata.split_strategy or f"seed-{args.seed}",
         model_id=model_name,
-        prompt_template={"system": SYSTEM_PROMPT, "task": task_prompt},
-        decoding_config={"max_tokens": max_tokens},
+        prompt_template={"system": SYSTEM_PROMPT, "task": TASK_PROMPT_TEMPLATE},
+        decoding_config={
+            "max_tokens": max_tokens,
+            "temperature": configured_temperature(),
+        },
         budget_policy=(
             episode_budget.policy.to_dict()
             if episode_budget is not None
@@ -157,6 +166,10 @@ def main():
         execution_policy={
             "backend": execution_backend,
             "timeout_seconds": args.sandbox_timeout,
+            "candidate_prediction_backend": prediction_backend,
+            "candidate_prediction_network": (
+                "none" if prediction_backend == "docker" else "host"
+            ),
         },
         episode_budget=episode_budget,
     )

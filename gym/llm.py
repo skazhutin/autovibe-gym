@@ -54,6 +54,17 @@ class LLMClient(Protocol):
         ...
 
 
+def configured_temperature() -> float:
+    raw = os.getenv("AUTOVIBE_LLM_TEMPERATURE", "1.0")
+    try:
+        value = float(raw)
+    except ValueError as exc:
+        raise ValueError("AUTOVIBE_LLM_TEMPERATURE must be numeric") from exc
+    if not 0.0 <= value <= 2.0:
+        raise ValueError("AUTOVIBE_LLM_TEMPERATURE must be between 0 and 2")
+    return value
+
+
 _TRANSIENT_NAMES = {
     "RateLimitError", "APITimeoutError", "APIConnectionError",
     "InternalServerError", "APIError",
@@ -81,11 +92,11 @@ def _emit_attempt(hook: Callable | None, **event) -> None:
 def _create_with_retries(client, *, request_attempt_hook=None, **kwargs):
     """Call chat.completions.create with exponential backoff on transient
     errors (rate limits / 5xx / timeouts). Tunable via env:
-    AUTOVIBE_LLM_MAX_RETRIES (default 5), AUTOVIBE_LLM_RETRY_BASE (default 2s)."""
+    AUTOVIBE_LLM_MAX_RETRIES (default 3), AUTOVIBE_LLM_RETRY_BASE (default 2s)."""
     try:
-        max_retries = int(os.getenv("AUTOVIBE_LLM_MAX_RETRIES", "5"))
+        max_retries = int(os.getenv("AUTOVIBE_LLM_MAX_RETRIES", "3"))
     except ValueError:
-        max_retries = 5
+        max_retries = 3
     try:
         base = float(os.getenv("AUTOVIBE_LLM_RETRY_BASE", "2"))
     except ValueError:
@@ -160,6 +171,7 @@ class LiteLLMClient:
         kwargs = {
             "model": model,
             "max_tokens": max_tokens,
+            "temperature": configured_temperature(),
             "messages": [{"role": "system", "content": system}] + messages,
         }
         api_key = os.getenv("AUTOVIBE_LITELLM_API_KEY")
@@ -249,6 +261,7 @@ class OpenAICompatibleLLMClient:
             request_attempt_hook=self._research_attempt_hook,
             model=model,
             max_tokens=max_tokens,
+            temperature=configured_temperature(),
             messages=[{"role": "system", "content": system}] + messages,
         )
         usage = response.usage
@@ -308,6 +321,7 @@ class GoogleAIStudioLLMClient:
                 config=types.GenerateContentConfig(
                     system_instruction=system,
                     max_output_tokens=max_tokens,
+                    temperature=configured_temperature(),
                 ),
             ),
             request_attempt_hook=self._research_attempt_hook,

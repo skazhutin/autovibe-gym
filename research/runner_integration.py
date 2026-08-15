@@ -27,6 +27,7 @@ def add_research_artifact_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--research-run-dir", default=None)
     parser.add_argument("--research-experiment-id", default=None)
     parser.add_argument("--research-replicate-index", type=int, default=0)
+    parser.add_argument("--research-arm", choices=["A", "B", "C"], default=None)
     parser.add_argument("--research-model-version", default="unversioned")
     parser.add_argument("--research-split-id", default=None)
     parser.add_argument("--research-condition-id", default=None)
@@ -125,7 +126,7 @@ def start_research_run(
         "model_id": model_id,
         "model_version": args.research_model_version,
         "decoding_config_hash": canonical_hash(decoding_config),
-        "arm": arm,
+        "arm": args.research_arm or arm,
         "replicate_index": args.research_replicate_index,
         "budget_policy_hash": canonical_hash(budget_policy),
         "execution_policy_hash": canonical_hash(execution_policy),
