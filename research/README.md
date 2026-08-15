@@ -10,22 +10,24 @@ pilot evidence and must not be merged with the future confirmatory series.
 
 ## Current state
 
-- Protocol status: `draft_unfrozen`.
+- Protocol status: frozen by annotated tag `paper-v1-experiment-freeze`.
 - Phase 0 code audit: complete at Git commit `1504cc0` (`origin/main` on
   2026-08-12).
-- Confirmatory runs: not authorized and not technically ready.
+- Confirmatory runs: authorized but not started; the fail-closed launcher must
+  pass review before the first condition is executed.
 - Runner causal behavior: opt-in research mode now uses the shared Paper V1
   global budget, common no-autofit validator, and one-shot hidden evaluation;
   product defaults remain compatible.
 - Manifest/ledger and failure-classification infrastructure: merged in PR 2.
 - Fair global budgets and research submission gates: merged in PR 3.
-- Confirmatory planner: implemented offline in PR 4; no exact confirmatory plan
-  can be created until the freeze-blocking human decisions are resolved.
+- Confirmatory planner: merged in PR 4; the frozen plan contains exactly 120
+  pending conditions (40 randomized A/B/C blocks).
 - Primary analysis pipeline: preregistered in PR 5a and tested only on synthetic
   manifests; it does not contain or imply a confirmatory result.
 
-The protocol cannot be frozen until every freeze-blocking TODO in
-[`protocol_v1.yaml`](protocols/protocol_v1.yaml) is resolved by a human owner.
+The frozen contract and exact plan were merged in PR #69 and are anchored by
+the annotated tag above. Future documentation changes do not alter that tagged
+contract or the bound execution commit.
 
 ## Arm mapping
 
@@ -160,6 +162,38 @@ failures enter the same-condition replacement queue, with a new run ID,
 outcomes, broken replacement chains, or condition drift fail reconciliation.
 This tooling is confirmatory infrastructure only: it neither authorizes nor
 launches pilot/confirmatory API runs.
+
+## Confirmatory launcher
+
+The launcher schedules the next condition from the frozen plan and defaults to
+one condition per invocation. It fails before provider access unless all of the
+following still match: annotated freeze tag and complete JSON contract, clean
+detached execution worktree at the bound commit, dataset hashes, exact internal
+OpenAI-compatible model records, Docker image availability, and manifest/event
+history.
+
+```powershell
+python -m research.confirmatory_launcher `
+  --execution-repo path/to/detached-frozen-worktree `
+  --datasets-root path/to/frozen-datasets `
+  --runs-root path/to/external-results/runs `
+  --models-config path/to/private-models.json `
+  --sandbox-image autovibe-gym-sandbox:paper-v1 `
+  --dry-run
+```
+
+Remove `--dry-run` only after review. `--max-conditions N` permits a bounded
+sequence; the default remains one. The private registry stays outside Git and
+supplies the internal API credential at runtime. There is no paid-provider
+fallback. Stdout/stderr, workspaces, MLflow SQLite state, run manifests, and the
+append-only launcher lifecycle ledger all live beside the external runs root.
+
+The Docker image was built after the protocol tag, so its digest is not a field
+of the preregistered condition payload. The launcher records the first selected
+digest as common infrastructure provenance and rejects any digest change for
+the remainder of the series. A missing/unfinished lifecycle event, running
+manifest, contract drift, or infrastructure replacement stops automation for
+human review; no result-based rerun decision is made.
 
 ## Preregistered primary analysis
 
