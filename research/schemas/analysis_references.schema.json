@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://autovibe-gym.local/schemas/analysis_references.schema.json",
+  "title": "AutoVibe Gym Paper V1 Frozen FANU References",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "plan_id", "plan_hash", "datasets"],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "plan_id": { "type": "string", "pattern": "^plan_[0-9a-f]{24}$" },
+    "plan_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "datasets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "dataset_id",
+          "metric_direction",
+          "dummy_score",
+          "reference_score"
+        ],
+        "properties": {
+          "dataset_id": { "type": "string", "minLength": 1 },
+          "metric_direction": { "enum": ["higher", "lower"] },
+          "dummy_score": { "type": "number" },
+          "reference_score": { "type": "number" }
+        }
+      }
+    }
+  }
+}

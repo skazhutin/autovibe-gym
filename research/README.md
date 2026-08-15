@@ -21,6 +21,8 @@ pilot evidence and must not be merged with the future confirmatory series.
 - Fair global budgets and research submission gates: merged in PR 3.
 - Confirmatory planner: implemented offline in PR 4; no exact confirmatory plan
   can be created until the freeze-blocking human decisions are resolved.
+- Primary analysis pipeline: preregistered in PR 5a and tested only on synthetic
+  manifests; it does not contain or imply a confirmatory result.
 
 The protocol cannot be frozen until every freeze-blocking TODO in
 [`protocol_v1.yaml`](protocols/protocol_v1.yaml) is resolved by a human owner.
@@ -82,6 +84,12 @@ Confirmatory execution must satisfy all of the following:
   exact result-blind planner input contract.
 - [`schemas/confirmatory_plan.schema.json`](schemas/confirmatory_plan.schema.json):
   immutable expanded-plan interchange schema.
+- [`analysis.py`](analysis.py): fail-closed completeness, FANU, paired H1/H2,
+  stratified bootstrap, permutation, McNemar, Holm, and immutable result output.
+- [`schemas/analysis_references.schema.json`](schemas/analysis_references.schema.json):
+  frozen dataset metric-direction/dummy/reference input contract.
+- [`schemas/analysis_result.schema.json`](schemas/analysis_result.schema.json):
+  content-hashed primary-analysis result contract.
 
 ## Opt-in run artifacts
 
@@ -152,6 +160,32 @@ outcomes, broken replacement chains, or condition drift fail reconciliation.
 This tooling is confirmatory infrastructure only: it neither authorizes nor
 launches pilot/confirmatory API runs.
 
+## Preregistered primary analysis
+
+After a frozen plan exists and its complete immutable run set has been
+reconciled, run the primary analysis without manually copying outcomes:
+
+```powershell
+python -m research.analysis `
+  --plan path/to/confirmatory-plan.json `
+  --runs path/to/immutable-run-root `
+  --references path/to/frozen-fanu-references.json `
+  --protocol research/protocols/protocol_v1.yaml `
+  --output path/to/primary-analysis.json
+```
+
+The pipeline refuses incomplete matrices, condition drift, invalid replacement
+chains, mismatched plan/reference identities, zero FANU denominators, successful
+runs without exactly one hidden evaluation, and failed runs marked as valid. It
+keeps agent failures at dummy performance and rejects infrastructure attempts as
+terminal outcomes. H1 (`B-A`) and H2 (`C-B`) are paired by
+dataset/model/replicate, aggregate dataset-model strata equally, and apply the
+protocol bootstrap, permutation, exact McNemar, and Holm procedures.
+
+The output path is concurrent-safe and cannot be overwritten. This PR validates
+the pipeline only with synthetic manifests; confirmatory values remain
+unavailable until the pilot, freeze, immutable tag, and execution gates pass.
+
 ## Offline validation
 
 ```powershell
@@ -159,6 +193,7 @@ python -m research.validate_protocol research/protocols/protocol_v1.yaml
 python -m pytest tests/test_research_protocol.py -q
 python -m pytest tests/test_research_run_artifacts.py tests/test_llm.py -q
 python -m pytest tests/test_research_planner.py -q
+python -m pytest tests/test_research_analysis.py -q
 ```
 
 The validator checks structural consistency only. A passing validation does not

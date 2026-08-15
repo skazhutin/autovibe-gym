@@ -77,11 +77,16 @@ For each comparison report:
 - 95% paired stratified percentile bootstrap CI with 10,000 resamples, seed
   `20260812`;
 - two-sided paired permutation test, exact when feasible and otherwise 100,000
-  Monte Carlo draws with seed `20260812`;
+  Monte Carlo draws with seed `20260812`; exact means at most 20 non-zero
+  paired differences, and Monte Carlo p-values use the add-one correction;
 - Holm-adjusted p-values across the H1 and H2 FANU tests;
 - raw paired values and per-dataset/per-model summaries.
 
 Effect estimates and intervals are primary; p-values are supporting evidence.
+Bootstrap resampling is within each dataset-model stratum, with the final
+statistic equally averaging stratum means. Permutation sign flips use the same
+equal-stratum statistic, including if strata contain unequal observed pair
+counts.
 
 ## Valid submission and failure outcomes
 
@@ -135,3 +140,7 @@ The confirmatory configuration, condition matrix, analysis code, dataset hashes,
 reference scores, and exclusions must be committed and tagged before outcomes are
 inspected. Tables and figures must be generated from immutable manifests; manual
 copying of reported numbers is prohibited.
+
+The primary analysis output is content-hashed and published with no-overwrite
+semantics. An identical rerun is idempotent; a different output at the same path
+is an error rather than an implicit replacement.

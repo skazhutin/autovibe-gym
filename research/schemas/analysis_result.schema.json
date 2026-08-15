@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://autovibe-gym.local/schemas/analysis_result.schema.json",
+  "title": "AutoVibe Gym Paper V1 Primary Analysis Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "evidence_class",
+    "plan_id",
+    "plan_hash",
+    "analysis_config",
+    "analysis_config_hash",
+    "completeness",
+    "reconciliation_hash",
+    "rows",
+    "comparisons",
+    "result_hash"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "evidence_class": { "const": "confirmatory_analysis" },
+    "plan_id": { "type": "string", "pattern": "^plan_[0-9a-f]{24}$" },
+    "plan_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "analysis_config": { "type": "object" },
+    "analysis_config_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "completeness": {
+      "type": "object",
+      "required": ["planned_conditions", "terminal_agent_outcomes", "complete"],
+      "properties": {
+        "planned_conditions": { "type": "integer", "minimum": 1 },
+        "terminal_agent_outcomes": { "type": "integer", "minimum": 1 },
+        "complete": { "const": true }
+      }
+    },
+    "reconciliation_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "rows": { "type": "array", "minItems": 1 },
+    "comparisons": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["H1", "H2"],
+      "properties": {
+        "H1": { "type": "object" },
+        "H2": { "type": "object" }
+      }
+    },
+    "result_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}
