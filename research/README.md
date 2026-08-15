@@ -14,10 +14,13 @@ pilot evidence and must not be merged with the future confirmatory series.
 - Phase 0 code audit: complete at Git commit `1504cc0` (`origin/main` on
   2026-08-12).
 - Confirmatory runs: not authorized and not technically ready.
-- Runner causal behavior: unchanged; opt-in Paper V1 artifacts do not alter
-  prompts, budgets, submit behavior, or provider retry decisions.
-- Manifest/ledger and failure-classification infrastructure: implemented in
-  PR 2; fair global budgets and the confirmatory planner remain later PRs.
+- Runner causal behavior: opt-in research mode now uses the shared Paper V1
+  global budget, common no-autofit validator, and one-shot hidden evaluation;
+  product defaults remain compatible.
+- Manifest/ledger and failure-classification infrastructure: merged in PR 2.
+- Fair global budgets and research submission gates: merged in PR 3.
+- Confirmatory planner: implemented offline in PR 4; no exact confirmatory plan
+  can be created until the freeze-blocking human decisions are resolved.
 
 The protocol cannot be frozen until every freeze-blocking TODO in
 [`protocol_v1.yaml`](protocols/protocol_v1.yaml) is resolved by a human owner.
@@ -72,6 +75,13 @@ Confirmatory execution must satisfy all of the following:
   failure classification.
 - [`schemas/run_manifest.schema.json`](schemas/run_manifest.schema.json):
   versioned manifest interchange schema.
+- [`planner.py`](planner.py): deterministic blocked condition planning,
+  immutable plan writing, manifest reconciliation, resume checks, and the
+  infrastructure-replacement queue.
+- [`schemas/confirmatory_plan_config.schema.json`](schemas/confirmatory_plan_config.schema.json):
+  exact result-blind planner input contract.
+- [`schemas/confirmatory_plan.schema.json`](schemas/confirmatory_plan.schema.json):
+  immutable expanded-plan interchange schema.
 
 ## Opt-in run artifacts
 
@@ -98,10 +108,49 @@ reruns additionally require `--research-rerun-of` and
   notebook events, with private evaluator fields removed;
 - `manifest_events.jsonl` — append-only lifecycle audit.
 
-The current provider retry limits and backoff are only observed. PR 2 does not
-change them or enforce the future common global budget. The default model
-version is recorded honestly as `unversioned`; such runs are pilot-only and
-cannot satisfy the later freeze gate.
+Provider retry limits and backoff remain observed rather than altered by the
+artifact layer. PR 3 adds the opt-in common global episode budget around those
+calls. A model version recorded as `unversioned` remains pilot-only and cannot
+satisfy the later freeze or confirmatory-plan gate.
+
+## Confirmatory planner
+
+The planner does not infer unresolved model, dataset, budget, prompt, or
+execution decisions. Its input must contain exact Git/config/dataset/split/model
+identities and SHA-256 hashes for the budget, decoding, execution, and prompt
+contracts. Values such as `TODO`, `TBD`, `unversioned`, or `unknown` are rejected.
+
+After those owner decisions are resolved, build the complete plan without
+executing any episode:
+
+```powershell
+python -m research.planner build `
+  --config path/to/frozen-plan-input.yaml `
+  --protocol research/protocols/protocol_v1.yaml `
+  --output path/to/confirmatory-plan.json
+```
+
+The generated plan contains every A/B/C condition before outcomes are visible,
+uses a portable SHA-256-seeded permutation within each
+dataset/model/replicate block, and hashes the complete canonical plan. Repeating
+the same build against the same output is a no-op; a different plan is never
+allowed to overwrite it.
+
+Resume and replacement status is derived only from append-only run manifests:
+
+```powershell
+python -m research.planner status `
+  --plan path/to/confirmatory-plan.json `
+  --runs path/to/immutable-run-root `
+  --output path/to/reconciliation.json
+```
+
+Agent failures remain terminal outcomes. Only declared infrastructure/provider
+failures enter the same-condition replacement queue, with a new run ID,
+`rerun_of`, and reason. Unknown conditions, duplicate run IDs, multiple terminal
+outcomes, broken replacement chains, or condition drift fail reconciliation.
+This tooling is confirmatory infrastructure only: it neither authorizes nor
+launches pilot/confirmatory API runs.
 
 ## Offline validation
 
@@ -109,6 +158,7 @@ cannot satisfy the later freeze gate.
 python -m research.validate_protocol research/protocols/protocol_v1.yaml
 python -m pytest tests/test_research_protocol.py -q
 python -m pytest tests/test_research_run_artifacts.py tests/test_llm.py -q
+python -m pytest tests/test_research_planner.py -q
 ```
 
 The validator checks structural consistency only. A passing validation does not

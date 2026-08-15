@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://autovibe-gym.local/schemas/confirmatory_plan_config.schema.json",
+  "title": "AutoVibe Gym Paper V1 Confirmatory Plan Input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "experiment_id",
+    "git_commit",
+    "budget_policy_hash",
+    "matrix"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "experiment_id": { "type": "string", "minLength": 1 },
+    "git_commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "budget_policy_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "matrix": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "datasets",
+        "models",
+        "arms",
+        "replicates_per_cell",
+        "planned_conditions",
+        "randomization_seed"
+      ],
+      "properties": {
+        "datasets": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["dataset_id", "dataset_hash", "split_id", "split_seed"],
+            "properties": {
+              "dataset_id": { "type": "string", "minLength": 1 },
+              "dataset_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+              "split_id": { "type": "string", "minLength": 1 },
+              "split_seed": { "type": "integer", "minimum": 0 }
+            }
+          }
+        },
+        "models": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "model_provider",
+              "model_id",
+              "model_version",
+              "decoding_config_hash"
+            ],
+            "properties": {
+              "model_provider": { "type": "string", "minLength": 1 },
+              "model_id": { "type": "string", "minLength": 1 },
+              "model_version": { "type": "string", "minLength": 1 },
+              "decoding_config_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+            }
+          }
+        },
+        "arms": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "arm",
+              "product_mode",
+              "execution_policy_hash",
+              "prompt_template_hash"
+            ],
+            "properties": {
+              "arm": { "enum": ["A", "B", "C"] },
+              "product_mode": { "type": "string", "minLength": 1 },
+              "execution_policy_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+              "prompt_template_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+            }
+          }
+        },
+        "replicates_per_cell": { "type": "integer", "minimum": 1 },
+        "planned_conditions": { "type": "integer", "minimum": 1 },
+        "randomization_seed": { "type": "integer" }
+      }
+    }
+  }
+}

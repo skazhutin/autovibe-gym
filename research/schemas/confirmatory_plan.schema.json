@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://autovibe-gym.local/schemas/confirmatory_plan.schema.json",
+  "title": "AutoVibe Gym Paper V1 Confirmatory Experiment Plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "experiment_id",
+    "protocol_hash",
+    "config_hash",
+    "plan_id",
+    "plan_hash",
+    "matrix",
+    "conditions"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "kind": { "const": "confirmatory_experiment_plan" },
+    "experiment_id": { "type": "string", "minLength": 1 },
+    "protocol_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "config_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "plan_id": { "type": "string", "pattern": "^plan_[0-9a-f]{24}$" },
+    "plan_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "matrix": {
+      "type": "object",
+      "required": [
+        "dataset_ids",
+        "model_ids",
+        "arms",
+        "replicates_per_cell",
+        "block_keys",
+        "block_count",
+        "planned_conditions",
+        "randomization_seed",
+        "within_block_order"
+      ]
+    },
+    "conditions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "sequence_index",
+          "block_index",
+          "within_block_index",
+          "block_id",
+          "product_mode",
+          "condition_id",
+          "condition"
+        ]
+      }
+    }
+  }
+}
