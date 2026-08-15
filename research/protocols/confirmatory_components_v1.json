@@ -1,0 +1,91 @@
+{
+  "schema_version": "1.0",
+  "execution_git_commit": "b4e3da29e1c6b7db42848f7eee82c6a8ef3e9dae",
+  "runtime_environment": {
+    "LLM_PROVIDER": "openai",
+    "LLM_BASE_URL": "http://llm.letovo.site:8809/openai",
+    "AUTOVIBE_LLM_TEMPERATURE": "0.4",
+    "AUTOVIBE_LLM_MAX_RETRIES": "3",
+    "AUTOVIBE_EXECUTOR_BACKEND": "docker",
+    "AUTOVIBE_KERNEL_BACKEND": "docker",
+    "AUTOVIBE_SANDBOX_MEMORY_MB": "2048",
+    "AUTOVIBE_SANDBOX_CPUS": "1",
+    "AUTOVIBE_KERNEL_MEMORY_MB": "2048",
+    "AUTOVIBE_KERNEL_CPUS": "1"
+  },
+  "budget_policy": {
+    "payload": {
+      "total_token_limit": 256000,
+      "max_output_tokens_per_call": 4096,
+      "max_llm_calls": 12,
+      "max_code_executions": 20,
+      "max_tool_calls": 20,
+      "wall_clock_limit_seconds": 1800
+    },
+    "hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03"
+  },
+  "decoding_config": {
+    "payload": {
+      "max_tokens": 4096,
+      "temperature": 0.4
+    },
+    "hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097"
+  },
+  "arms": {
+    "A": {
+      "product_mode": "repeated_single_shot",
+      "runner": "experiments.run_multishot",
+      "prompt_source_symbols": [
+        "SYSTEM_PROMPT",
+        "TASK_PROMPT_TEMPLATE",
+        "ATTEMPT_FEEDBACK_TEMPLATE"
+      ],
+      "prompt_template_hash": "c66a62a4ce9f9bbd8a413979194d156f605bb5e507811a692578844d0db4c4f8",
+      "execution_policy": {
+        "backend": "docker",
+        "timeout_seconds": 120,
+        "candidate_prediction_backend": "docker",
+        "candidate_prediction_network": "none"
+      },
+      "execution_policy_hash": "567696568c4725f0e0f38898ea77a48f1fd1756c0ec4d12cd0649f9fc6dd6a07"
+    },
+    "B": {
+      "product_mode": "iterative_no_checklist",
+      "runner": "experiments.run_gym",
+      "prompt_source_symbols": [
+        "gym.agent.SYSTEM_PROMPT",
+        "gym.agent.THOUGHTS_DISABLED_PROMPT",
+        "NotebookGymEnv.protocol_version",
+        "NotebookGymEnv.checklist_version",
+        "NotebookGymEnv.feedback_policy_version"
+      ],
+      "prompt_template_hash": "dd8219c9f820f0a31bba0648f9ed6e4c1c7a98e86b75124f1e452ab8b23a2a27",
+      "execution_policy": {
+        "backend": "jupyter-docker",
+        "timeout_seconds": 120,
+        "candidate_prediction_backend": "docker",
+        "candidate_prediction_network": "none"
+      },
+      "execution_policy_hash": "a67061999cc4d4390067bcbf95c4df058deb1fe9e83cc64245dbccf06e2d808e"
+    },
+    "C": {
+      "product_mode": "gym_with_checklist",
+      "runner": "experiments.run_gym",
+      "prompt_source_symbols": [
+        "gym.agent.SYSTEM_PROMPT",
+        "gym.agent.THOUGHTS_DISABLED_PROMPT",
+        "NotebookGymEnv.protocol_version",
+        "NotebookGymEnv.checklist_version",
+        "NotebookGymEnv.feedback_policy_version"
+      ],
+      "prompt_template_hash": "f58bd4c5704fedc887d5c2ef952eea37e48fde63c376acc2d997f82033917f5a",
+      "execution_policy": {
+        "backend": "jupyter-docker",
+        "timeout_seconds": 120,
+        "candidate_prediction_backend": "docker",
+        "candidate_prediction_network": "none"
+      },
+      "execution_policy_hash": "a67061999cc4d4390067bcbf95c4df058deb1fe9e83cc64245dbccf06e2d808e"
+    }
+  }
+}

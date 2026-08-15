@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "freeze_tag": "paper-v1-experiment-freeze",
+  "execution_git_commit": "b4e3da29e1c6b7db42848f7eee82c6a8ef3e9dae",
+  "protocol_file": "research/protocols/protocol_v1.yaml",
+  "protocol_hash": "9c94618419e9c86053dec510495ea91d5a87a592964f599d874a5702bdad38f8",
+  "components_file": "research/protocols/confirmatory_components_v1.json",
+  "plan_config_file": "research/protocols/confirmatory_plan_config_v1.yaml",
+  "normalized_plan_config_hash": "964a189f0aef527a44d6014cff97084875e3040e3e4abb6d30a9fead5457d081",
+  "plan_file": "research/protocols/confirmatory_plan_v1.json",
+  "plan_id": "plan_1c2ad2a922165e0d27471ae7",
+  "plan_hash": "1c2ad2a922165e0d27471ae79c2cff1e7266ac29dbc137f7ca3a1f1e8784b593",
+  "planned_conditions": 120,
+  "confirmatory_outcomes_visible_at_freeze": false,
+  "tag_verification": "The external Git ref must resolve to the commit containing this record."
+}

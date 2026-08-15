@@ -1,0 +1,48 @@
+schema_version: "1.0"
+experiment_id: autovibe-gym-paper-v1-confirmatory
+git_commit: b4e3da29e1c6b7db42848f7eee82c6a8ef3e9dae
+budget_policy_hash: d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03
+analysis_reference_hash: e867776aa650b7445a9fb17d16686e176dca8b14cc0c1460426708fe162e0570
+matrix:
+  datasets:
+    - dataset_id: air_quality
+      dataset_hash: 594c0bdd0a9891c954204ac36bf3410c3624b94b0539bb9c2c6c35650d13529c
+      split_id: chronological-sensor-only-local-snapshot-v1
+      split_seed: 42
+    - dataset_id: diabetes_readmission
+      dataset_hash: b91679a8b9b61215ea40b5586803ebb16c09e25896adbeaf4d00e67e9a335589
+      split_id: patient-group-shuffle-seed-42-binary-v1
+      split_seed: 42
+    - dataset_id: student_dropout
+      dataset_hash: c42ac56f6a5f1e2432812be1962ecba7a88bf3d8978ce50f8b74c175260ba847
+      split_id: stratified-random-seed-42-v1
+      split_seed: 42
+    - dataset_id: bank_marketing
+      dataset_hash: 2f996e2d2dfe734f4cdf9ce0c600377699c0b535dbed3187db207c8759681733
+      split_id: predefined-local-snapshot-no-duration-seed-42-v1
+      split_seed: 42
+  models:
+    - model_provider: openai
+      model_id: deepseek-v4-flash
+      model_version: service-snapshot-2026-08-15
+      decoding_config_hash: 876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097
+    - model_provider: openai
+      model_id: gemma-4-26b
+      model_version: service-snapshot-2026-08-15
+      decoding_config_hash: 876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097
+  arms:
+    - arm: A
+      product_mode: repeated_single_shot
+      execution_policy_hash: 567696568c4725f0e0f38898ea77a48f1fd1756c0ec4d12cd0649f9fc6dd6a07
+      prompt_template_hash: c66a62a4ce9f9bbd8a413979194d156f605bb5e507811a692578844d0db4c4f8
+    - arm: B
+      product_mode: iterative_no_checklist
+      execution_policy_hash: a67061999cc4d4390067bcbf95c4df058deb1fe9e83cc64245dbccf06e2d808e
+      prompt_template_hash: dd8219c9f820f0a31bba0648f9ed6e4c1c7a98e86b75124f1e452ab8b23a2a27
+    - arm: C
+      product_mode: gym_with_checklist
+      execution_policy_hash: a67061999cc4d4390067bcbf95c4df058deb1fe9e83cc64245dbccf06e2d808e
+      prompt_template_hash: f58bd4c5704fedc887d5c2ef952eea37e48fde63c376acc2d997f82033917f5a
+  replicates_per_cell: 5
+  planned_conditions: 120
+  randomization_seed: 20260812

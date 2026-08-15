@@ -1,15 +1,15 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-08-15 (Paper V1 freeze package and result-blind pilot are complete; confirmatory execution has not started)
-**Phase:** Paper V1 protocol freeze review before immutable tag and confirmatory planning.
+**Last updated:** 2026-08-15 (Paper V1 freeze package and exact 120-condition plan are complete; confirmatory execution has not started)
+**Phase:** Paper V1 freeze review before immutable tag and confirmatory execution.
 
 ---
 
 ## Current Sprint Goal
 
-Review and merge an auditable, result-blind Paper V1 freeze, then create the
-immutable experiment tag before generating or executing the real confirmatory
-plan.
+Review and merge an auditable, result-blind Paper V1 freeze with its complete
+precomputed plan, then create and verify the immutable experiment tag before
+executing any confirmatory condition.
 
 ## Paper V1 Research Protocol
 
@@ -18,8 +18,8 @@ plan.
 | Phase 0 code audit | Done | Audited freshly fetched `origin/main` commit `1504cc0`; mapped five modes, per-call token semantics, host autofit, step/tool counters, artifact paths, hidden-score privacy, hidden retry loop, and current tests |
 | `research/protocol-v1` scaffold | Done | Machine-readable protocol, hypotheses, analysis plan, failure policy, selection gates, validator, and offline tests |
 | Protocol freeze | Ready for review | All D01-D09 decisions are recorded; two internal model IDs, four leakage-reviewed dataset snapshots, 256k/12-call budget, zero-ruble no-fallback policy, storage choice, annotator nominees, manifest `91e4a9...d7ac`, and FANU references `e86777...0570` are bound. Freeze becomes operative only after merge and tag `paper-v1-experiment-freeze` |
-| Confirmatory execution | Not started | Nine completed availability/budget pilot episodes are explicitly non-confirmatory. No real 120-condition plan or confirmatory outcome exists |
-| Candidate prediction isolation | Implemented, under review | Confirmatory Docker runs execute agent `predict(X)` readiness and hidden evaluation in a separate ephemeral, network-none, read-only/cap-dropped Docker evaluator with no host secrets; local mode uses a spawned-process fallback. Crash/timeout becomes a recorded invalid outcome instead of killing the host recorder |
+| Confirmatory execution | Planned, not started | The immutable result-blind plan contains exactly 120 pending conditions (40 A/B/C blocks) and binds execution commit `b4e3da2`; nine completed availability/budget pilot episodes remain explicitly non-confirmatory and no confirmatory outcome has been generated or inspected |
+| Candidate prediction isolation | Implemented, under review | Confirmatory Docker runs explicitly bind agent execution and candidate prediction to Docker. Readiness and hidden evaluation run in a separate ephemeral, network-none, read-only/cap-dropped evaluator; its result crosses to the host only as a validated JSON scalar vector, never executable pickle output |
 | Auditable run artifacts (PR 2) | Merged | PR 2 was rebased onto merged PR 1, reverified (`289 passed, 2 skipped` locally plus required GitHub `Python tests` success), and squash-merged as `67069a3` |
 | Causal runner behavior changes (PR 3) | Merged as PR #65 | Research-mode A/B/C runners share one pre-call-enforced episode budget, common no-autofit submission validation, and at most one hidden evaluation. Default product behavior remains compatible. After review fixes, `307 passed, 2 skipped` locally and both GitHub checks passed. Fast-forward merge preserved all three commits with author/committer `JapanDino`; `main` advanced to `385a09f` |
 | Confirmatory experiment planner (PR 4) | Merged as PR #66 | Deterministic immutable A/B/C matrix expansion, portable blocked randomization, plan/config hashes, concurrent-safe no-overwrite writes, manifest-based resume, duplicate/condition-drift/category rejection, and same-condition infrastructure replacement queue. Review-fix full suite: `338 passed, 2 skipped`; both GitHub checks passed. Fast-forward merge preserved JapanDino authorship and advanced `main` to `1b12017` |
@@ -556,8 +556,9 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 
 ## Next Actions
 
-1. [ ] Complete full regression and human review of the frozen protocol,
-       dataset cards, pilot evidence, and crash-containment change.
+1. [x] Completed full local regression of the frozen protocol, exact plan,
+       dataset cards, pilot evidence, and crash-containment changes; human PR
+       review remains a merge gate.
 2. [x] PR 1 and PR 2 were reviewed through their required gates and merged in
        order; PR 2 passed local and required GitHub verification after rebase.
 3. [x] Rebased, reviewed, reverified, and fast-forward merged PR #65: one fair
@@ -572,9 +573,9 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 6. [x] Completed a labeled result-blind availability/budget pilot after PR 5a;
        selected 256k/12 calls and kept all pilot outputs outside confirmatory data.
 7. [ ] Merge the freeze PR, create and verify tag
-       `paper-v1-experiment-freeze`, then generate the immutable real
-       120-condition plan from that exact clean commit. Do not execute before
-       plan/config/protocol hashes reconcile.
+       `paper-v1-experiment-freeze`, then execute only the already-generated
+       immutable 120-condition plan. The plan/config/protocol hashes reconcile
+       and every condition binds execution commit `b4e3da2`.
 8. [ ] Keep the earlier H200 notebook-era matrix rerun and experiment-report
        refresh as product/pilot validation, clearly separated from Paper V1.
 9. [x] Existing product PRs were merged to `main`; TZ/PROTOCOL/EXPERIMENT_REPORT
@@ -586,6 +587,7 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 
 | Date | Change |
 |------|--------|
+| 2026-08-15 | Closed the three actionable PR #69 review gaps: Arm A now explicitly couples Docker execution to Docker candidate prediction; the evaluator returns a strict typed JSON scalar vector instead of host-unpickled result objects; and the exact result-blind confirmatory plan now exists before the freeze tag. Also bound API temperature 0.4 to actual requests and decoding hashes, normalized prompt-template hashing across datasets, added explicit A/B/C manifest identity, and reduced the default provider retry limit to the preregistered three. Execution commit `b4e3da2` passed `372 passed`; plan `plan_1c2ad2a922165e0d27471ae7` contains 120 pending conditions with hash `1c2ad2...b593`. No confirmatory outcome or external publication was created. |
 | 2026-08-15 | Prepared the Paper V1 protocol freeze after nine completed result-blind pilot episodes. Froze authenticated internal `deepseek-v4-flash`/`gemma-4-26b`, 256k tokens with 12 calls and 0-ruble/no-paid-fallback policy, four leakage-reviewed dataset snapshots, FANU dummy/reference values, storage choice, annotator nominees, and TMLR-style manuscript format. Added dataset cards, endpoint/pilot snapshots, immutable manifest/reference hashes, and a no-overwrite freeze generator. Pilot-discovered native candidate prediction crashes are now contained; confirmatory prediction runs in an ephemeral network-none Docker evaluator with no host secrets. Focused suite `48 passed`; full suite `361 passed`; Docker prediction smoke passed. No confirmatory plan/outcome or external publication was created. |
 | 2026-08-15 | Fast-forward merged Paper V1 PR 5a (#67) at `b1cd5f5` after final GitHub `Python tests` success and resolution of all actionable review threads. Preserved four commits with author/committer `JapanDino`. The frozen analysis now fails closed on incomplete/dirty/drifted inputs, binds protocol/reference hashes, reconciles disk ledgers, and preregisters FANU H1/H2, Wilson valid-rate intervals, McNemar/Holm, and all-outcome/successful-only summaries. No API, pilot, real manifest, confirmatory outcome, or scientific claim was created or inspected. |
 | 2026-08-15 | Fast-forward merged Paper V1 PR 4 (#66) at `1b12017` after all review threads and GitHub checks passed, preserving author/committer `JapanDino`. Published PR 5a as #67: fail-closed completeness, frozen FANU references, paired H1/H2, equal-stratum bootstrap/permutation, exact McNemar, 95% Wilson rate intervals, all-outcome/successful-only score summaries, ledger reconciliation, Holm, raw/stratum outputs, schemas, and immutable content-hashed publication. Review fixes cryptographically bind protocol and reference payloads to the plan. Synthetic-only focused suite after fixes: `66 passed`; full suite: `351 passed, 2 skipped`. No API/pilot/confirmatory outcome was created or inspected. |
