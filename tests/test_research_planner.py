@@ -1,5 +1,6 @@
 import copy
 import json
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
@@ -202,7 +203,16 @@ def test_plan_rejects_pilot_budget_status():
     protocol = _protocol()
     protocol["budget"]["status"] = "pilot_default_not_frozen"
 
-    with pytest.raises(PlanError, match="final frozen budget"):
+    with pytest.raises(PlanError, match="exactly 'frozen'"):
+        build_confirmatory_plan(_config(), protocol=protocol)
+
+
+@pytest.mark.parametrize("status", ["draft", "unfrozen", "frozn", "owner_resolved"])
+def test_plan_accepts_only_exact_frozen_budget_status(status):
+    protocol = _protocol()
+    protocol["budget"]["status"] = status
+
+    with pytest.raises(PlanError, match="exactly 'frozen'"):
         build_confirmatory_plan(_config(), protocol=protocol)
 
 
@@ -226,6 +236,28 @@ def test_plan_write_is_atomic_idempotent_and_never_overwrites(tmp_path):
     changed = build_confirmatory_plan(_config(experiment_id="different"), protocol=_protocol())
     with pytest.raises(FileExistsError, match="Refusing to overwrite"):
         write_plan(changed, path)
+
+
+def test_concurrent_different_plans_cannot_overwrite_each_other(tmp_path):
+    first = build_confirmatory_plan(_config(), protocol=_protocol())
+    second = build_confirmatory_plan(
+        _config(experiment_id="different-experiment"), protocol=_protocol()
+    )
+    path = tmp_path / "confirmatory-plan.json"
+
+    def publish(plan):
+        try:
+            return write_plan(plan, path)
+        except FileExistsError:
+            return "rejected"
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        outcomes = list(pool.map(publish, [first, second]))
+
+    assert sorted(outcomes, key=str) == [True, "rejected"]
+    stored = load_plan(path)
+    assert stored["plan_hash"] in {first["plan_hash"], second["plan_hash"]}
+    assert not list(tmp_path.glob(".*.tmp"))
 
 
 def test_plan_validation_detects_tampering():
@@ -261,6 +293,15 @@ def test_agent_outcome_is_terminal_and_not_replaced():
     assert report["counts"]["terminal"] == 1
     assert report["replacement_queue"] == []
     assert report["conditions"][0]["state"] == "terminal"
+
+
+@pytest.mark.parametrize("category", [None, "made_up_category"])
+def test_completed_attempt_requires_declared_failure_category(category):
+    plan = build_confirmatory_plan(_config(), protocol=_protocol())
+    first = plan["conditions"][0]
+
+    with pytest.raises(PlanError, match="unrecognized failure_category"):
+        reconcile_plan(plan, [_manifest(first, "run_bad_category", category=category)])
 
 
 @pytest.mark.parametrize("category", sorted(INFRASTRUCTURE_FAILURES))

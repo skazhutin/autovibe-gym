@@ -34,6 +34,7 @@ INFRASTRUCTURE_FAILURES = {
     FailureCategory.PROVIDER_OTHER.value,
     FailureCategory.ORCHESTRATOR_FAILURE.value,
 }
+KNOWN_FAILURE_CATEGORIES = {category.value for category in FailureCategory}
 _HASH = re.compile(r"^[0-9a-f]{64}$")
 _GIT_COMMIT = re.compile(r"^[0-9a-f]{40}$")
 _PLACEHOLDER = re.compile(
@@ -118,8 +119,8 @@ def _validate_protocol_contract(config: Mapping[str, Any], protocol: Mapping[str
         "protocol.arms",
     )
     budget_status = str(protocol_budget.get("status") or "").strip().lower()
-    if not budget_status or "pilot" in budget_status or "not_frozen" in budget_status:
-        raise PlanError("protocol.budget.status must identify the final frozen budget")
+    if budget_status != "frozen":
+        raise PlanError("protocol.budget.status must be exactly 'frozen'")
 
     matrix = _require_mapping(config.get("matrix"), "config.matrix")
     protocol_model_ids = sorted(str(item.get("id") or "") for item in protocol_matrix.get("models", []))
@@ -358,12 +359,14 @@ def write_plan(plan: Mapping[str, Any], path: str | Path) -> bool:
     validate_plan(plan)
     destination = Path(path)
     content = _json_bytes(plan)
-    if destination.exists():
+    def matches_existing() -> bool:
         existing = json.loads(destination.read_text(encoding="utf-8"))
         validate_plan(existing)
         if existing.get("plan_hash") != plan.get("plan_hash") or _json_bytes(existing) != content:
             raise FileExistsError(f"Refusing to overwrite different plan: {destination}")
         return False
+    if destination.exists():
+        return matches_existing()
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_name(f".{destination.name}.{uuid.uuid4().hex}.tmp")
     try:
@@ -371,7 +374,13 @@ def write_plan(plan: Mapping[str, Any], path: str | Path) -> bool:
             handle.write(content)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(temporary, destination)
+        try:
+            # A hard link publishes the fully-written inode only if the final
+            # destination is still absent. Unlike os.replace(), it can never
+            # overwrite a concurrently preregistered plan.
+            os.link(temporary, destination)
+        except FileExistsError:
+            return matches_existing()
     finally:
         if temporary.exists():
             temporary.unlink()
@@ -419,6 +428,14 @@ def reconcile_plan(
             errors.append(f"duplicate run_id {run_id}")
             continue
         run_ids[run_id] = manifest
+        if manifest.get("state") == "completed":
+            category = manifest.get("failure_category")
+            if category not in KNOWN_FAILURE_CATEGORIES:
+                errors.append(
+                    f"completed run {run_id} has unrecognized failure_category {category!r}"
+                )
+        elif manifest.get("failure_category") is not None:
+            errors.append(f"running run {run_id} must not have a terminal failure_category")
         planned = planned_items.get(condition_key)
         if planned is None:
             errors.append(f"run {run_id} has unplanned condition_id {condition_key}")

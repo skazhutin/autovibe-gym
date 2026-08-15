@@ -21,7 +21,7 @@ that block a budget-matched confirmatory study.
 | Confirmatory execution | Not started | Existing outputs remain pilot-only; no expensive API runs authorized in this cycle |
 | Auditable run artifacts (PR 2) | Merged | PR 2 was rebased onto merged PR 1, reverified (`289 passed, 2 skipped` locally plus required GitHub `Python tests` success), and squash-merged as `67069a3` |
 | Causal runner behavior changes (PR 3) | Merged as PR #65 | Research-mode A/B/C runners share one pre-call-enforced episode budget, common no-autofit submission validation, and at most one hidden evaluation. Default product behavior remains compatible. After review fixes, `307 passed, 2 skipped` locally and both GitHub checks passed. Fast-forward merge preserved all three commits with author/committer `JapanDino`; `main` advanced to `385a09f` |
-| Confirmatory experiment planner (PR 4) | Implemented locally, unpublished | Deterministic immutable A/B/C matrix expansion, portable blocked randomization, plan/config hashes, idempotent no-overwrite writes, manifest-based resume, duplicate/condition-drift rejection, and same-condition infrastructure replacement queue. Current provisional protocol and pilot budget are rejected; no real plan or run was created. Full local suite: `331 passed, 2 skipped` |
+| Confirmatory experiment planner (PR 4) | In review as PR #66 | Deterministic immutable A/B/C matrix expansion, portable blocked randomization, plan/config hashes, concurrent-safe no-overwrite writes, manifest-based resume, duplicate/condition-drift/category rejection, and same-condition infrastructure replacement queue. Current provisional protocol and any budget status other than exact `frozen` are rejected; no real plan or run was created. Review-fix full suite: `338 passed, 2 skipped`; GitHub CI reruns on the final head |
 | Research PR policy | Done | `docs/RESEARCH_PR_POLICY.md` defines authorization, identity, Draft/Ready/Merge gates, PR 1–6 timing, pilot/freeze/confirmatory boundaries, PR body, commit evidence, and post-merge rules |
 | Commit/PR identity | Enforced by policy/config | Commits use `JapanDino <klim.i.rumyantsev@gmail.com>`; PR author must be GitHub login `JapanDino`; identity is checked independently before commit and before PR |
 
@@ -171,7 +171,7 @@ Paper V1 fair-budget cycle (local PR 3 preparation, 2026-08-14):
 - No API calls, pilot episodes, or hidden-test research runs occurred. PR 3 was
   rebased onto merged `origin/main`, reverified, and published as PR #65.
 
-Paper V1 confirmatory-planner cycle (local PR 4 preparation, 2026-08-14):
+Paper V1 confirmatory-planner cycle (PR 4, 2026-08-15):
 
 - PR 3 review feedback was answered and its only unresolved thread was resolved
   after commit `385a09f`; required `Python tests` and the Docker sandbox
@@ -193,9 +193,13 @@ Paper V1 confirmatory-planner cycle (local PR 4 preparation, 2026-08-14):
   under the same condition with `rerun_of` and a reason.
 - Added JSON schemas for exact plan input and expanded plan output plus CLI/docs
   for offline `build` and `status`. The CLI does not launch episodes.
-- Focused planner/manifest/protocol/budget/submission suite -> `59 passed`, one
+- Automated review identified and the branch fixed three fail-closed gaps:
+  budget status now must equal `frozen`, completed attempts require a declared
+  failure category, and concurrent writers publish via an atomic hard link so a
+  different preregistered plan cannot be overwritten.
+- Focused planner/manifest/protocol/budget/submission suite -> `66 passed`, one
   existing Jupyter path deprecation warning.
-- Full `python -m pytest -q` -> `331 passed, 2 skipped`, one existing Jupyter
+- Full `python -m pytest -q` -> `338 passed, 2 skipped`, one existing Jupyter
   path deprecation warning. `git diff --check` passed.
 - No exact confirmatory config, real plan, API call, pilot episode, hidden-test
   evaluation, or confirmatory outcome was created or inspected.
@@ -472,7 +476,7 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 3. [x] Rebased, reviewed, reverified, and fast-forward merged PR #65: one fair
        global budget across A/B/C, research-mode no-autofit validation, and one
        hidden evaluation per terminal agent outcome. Merged `main` is `385a09f`.
-4. [ ] Review and publish the locally verified PR 4 implementation: complete
+4. [ ] Complete review and merge of published PR #66: complete
        condition matrix/hash, blocked randomization, resume/idempotency,
        duplicate rejection, replacement queue, schemas, CLI, and acceptance checks.
 5. [ ] PR 5a: preregister FANU, completeness, paired analysis, and synthetic
@@ -491,7 +495,7 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 
 | Date | Change |
 |------|--------|
-| 2026-08-15 | Fast-forward merged Paper V1 PR 3 (#65) at `385a09f`, preserving author/committer `JapanDino`; all final GitHub checks passed. Prepared PR 4 for publication: deterministic immutable condition planning, 120-condition acceptance fixture, SHA-256 blocked A/B/C ordering, idempotent no-overwrite plan creation, strict protocol/config gates, manifest resume/duplicate checks, and infrastructure-only replacement queue. Focused suite: `59 passed`; full suite: `331 passed, 2 skipped`. No plan with real identities and no API/pilot/confirmatory run was created. |
+| 2026-08-15 | Fast-forward merged Paper V1 PR 3 (#65) at `385a09f`, preserving author/committer `JapanDino`; all final GitHub checks passed. Published PR 4 as #66: deterministic immutable condition planning, 120-condition acceptance fixture, SHA-256 blocked A/B/C ordering, concurrent-safe no-overwrite plan creation, exact frozen-budget/category gates, manifest resume/duplicate checks, and infrastructure-only replacement queue. Review-fix focused suite: `66 passed`; full suite: `338 passed, 2 skipped`. No plan with real identities and no API/pilot/confirmatory run was created. |
 | 2026-08-14 | Merged Paper V1 PR 1 (`6bb75d1`) and PR 2 (`67069a3`) in order after required checks. Published PR 3 as #65: pre-call global episode budgets and audit events, common no-autofit submission validation, one-shot hidden evaluation without repair feedback, reasoning/cached-token observability, and research-only suppression of post-outcome LLM summaries. Review follow-up removed reasoning-token double counting and ensured budget exhaustion still finalizes the single-shot manifest. Full offline suite: `307 passed, 2 skipped`; required GitHub `Python tests` passed; the separate Docker integration job remains flaky at kernel readiness. No API/pilot/confirmatory run occurred. |
 | 2026-08-12 | Codified mandatory authorship and publication rules: every commit must use `JapanDino <klim.i.rumyantsev@gmail.com>`, every PR must be authored by GitHub login `JapanDino`, and stage/commit/push/PR/merge require separate explicit authorization. Added `docs/RESEARCH_PR_POLICY.md` with Draft/Ready/Merge timing, PR 1–6 sequencing, preregistered PR 5a before freeze, pilot/confirmatory gates, PR-body evidence requirements, and post-merge provenance rules. |
 | 2026-08-12 | Prepared the unfrozen Paper V1 research package from freshly fetched `origin/main` commit `1504cc0`: Phase 0 evidence-backed code audit, canonical machine-readable protocol, hypotheses, analysis plan, failure/retry policy, dataset/model selection gates, offline validator, and focused tests. Confirmed current per-call token semantics, host autofit in single/repeated controls, separate step/tool accounting, private hidden score, three-attempt hidden failure loop, and 8-vs-12 checklist documentation drift. No runner behavior, API experiment, commit, push, or PR was performed. |
