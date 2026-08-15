@@ -23,7 +23,9 @@ def test_protocol_v1_is_structurally_valid_and_frozen():
     assert validate_protocol(protocol) == []
     assert protocol["status"] == "frozen"
     assert protocol["freeze"]["allowed"] is True
-    assert protocol["freeze"]["tag"] == "paper-v1-experiment-freeze"
+    assert protocol["freeze"]["tag"] == "paper-v1-experiment-freeze-v2"
+    assert protocol["freeze"]["supersedes_tag"] == "paper-v1-experiment-freeze"
+    assert protocol["freeze"]["outcomes_visible_before_amendment"] is False
     assert protocol["matrix"]["planned_confirmatory_runs"] == 120
     assert protocol["budget"]["total_token_limit"] == 256000
     assert (

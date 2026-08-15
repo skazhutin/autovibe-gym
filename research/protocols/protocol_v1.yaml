@@ -7,7 +7,7 @@ target_first_version: "2026-10-15"
 
 freeze:
   allowed: true
-  tag: paper-v1-experiment-freeze
+  tag: paper-v1-experiment-freeze-v2
   rule: Resolve every freeze_blocking TODO before confirmatory runs begin.
   required_clean_worktree: true
   existing_outputs_are_pilot_only: true
@@ -15,6 +15,10 @@ freeze:
   frozen_input_manifest_hash: 91e4a98523e336929057bb0a4b5b27b54aa2a7b9f2ec0f0057a37989b562d7ac
   fanu_reference_file: research/protocols/fanu_reference_values_v1.json
   fanu_reference_hash: e867776aa650b7445a9fb17d16686e176dca8b14cc0c1460426708fe162e0570
+  amendment_file: research/protocols/amendments/2026-08-15-freeze-v2.md
+  supersedes_tag: paper-v1-experiment-freeze
+  amendment_scope: numeric serialization only; wall-clock limit remains 1800 seconds
+  outcomes_visible_before_amendment: false
 
 research_questions:
   primary: >-

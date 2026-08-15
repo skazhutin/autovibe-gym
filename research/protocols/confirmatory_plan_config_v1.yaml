@@ -1,7 +1,7 @@
 schema_version: "1.0"
 experiment_id: autovibe-gym-paper-v1-confirmatory
 git_commit: b4e3da29e1c6b7db42848f7eee82c6a8ef3e9dae
-budget_policy_hash: d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03
+budget_policy_hash: ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2
 analysis_reference_hash: e867776aa650b7445a9fb17d16686e176dca8b14cc0c1460426708fe162e0570
 matrix:
   datasets:

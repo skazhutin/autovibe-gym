@@ -20,9 +20,9 @@
       "max_llm_calls": 12,
       "max_code_executions": 20,
       "max_tool_calls": 20,
-      "wall_clock_limit_seconds": 1800
+      "wall_clock_limit_seconds": 1800.0
     },
-    "hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03"
+    "hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2"
   },
   "decoding_config": {
     "payload": {

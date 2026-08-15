@@ -6,6 +6,7 @@ import yaml
 from experiments import run_multishot
 from gym.agent import SYSTEM_PROMPT, THOUGHTS_DISABLED_PROMPT
 from gym.notebook_env import NotebookGymEnv
+from research.budget import EpisodeBudgetPolicy
 from research.planner import load_plan
 from research.run_artifacts import canonical_hash
 
@@ -47,6 +48,9 @@ def test_component_hashes_match_execution_commit_runtime_contracts():
     assert canonical_hash(components["budget_policy"]["payload"]) == components[
         "budget_policy"
     ]["hash"]
+    assert canonical_hash(
+        EpisodeBudgetPolicy(**components["budget_policy"]["payload"]).to_dict()
+    ) == components["budget_policy"]["hash"]
     assert canonical_hash(components["decoding_config"]["payload"]) == components[
         "decoding_config"
     ]["hash"]

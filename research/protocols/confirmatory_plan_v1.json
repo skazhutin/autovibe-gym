@@ -6,7 +6,7 @@
       "block_index": 0,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "594c0bdd0a9891c954204ac36bf3410c3624b94b0539bb9c2c6c35650d13529c",
         "dataset_id": "air_quality",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -21,7 +21,7 @@
         "split_id": "chronological-sensor-only-local-snapshot-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_8cba076135517a5f0826b5a1",
+      "condition_id": "cond_48eabe9e4a2afe683947e49d",
       "product_mode": "repeated_single_shot",
       "sequence_index": 0,
       "within_block_index": 0
@@ -31,7 +31,7 @@
       "block_index": 0,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "594c0bdd0a9891c954204ac36bf3410c3624b94b0539bb9c2c6c35650d13529c",
         "dataset_id": "air_quality",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -46,7 +46,7 @@
         "split_id": "chronological-sensor-only-local-snapshot-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_ac1cea91846d19a2507b1f1f",
+      "condition_id": "cond_848f0e3630ae354e9248673b",
       "product_mode": "gym_with_checklist",
       "sequence_index": 1,
       "within_block_index": 1
@@ -56,7 +56,7 @@
       "block_index": 0,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "594c0bdd0a9891c954204ac36bf3410c3624b94b0539bb9c2c6c35650d13529c",
         "dataset_id": "air_quality",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -71,7 +71,7 @@
         "split_id": "chronological-sensor-only-local-snapshot-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_7c8a864cde9108c03f43f4b3",
+      "condition_id": "cond_b99efb67dfa78ed1084385fc",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 2,
       "within_block_index": 2
@@ -81,7 +81,7 @@
       "block_index": 1,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "594c0bdd0a9891c954204ac36bf3410c3624b94b0539bb9c2c6c35650d13529c",
         "dataset_id": "air_quality",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -96,7 +96,7 @@
         "split_id": "chronological-sensor-only-local-snapshot-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_8a8bac9e4398218ac025a8d5",
+      "condition_id": "cond_720340aa24b7dae1498c5afa",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 3,
       "within_block_index": 0
@@ -106,7 +106,7 @@
       "block_index": 1,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "594c0bdd0a9891c954204ac36bf3410c3624b94b0539bb9c2c6c35650d13529c",
         "dataset_id": "air_quality",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -121,7 +121,7 @@
         "split_id": "chronological-sensor-only-local-snapshot-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_0a043f907f423dfea355aa8e",
+      "condition_id": "cond_9cce9793b3089f73a835df07",
       "product_mode": "repeated_single_shot",
       "sequence_index": 4,
       "within_block_index": 1
@@ -131,7 +131,7 @@
       "block_index": 1,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "594c0bdd0a9891c954204ac36bf3410c3624b94b0539bb9c2c6c35650d13529c",
         "dataset_id": "air_quality",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -146,7 +146,7 @@
         "split_id": "chronological-sensor-only-local-snapshot-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_ab38dc5987ef93a4b5bd9a88",
+      "condition_id": "cond_cb68937474a369c1404dba13",
       "product_mode": "gym_with_checklist",
       "sequence_index": 5,
       "within_block_index": 2
@@ -156,7 +156,7 @@
       "block_index": 2,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "594c0bdd0a9891c954204ac36bf3410c3624b94b0539bb9c2c6c35650d13529c",
         "dataset_id": "air_quality",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -171,7 +171,7 @@
         "split_id": "chronological-sensor-only-local-snapshot-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_848c2296a4f36c5a0b5873a0",
+      "condition_id": "cond_7f3578c39eef5ad22050476e",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 6,
       "within_block_index": 0
@@ -181,7 +181,7 @@
       "block_index": 2,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "594c0bdd0a9891c954204ac36bf3410c3624b94b0539bb9c2c6c35650d13529c",
         "dataset_id": "air_quality",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -196,7 +196,7 @@
         "split_id": "chronological-sensor-only-local-snapshot-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_9562b63eac93c2ace3df0562",
+      "condition_id": "cond_30ae87924250bc51bb77e378",
       "product_mode": "gym_with_checklist",
       "sequence_index": 7,
       "within_block_index": 1
@@ -206,7 +206,7 @@
       "block_index": 2,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "594c0bdd0a9891c954204ac36bf3410c3624b94b0539bb9c2c6c35650d13529c",
         "dataset_id": "air_quality",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -221,7 +221,7 @@
         "split_id": "chronological-sensor-only-local-snapshot-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_f4506413a77dd35cfd3d2e39",
+      "condition_id": "cond_91914b2b9e81b40cf339df1b",
       "product_mode": "repeated_single_shot",
       "sequence_index": 8,
       "within_block_index": 2
@@ -231,7 +231,7 @@
       "block_index": 3,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "594c0bdd0a9891c954204ac36bf3410c3624b94b0539bb9c2c6c35650d13529c",
         "dataset_id": "air_quality",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -246,7 +246,7 @@
         "split_id": "chronological-sensor-only-local-snapshot-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_c8f5381a04f2b49af02de6a0",
+      "condition_id": "cond_c3714c3fa32c0a4500e1c506",
       "product_mode": "repeated_single_shot",
       "sequence_index": 9,
       "within_block_index": 0
@@ -256,7 +256,7 @@
       "block_index": 3,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "594c0bdd0a9891c954204ac36bf3410c3624b94b0539bb9c2c6c35650d13529c",
         "dataset_id": "air_quality",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -271,7 +271,7 @@
         "split_id": "chronological-sensor-only-local-snapshot-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_b072e933d62973aef1360dba",
+      "condition_id": "cond_23398b7c743d8ba3052f574e",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 10,
       "within_block_index": 1
@@ -281,7 +281,7 @@
       "block_index": 3,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "594c0bdd0a9891c954204ac36bf3410c3624b94b0539bb9c2c6c35650d13529c",
         "dataset_id": "air_quality",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -296,7 +296,7 @@
         "split_id": "chronological-sensor-only-local-snapshot-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_a1c25c86def6749e3efde7e2",
+      "condition_id": "cond_563880be3629b1997b5c6821",
       "product_mode": "gym_with_checklist",
       "sequence_index": 11,
       "within_block_index": 2
@@ -306,7 +306,7 @@
       "block_index": 4,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "594c0bdd0a9891c954204ac36bf3410c3624b94b0539bb9c2c6c35650d13529c",
         "dataset_id": "air_quality",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -321,7 +321,7 @@
         "split_id": "chronological-sensor-only-local-snapshot-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_16d84eac720f626de104cb3d",
+      "condition_id": "cond_89b67aa446542f9b2cde2f41",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 12,
       "within_block_index": 0
@@ -331,7 +331,7 @@
       "block_index": 4,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "594c0bdd0a9891c954204ac36bf3410c3624b94b0539bb9c2c6c35650d13529c",
         "dataset_id": "air_quality",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -346,7 +346,7 @@
         "split_id": "chronological-sensor-only-local-snapshot-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_481cbf9515243aeae4eb952f",
+      "condition_id": "cond_edf1bd1f8bca9ceea956ec3d",
       "product_mode": "gym_with_checklist",
       "sequence_index": 13,
       "within_block_index": 1
@@ -356,7 +356,7 @@
       "block_index": 4,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "594c0bdd0a9891c954204ac36bf3410c3624b94b0539bb9c2c6c35650d13529c",
         "dataset_id": "air_quality",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -371,7 +371,7 @@
         "split_id": "chronological-sensor-only-local-snapshot-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_beb0456f681ecf36d2933902",
+      "condition_id": "cond_63daa88add7de733b59cfd2f",
       "product_mode": "repeated_single_shot",
       "sequence_index": 14,
       "within_block_index": 2
@@ -381,7 +381,7 @@
       "block_index": 5,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "594c0bdd0a9891c954204ac36bf3410c3624b94b0539bb9c2c6c35650d13529c",
         "dataset_id": "air_quality",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -396,7 +396,7 @@
         "split_id": "chronological-sensor-only-local-snapshot-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_c84104b26b8fb2b91d44d71c",
+      "condition_id": "cond_ae06c7b1904a362763976b20",
       "product_mode": "gym_with_checklist",
       "sequence_index": 15,
       "within_block_index": 0
@@ -406,7 +406,7 @@
       "block_index": 5,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "594c0bdd0a9891c954204ac36bf3410c3624b94b0539bb9c2c6c35650d13529c",
         "dataset_id": "air_quality",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -421,7 +421,7 @@
         "split_id": "chronological-sensor-only-local-snapshot-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_86181012a42ffa3ed69d19ef",
+      "condition_id": "cond_4d4225deaf9db648047b5621",
       "product_mode": "repeated_single_shot",
       "sequence_index": 16,
       "within_block_index": 1
@@ -431,7 +431,7 @@
       "block_index": 5,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "594c0bdd0a9891c954204ac36bf3410c3624b94b0539bb9c2c6c35650d13529c",
         "dataset_id": "air_quality",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -446,7 +446,7 @@
         "split_id": "chronological-sensor-only-local-snapshot-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_a408dbb19d0dd1e4d30385b3",
+      "condition_id": "cond_4dff43ef253c18b1d0216629",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 17,
       "within_block_index": 2
@@ -456,7 +456,7 @@
       "block_index": 6,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "594c0bdd0a9891c954204ac36bf3410c3624b94b0539bb9c2c6c35650d13529c",
         "dataset_id": "air_quality",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -471,7 +471,7 @@
         "split_id": "chronological-sensor-only-local-snapshot-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_6594abde7b75ccbf0f8984ed",
+      "condition_id": "cond_d44837a594aff5c6e88868a5",
       "product_mode": "gym_with_checklist",
       "sequence_index": 18,
       "within_block_index": 0
@@ -481,7 +481,7 @@
       "block_index": 6,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "594c0bdd0a9891c954204ac36bf3410c3624b94b0539bb9c2c6c35650d13529c",
         "dataset_id": "air_quality",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -496,7 +496,7 @@
         "split_id": "chronological-sensor-only-local-snapshot-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_5447f531faea811c86c8da67",
+      "condition_id": "cond_1e04de6fa7270db6d53a520e",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 19,
       "within_block_index": 1
@@ -506,7 +506,7 @@
       "block_index": 6,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "594c0bdd0a9891c954204ac36bf3410c3624b94b0539bb9c2c6c35650d13529c",
         "dataset_id": "air_quality",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -521,7 +521,7 @@
         "split_id": "chronological-sensor-only-local-snapshot-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_001bf2b95ece88d968de4de7",
+      "condition_id": "cond_7db5378357c95903be8cf56f",
       "product_mode": "repeated_single_shot",
       "sequence_index": 20,
       "within_block_index": 2
@@ -531,7 +531,7 @@
       "block_index": 7,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "594c0bdd0a9891c954204ac36bf3410c3624b94b0539bb9c2c6c35650d13529c",
         "dataset_id": "air_quality",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -546,7 +546,7 @@
         "split_id": "chronological-sensor-only-local-snapshot-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_b3dde268228692a98001de7f",
+      "condition_id": "cond_9e5be28aaf0caee670c73342",
       "product_mode": "gym_with_checklist",
       "sequence_index": 21,
       "within_block_index": 0
@@ -556,7 +556,7 @@
       "block_index": 7,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "594c0bdd0a9891c954204ac36bf3410c3624b94b0539bb9c2c6c35650d13529c",
         "dataset_id": "air_quality",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -571,7 +571,7 @@
         "split_id": "chronological-sensor-only-local-snapshot-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_098a94d8d3b42be99fa0fd0f",
+      "condition_id": "cond_03f1e02eba1254723f352ce7",
       "product_mode": "repeated_single_shot",
       "sequence_index": 22,
       "within_block_index": 1
@@ -581,7 +581,7 @@
       "block_index": 7,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "594c0bdd0a9891c954204ac36bf3410c3624b94b0539bb9c2c6c35650d13529c",
         "dataset_id": "air_quality",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -596,7 +596,7 @@
         "split_id": "chronological-sensor-only-local-snapshot-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_5c98701b712ecaf5781cf0c1",
+      "condition_id": "cond_1c5c4b91797c6c8dea2adaed",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 23,
       "within_block_index": 2
@@ -606,7 +606,7 @@
       "block_index": 8,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "594c0bdd0a9891c954204ac36bf3410c3624b94b0539bb9c2c6c35650d13529c",
         "dataset_id": "air_quality",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -621,7 +621,7 @@
         "split_id": "chronological-sensor-only-local-snapshot-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_25c4ba432e3cec99c48650e5",
+      "condition_id": "cond_71d75f023bb3f5a7500b2084",
       "product_mode": "gym_with_checklist",
       "sequence_index": 24,
       "within_block_index": 0
@@ -631,7 +631,7 @@
       "block_index": 8,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "594c0bdd0a9891c954204ac36bf3410c3624b94b0539bb9c2c6c35650d13529c",
         "dataset_id": "air_quality",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -646,7 +646,7 @@
         "split_id": "chronological-sensor-only-local-snapshot-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_e63a650203923c9ebc5323e7",
+      "condition_id": "cond_cb7e7435f0acada01f679dea",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 25,
       "within_block_index": 1
@@ -656,7 +656,7 @@
       "block_index": 8,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "594c0bdd0a9891c954204ac36bf3410c3624b94b0539bb9c2c6c35650d13529c",
         "dataset_id": "air_quality",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -671,7 +671,7 @@
         "split_id": "chronological-sensor-only-local-snapshot-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_25a79d4ec7efd73f04a5ea3a",
+      "condition_id": "cond_4a1ed987507831447d651ef0",
       "product_mode": "repeated_single_shot",
       "sequence_index": 26,
       "within_block_index": 2
@@ -681,7 +681,7 @@
       "block_index": 9,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "594c0bdd0a9891c954204ac36bf3410c3624b94b0539bb9c2c6c35650d13529c",
         "dataset_id": "air_quality",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -696,7 +696,7 @@
         "split_id": "chronological-sensor-only-local-snapshot-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_b2a92a7f40523bd3b1b6207d",
+      "condition_id": "cond_490b8702e5c07784018c0f53",
       "product_mode": "repeated_single_shot",
       "sequence_index": 27,
       "within_block_index": 0
@@ -706,7 +706,7 @@
       "block_index": 9,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "594c0bdd0a9891c954204ac36bf3410c3624b94b0539bb9c2c6c35650d13529c",
         "dataset_id": "air_quality",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -721,7 +721,7 @@
         "split_id": "chronological-sensor-only-local-snapshot-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_5173c8c9a89dd9840206c6fd",
+      "condition_id": "cond_2b88f32774cbbbed3b657448",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 28,
       "within_block_index": 1
@@ -731,7 +731,7 @@
       "block_index": 9,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "594c0bdd0a9891c954204ac36bf3410c3624b94b0539bb9c2c6c35650d13529c",
         "dataset_id": "air_quality",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -746,7 +746,7 @@
         "split_id": "chronological-sensor-only-local-snapshot-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_5f0cbc3d0833b51fa6c9afe6",
+      "condition_id": "cond_b71c5ea61d6d4b6d80399884",
       "product_mode": "gym_with_checklist",
       "sequence_index": 29,
       "within_block_index": 2
@@ -756,7 +756,7 @@
       "block_index": 10,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "2f996e2d2dfe734f4cdf9ce0c600377699c0b535dbed3187db207c8759681733",
         "dataset_id": "bank_marketing",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -771,7 +771,7 @@
         "split_id": "predefined-local-snapshot-no-duration-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_a58fb316369874f0d849ad5b",
+      "condition_id": "cond_3d2af0fdf244f0219d5b4e03",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 30,
       "within_block_index": 0
@@ -781,7 +781,7 @@
       "block_index": 10,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "2f996e2d2dfe734f4cdf9ce0c600377699c0b535dbed3187db207c8759681733",
         "dataset_id": "bank_marketing",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -796,7 +796,7 @@
         "split_id": "predefined-local-snapshot-no-duration-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_82ee9c8bb75dc2e82da8f694",
+      "condition_id": "cond_01061d1d64dab5e33f202db1",
       "product_mode": "gym_with_checklist",
       "sequence_index": 31,
       "within_block_index": 1
@@ -806,7 +806,7 @@
       "block_index": 10,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "2f996e2d2dfe734f4cdf9ce0c600377699c0b535dbed3187db207c8759681733",
         "dataset_id": "bank_marketing",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -821,7 +821,7 @@
         "split_id": "predefined-local-snapshot-no-duration-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_52dc6e3ee0c4190fe6781797",
+      "condition_id": "cond_1496f921fb011782b753f8cd",
       "product_mode": "repeated_single_shot",
       "sequence_index": 32,
       "within_block_index": 2
@@ -831,7 +831,7 @@
       "block_index": 11,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "2f996e2d2dfe734f4cdf9ce0c600377699c0b535dbed3187db207c8759681733",
         "dataset_id": "bank_marketing",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -846,7 +846,7 @@
         "split_id": "predefined-local-snapshot-no-duration-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_baed4d006a08c7b62b55e409",
+      "condition_id": "cond_40e4e94da9acdde0f2f28c62",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 33,
       "within_block_index": 0
@@ -856,7 +856,7 @@
       "block_index": 11,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "2f996e2d2dfe734f4cdf9ce0c600377699c0b535dbed3187db207c8759681733",
         "dataset_id": "bank_marketing",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -871,7 +871,7 @@
         "split_id": "predefined-local-snapshot-no-duration-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_49f35728bb449fa955da6caa",
+      "condition_id": "cond_339bc6c53e9c0c4dd3bef9d0",
       "product_mode": "gym_with_checklist",
       "sequence_index": 34,
       "within_block_index": 1
@@ -881,7 +881,7 @@
       "block_index": 11,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "2f996e2d2dfe734f4cdf9ce0c600377699c0b535dbed3187db207c8759681733",
         "dataset_id": "bank_marketing",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -896,7 +896,7 @@
         "split_id": "predefined-local-snapshot-no-duration-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_697245e7368c6b5a4fc496fa",
+      "condition_id": "cond_cf6ef53b3a94adafa96b0571",
       "product_mode": "repeated_single_shot",
       "sequence_index": 35,
       "within_block_index": 2
@@ -906,7 +906,7 @@
       "block_index": 12,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "2f996e2d2dfe734f4cdf9ce0c600377699c0b535dbed3187db207c8759681733",
         "dataset_id": "bank_marketing",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -921,7 +921,7 @@
         "split_id": "predefined-local-snapshot-no-duration-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_2509e07931d52fa0d51a9ca6",
+      "condition_id": "cond_b5126bd5ddc3e25d512ed8c2",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 36,
       "within_block_index": 0
@@ -931,7 +931,7 @@
       "block_index": 12,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "2f996e2d2dfe734f4cdf9ce0c600377699c0b535dbed3187db207c8759681733",
         "dataset_id": "bank_marketing",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -946,7 +946,7 @@
         "split_id": "predefined-local-snapshot-no-duration-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_5a510a137d78e596e45830b8",
+      "condition_id": "cond_8d3a1a1e00cda1a7f9694788",
       "product_mode": "gym_with_checklist",
       "sequence_index": 37,
       "within_block_index": 1
@@ -956,7 +956,7 @@
       "block_index": 12,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "2f996e2d2dfe734f4cdf9ce0c600377699c0b535dbed3187db207c8759681733",
         "dataset_id": "bank_marketing",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -971,7 +971,7 @@
         "split_id": "predefined-local-snapshot-no-duration-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_73e89f3f1285025117d0ef8d",
+      "condition_id": "cond_0fe253fddf78c3ddc8a8a58e",
       "product_mode": "repeated_single_shot",
       "sequence_index": 38,
       "within_block_index": 2
@@ -981,7 +981,7 @@
       "block_index": 13,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "2f996e2d2dfe734f4cdf9ce0c600377699c0b535dbed3187db207c8759681733",
         "dataset_id": "bank_marketing",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -996,7 +996,7 @@
         "split_id": "predefined-local-snapshot-no-duration-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_7bd58feb20849ae747978b41",
+      "condition_id": "cond_2d1286654f0025231d2f2379",
       "product_mode": "gym_with_checklist",
       "sequence_index": 39,
       "within_block_index": 0
@@ -1006,7 +1006,7 @@
       "block_index": 13,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "2f996e2d2dfe734f4cdf9ce0c600377699c0b535dbed3187db207c8759681733",
         "dataset_id": "bank_marketing",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1021,7 +1021,7 @@
         "split_id": "predefined-local-snapshot-no-duration-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_e9fa79b6da564a02db6b0993",
+      "condition_id": "cond_1a80204cce8bbae3674b7d14",
       "product_mode": "repeated_single_shot",
       "sequence_index": 40,
       "within_block_index": 1
@@ -1031,7 +1031,7 @@
       "block_index": 13,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "2f996e2d2dfe734f4cdf9ce0c600377699c0b535dbed3187db207c8759681733",
         "dataset_id": "bank_marketing",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1046,7 +1046,7 @@
         "split_id": "predefined-local-snapshot-no-duration-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_91f113aae6a96260ea6a636f",
+      "condition_id": "cond_98984f7d4b2beeb4cd9ded49",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 41,
       "within_block_index": 2
@@ -1056,7 +1056,7 @@
       "block_index": 14,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "2f996e2d2dfe734f4cdf9ce0c600377699c0b535dbed3187db207c8759681733",
         "dataset_id": "bank_marketing",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1071,7 +1071,7 @@
         "split_id": "predefined-local-snapshot-no-duration-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_66a432611d58d8836eb31ebc",
+      "condition_id": "cond_9644373bc970862aaa3f54f7",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 42,
       "within_block_index": 0
@@ -1081,7 +1081,7 @@
       "block_index": 14,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "2f996e2d2dfe734f4cdf9ce0c600377699c0b535dbed3187db207c8759681733",
         "dataset_id": "bank_marketing",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1096,7 +1096,7 @@
         "split_id": "predefined-local-snapshot-no-duration-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_4c8eae730d5701ee4e3179bd",
+      "condition_id": "cond_a7b2ad6cb6e93b24a917c939",
       "product_mode": "repeated_single_shot",
       "sequence_index": 43,
       "within_block_index": 1
@@ -1106,7 +1106,7 @@
       "block_index": 14,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "2f996e2d2dfe734f4cdf9ce0c600377699c0b535dbed3187db207c8759681733",
         "dataset_id": "bank_marketing",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1121,7 +1121,7 @@
         "split_id": "predefined-local-snapshot-no-duration-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_05ed6fe7e25d3b1ea023093d",
+      "condition_id": "cond_5fe7948dabf3fff4fa5f1078",
       "product_mode": "gym_with_checklist",
       "sequence_index": 44,
       "within_block_index": 2
@@ -1131,7 +1131,7 @@
       "block_index": 15,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "2f996e2d2dfe734f4cdf9ce0c600377699c0b535dbed3187db207c8759681733",
         "dataset_id": "bank_marketing",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1146,7 +1146,7 @@
         "split_id": "predefined-local-snapshot-no-duration-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_e072186ad438b664d350d7ec",
+      "condition_id": "cond_ffa00ec07e880dbd33fc47cc",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 45,
       "within_block_index": 0
@@ -1156,7 +1156,7 @@
       "block_index": 15,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "2f996e2d2dfe734f4cdf9ce0c600377699c0b535dbed3187db207c8759681733",
         "dataset_id": "bank_marketing",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1171,7 +1171,7 @@
         "split_id": "predefined-local-snapshot-no-duration-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_40c990bb6953ea1aec51bc10",
+      "condition_id": "cond_d1e22294f811b6fa6872285e",
       "product_mode": "repeated_single_shot",
       "sequence_index": 46,
       "within_block_index": 1
@@ -1181,7 +1181,7 @@
       "block_index": 15,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "2f996e2d2dfe734f4cdf9ce0c600377699c0b535dbed3187db207c8759681733",
         "dataset_id": "bank_marketing",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1196,7 +1196,7 @@
         "split_id": "predefined-local-snapshot-no-duration-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_bdbfd3db954e932da8b87519",
+      "condition_id": "cond_acbb361e42fd9fc0426a0a87",
       "product_mode": "gym_with_checklist",
       "sequence_index": 47,
       "within_block_index": 2
@@ -1206,7 +1206,7 @@
       "block_index": 16,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "2f996e2d2dfe734f4cdf9ce0c600377699c0b535dbed3187db207c8759681733",
         "dataset_id": "bank_marketing",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1221,7 +1221,7 @@
         "split_id": "predefined-local-snapshot-no-duration-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_2d62336cd9fc6be8f8ceee74",
+      "condition_id": "cond_e164ec704fc5b3e02b586ffe",
       "product_mode": "repeated_single_shot",
       "sequence_index": 48,
       "within_block_index": 0
@@ -1231,7 +1231,7 @@
       "block_index": 16,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "2f996e2d2dfe734f4cdf9ce0c600377699c0b535dbed3187db207c8759681733",
         "dataset_id": "bank_marketing",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1246,7 +1246,7 @@
         "split_id": "predefined-local-snapshot-no-duration-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_65fd9d41266b78b3005af9c8",
+      "condition_id": "cond_7d5ae711a74280bdca62b02f",
       "product_mode": "gym_with_checklist",
       "sequence_index": 49,
       "within_block_index": 1
@@ -1256,7 +1256,7 @@
       "block_index": 16,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "2f996e2d2dfe734f4cdf9ce0c600377699c0b535dbed3187db207c8759681733",
         "dataset_id": "bank_marketing",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1271,7 +1271,7 @@
         "split_id": "predefined-local-snapshot-no-duration-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_81f0eadfe1bf6cbf505f36cd",
+      "condition_id": "cond_9272065d0851589b8c1b1079",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 50,
       "within_block_index": 2
@@ -1281,7 +1281,7 @@
       "block_index": 17,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "2f996e2d2dfe734f4cdf9ce0c600377699c0b535dbed3187db207c8759681733",
         "dataset_id": "bank_marketing",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1296,7 +1296,7 @@
         "split_id": "predefined-local-snapshot-no-duration-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_e29083fde99a0cf7a0756319",
+      "condition_id": "cond_bde01315a47a07054d7c088a",
       "product_mode": "repeated_single_shot",
       "sequence_index": 51,
       "within_block_index": 0
@@ -1306,7 +1306,7 @@
       "block_index": 17,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "2f996e2d2dfe734f4cdf9ce0c600377699c0b535dbed3187db207c8759681733",
         "dataset_id": "bank_marketing",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1321,7 +1321,7 @@
         "split_id": "predefined-local-snapshot-no-duration-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_035e01d52dfeb7f4cbb93b29",
+      "condition_id": "cond_74eeb86817ca224ca37cec94",
       "product_mode": "gym_with_checklist",
       "sequence_index": 52,
       "within_block_index": 1
@@ -1331,7 +1331,7 @@
       "block_index": 17,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "2f996e2d2dfe734f4cdf9ce0c600377699c0b535dbed3187db207c8759681733",
         "dataset_id": "bank_marketing",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1346,7 +1346,7 @@
         "split_id": "predefined-local-snapshot-no-duration-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_1d3e03fc36ee13c242ed0136",
+      "condition_id": "cond_17f5f26e98836634ffd3d60e",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 53,
       "within_block_index": 2
@@ -1356,7 +1356,7 @@
       "block_index": 18,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "2f996e2d2dfe734f4cdf9ce0c600377699c0b535dbed3187db207c8759681733",
         "dataset_id": "bank_marketing",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1371,7 +1371,7 @@
         "split_id": "predefined-local-snapshot-no-duration-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_5eb7ec6573bed8f9c6501a45",
+      "condition_id": "cond_3ca22fdd16e6a1129786e4a9",
       "product_mode": "gym_with_checklist",
       "sequence_index": 54,
       "within_block_index": 0
@@ -1381,7 +1381,7 @@
       "block_index": 18,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "2f996e2d2dfe734f4cdf9ce0c600377699c0b535dbed3187db207c8759681733",
         "dataset_id": "bank_marketing",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1396,7 +1396,7 @@
         "split_id": "predefined-local-snapshot-no-duration-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_e94b50a4e1c29e855735c454",
+      "condition_id": "cond_c0021d00a798cde2fdf26ee1",
       "product_mode": "repeated_single_shot",
       "sequence_index": 55,
       "within_block_index": 1
@@ -1406,7 +1406,7 @@
       "block_index": 18,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "2f996e2d2dfe734f4cdf9ce0c600377699c0b535dbed3187db207c8759681733",
         "dataset_id": "bank_marketing",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1421,7 +1421,7 @@
         "split_id": "predefined-local-snapshot-no-duration-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_8bd278df54f421f7ed362c49",
+      "condition_id": "cond_53344580900edbf81983278c",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 56,
       "within_block_index": 2
@@ -1431,7 +1431,7 @@
       "block_index": 19,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "2f996e2d2dfe734f4cdf9ce0c600377699c0b535dbed3187db207c8759681733",
         "dataset_id": "bank_marketing",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1446,7 +1446,7 @@
         "split_id": "predefined-local-snapshot-no-duration-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_626b73ece46d5d4de3dddb94",
+      "condition_id": "cond_a95166a45a0b04e77b9ee6f4",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 57,
       "within_block_index": 0
@@ -1456,7 +1456,7 @@
       "block_index": 19,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "2f996e2d2dfe734f4cdf9ce0c600377699c0b535dbed3187db207c8759681733",
         "dataset_id": "bank_marketing",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1471,7 +1471,7 @@
         "split_id": "predefined-local-snapshot-no-duration-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_11425044f74a5cca15403ea8",
+      "condition_id": "cond_f209fe7aa670a1edf009ec2d",
       "product_mode": "gym_with_checklist",
       "sequence_index": 58,
       "within_block_index": 1
@@ -1481,7 +1481,7 @@
       "block_index": 19,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "2f996e2d2dfe734f4cdf9ce0c600377699c0b535dbed3187db207c8759681733",
         "dataset_id": "bank_marketing",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1496,7 +1496,7 @@
         "split_id": "predefined-local-snapshot-no-duration-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_9ab48176fccf788ce887fc5b",
+      "condition_id": "cond_b9b6aeee03041e62dc84d148",
       "product_mode": "repeated_single_shot",
       "sequence_index": 59,
       "within_block_index": 2
@@ -1506,7 +1506,7 @@
       "block_index": 20,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "b91679a8b9b61215ea40b5586803ebb16c09e25896adbeaf4d00e67e9a335589",
         "dataset_id": "diabetes_readmission",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1521,7 +1521,7 @@
         "split_id": "patient-group-shuffle-seed-42-binary-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_0999bd36829c2abe84483ffe",
+      "condition_id": "cond_5021fc79572a23d97102bb48",
       "product_mode": "repeated_single_shot",
       "sequence_index": 60,
       "within_block_index": 0
@@ -1531,7 +1531,7 @@
       "block_index": 20,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "b91679a8b9b61215ea40b5586803ebb16c09e25896adbeaf4d00e67e9a335589",
         "dataset_id": "diabetes_readmission",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1546,7 +1546,7 @@
         "split_id": "patient-group-shuffle-seed-42-binary-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_c58ba51fdc5ef1f37fde7f68",
+      "condition_id": "cond_43ecc7957b769e15045f20c8",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 61,
       "within_block_index": 1
@@ -1556,7 +1556,7 @@
       "block_index": 20,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "b91679a8b9b61215ea40b5586803ebb16c09e25896adbeaf4d00e67e9a335589",
         "dataset_id": "diabetes_readmission",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1571,7 +1571,7 @@
         "split_id": "patient-group-shuffle-seed-42-binary-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_19af434db9e3c40955cedd38",
+      "condition_id": "cond_3b24fd0735737a084491a5bd",
       "product_mode": "gym_with_checklist",
       "sequence_index": 62,
       "within_block_index": 2
@@ -1581,7 +1581,7 @@
       "block_index": 21,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "b91679a8b9b61215ea40b5586803ebb16c09e25896adbeaf4d00e67e9a335589",
         "dataset_id": "diabetes_readmission",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1596,7 +1596,7 @@
         "split_id": "patient-group-shuffle-seed-42-binary-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_c28ff53a0ce483dc8805e9db",
+      "condition_id": "cond_9afbe7c3815f403a35d0f8a6",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 63,
       "within_block_index": 0
@@ -1606,7 +1606,7 @@
       "block_index": 21,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "b91679a8b9b61215ea40b5586803ebb16c09e25896adbeaf4d00e67e9a335589",
         "dataset_id": "diabetes_readmission",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1621,7 +1621,7 @@
         "split_id": "patient-group-shuffle-seed-42-binary-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_0d0177c418190dfa2be1fae1",
+      "condition_id": "cond_dd27e059b34f4ffaa4d61d10",
       "product_mode": "repeated_single_shot",
       "sequence_index": 64,
       "within_block_index": 1
@@ -1631,7 +1631,7 @@
       "block_index": 21,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "b91679a8b9b61215ea40b5586803ebb16c09e25896adbeaf4d00e67e9a335589",
         "dataset_id": "diabetes_readmission",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1646,7 +1646,7 @@
         "split_id": "patient-group-shuffle-seed-42-binary-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_fee1e695423ac6eeaaf5f700",
+      "condition_id": "cond_31c2b6b475e835e392120baf",
       "product_mode": "gym_with_checklist",
       "sequence_index": 65,
       "within_block_index": 2
@@ -1656,7 +1656,7 @@
       "block_index": 22,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "b91679a8b9b61215ea40b5586803ebb16c09e25896adbeaf4d00e67e9a335589",
         "dataset_id": "diabetes_readmission",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1671,7 +1671,7 @@
         "split_id": "patient-group-shuffle-seed-42-binary-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_99cd5ac073d59147d1204e70",
+      "condition_id": "cond_a7b092e2bf003a768fb0b898",
       "product_mode": "gym_with_checklist",
       "sequence_index": 66,
       "within_block_index": 0
@@ -1681,7 +1681,7 @@
       "block_index": 22,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "b91679a8b9b61215ea40b5586803ebb16c09e25896adbeaf4d00e67e9a335589",
         "dataset_id": "diabetes_readmission",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1696,7 +1696,7 @@
         "split_id": "patient-group-shuffle-seed-42-binary-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_8c9cc435f1778f5f1a25e4b5",
+      "condition_id": "cond_4f7ebb943938031ee1c8a475",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 67,
       "within_block_index": 1
@@ -1706,7 +1706,7 @@
       "block_index": 22,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "b91679a8b9b61215ea40b5586803ebb16c09e25896adbeaf4d00e67e9a335589",
         "dataset_id": "diabetes_readmission",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1721,7 +1721,7 @@
         "split_id": "patient-group-shuffle-seed-42-binary-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_f93c6ed921bb1dc6fcf518ee",
+      "condition_id": "cond_d3d3fa08dfe92e7f0f9fc64e",
       "product_mode": "repeated_single_shot",
       "sequence_index": 68,
       "within_block_index": 2
@@ -1731,7 +1731,7 @@
       "block_index": 23,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "b91679a8b9b61215ea40b5586803ebb16c09e25896adbeaf4d00e67e9a335589",
         "dataset_id": "diabetes_readmission",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1746,7 +1746,7 @@
         "split_id": "patient-group-shuffle-seed-42-binary-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_6b64e3bf265950a1c65193d6",
+      "condition_id": "cond_3b08744e096652fa234b59a3",
       "product_mode": "gym_with_checklist",
       "sequence_index": 69,
       "within_block_index": 0
@@ -1756,7 +1756,7 @@
       "block_index": 23,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "b91679a8b9b61215ea40b5586803ebb16c09e25896adbeaf4d00e67e9a335589",
         "dataset_id": "diabetes_readmission",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1771,7 +1771,7 @@
         "split_id": "patient-group-shuffle-seed-42-binary-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_b009bf8983b1c7f4bd306a15",
+      "condition_id": "cond_02422a84cc691c85ad4a30c3",
       "product_mode": "repeated_single_shot",
       "sequence_index": 70,
       "within_block_index": 1
@@ -1781,7 +1781,7 @@
       "block_index": 23,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "b91679a8b9b61215ea40b5586803ebb16c09e25896adbeaf4d00e67e9a335589",
         "dataset_id": "diabetes_readmission",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1796,7 +1796,7 @@
         "split_id": "patient-group-shuffle-seed-42-binary-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_f37d37f3726f2ae2094f3c7f",
+      "condition_id": "cond_4ea782b099483847846ca920",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 71,
       "within_block_index": 2
@@ -1806,7 +1806,7 @@
       "block_index": 24,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "b91679a8b9b61215ea40b5586803ebb16c09e25896adbeaf4d00e67e9a335589",
         "dataset_id": "diabetes_readmission",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1821,7 +1821,7 @@
         "split_id": "patient-group-shuffle-seed-42-binary-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_a680181cfd66a61d2e818843",
+      "condition_id": "cond_0b59345bc932581bc4dd16de",
       "product_mode": "gym_with_checklist",
       "sequence_index": 72,
       "within_block_index": 0
@@ -1831,7 +1831,7 @@
       "block_index": 24,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "b91679a8b9b61215ea40b5586803ebb16c09e25896adbeaf4d00e67e9a335589",
         "dataset_id": "diabetes_readmission",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1846,7 +1846,7 @@
         "split_id": "patient-group-shuffle-seed-42-binary-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_9273168a305177ad9d6b4444",
+      "condition_id": "cond_e3ff7962f2cb54dcae7898ad",
       "product_mode": "repeated_single_shot",
       "sequence_index": 73,
       "within_block_index": 1
@@ -1856,7 +1856,7 @@
       "block_index": 24,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "b91679a8b9b61215ea40b5586803ebb16c09e25896adbeaf4d00e67e9a335589",
         "dataset_id": "diabetes_readmission",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1871,7 +1871,7 @@
         "split_id": "patient-group-shuffle-seed-42-binary-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_98eef70448b71074ee156641",
+      "condition_id": "cond_a8eb99b3c3efd216c87ce03d",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 74,
       "within_block_index": 2
@@ -1881,7 +1881,7 @@
       "block_index": 25,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "b91679a8b9b61215ea40b5586803ebb16c09e25896adbeaf4d00e67e9a335589",
         "dataset_id": "diabetes_readmission",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1896,7 +1896,7 @@
         "split_id": "patient-group-shuffle-seed-42-binary-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_327f4a0463d75ced12b145bf",
+      "condition_id": "cond_87d69781f6d5170a9dda6991",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 75,
       "within_block_index": 0
@@ -1906,7 +1906,7 @@
       "block_index": 25,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "b91679a8b9b61215ea40b5586803ebb16c09e25896adbeaf4d00e67e9a335589",
         "dataset_id": "diabetes_readmission",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1921,7 +1921,7 @@
         "split_id": "patient-group-shuffle-seed-42-binary-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_18ddc29e03127fc7f2271ace",
+      "condition_id": "cond_e04a8e41e20b8090687328a6",
       "product_mode": "repeated_single_shot",
       "sequence_index": 76,
       "within_block_index": 1
@@ -1931,7 +1931,7 @@
       "block_index": 25,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "b91679a8b9b61215ea40b5586803ebb16c09e25896adbeaf4d00e67e9a335589",
         "dataset_id": "diabetes_readmission",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1946,7 +1946,7 @@
         "split_id": "patient-group-shuffle-seed-42-binary-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_087bd81d852e1987b889313b",
+      "condition_id": "cond_376dfb22457a68167160a749",
       "product_mode": "gym_with_checklist",
       "sequence_index": 77,
       "within_block_index": 2
@@ -1956,7 +1956,7 @@
       "block_index": 26,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "b91679a8b9b61215ea40b5586803ebb16c09e25896adbeaf4d00e67e9a335589",
         "dataset_id": "diabetes_readmission",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1971,7 +1971,7 @@
         "split_id": "patient-group-shuffle-seed-42-binary-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_429cadbc4c6a348fbe991175",
+      "condition_id": "cond_3fdace963037dcae61295d44",
       "product_mode": "gym_with_checklist",
       "sequence_index": 78,
       "within_block_index": 0
@@ -1981,7 +1981,7 @@
       "block_index": 26,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "b91679a8b9b61215ea40b5586803ebb16c09e25896adbeaf4d00e67e9a335589",
         "dataset_id": "diabetes_readmission",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -1996,7 +1996,7 @@
         "split_id": "patient-group-shuffle-seed-42-binary-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_966bb2ebc5fe3ed276944b4f",
+      "condition_id": "cond_b30f7774ed4a0c207be71ff0",
       "product_mode": "repeated_single_shot",
       "sequence_index": 79,
       "within_block_index": 1
@@ -2006,7 +2006,7 @@
       "block_index": 26,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "b91679a8b9b61215ea40b5586803ebb16c09e25896adbeaf4d00e67e9a335589",
         "dataset_id": "diabetes_readmission",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2021,7 +2021,7 @@
         "split_id": "patient-group-shuffle-seed-42-binary-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_5c320fb9cc08431b568a4d11",
+      "condition_id": "cond_ee5ae165c3ad59c4badcb032",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 80,
       "within_block_index": 2
@@ -2031,7 +2031,7 @@
       "block_index": 27,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "b91679a8b9b61215ea40b5586803ebb16c09e25896adbeaf4d00e67e9a335589",
         "dataset_id": "diabetes_readmission",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2046,7 +2046,7 @@
         "split_id": "patient-group-shuffle-seed-42-binary-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_591cee031f94fe838af549d4",
+      "condition_id": "cond_6aed1f4ffd8770a35c00f831",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 81,
       "within_block_index": 0
@@ -2056,7 +2056,7 @@
       "block_index": 27,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "b91679a8b9b61215ea40b5586803ebb16c09e25896adbeaf4d00e67e9a335589",
         "dataset_id": "diabetes_readmission",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2071,7 +2071,7 @@
         "split_id": "patient-group-shuffle-seed-42-binary-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_2e6543348edfd0f892cc2b11",
+      "condition_id": "cond_29a5e896ba965b7d8417ac70",
       "product_mode": "repeated_single_shot",
       "sequence_index": 82,
       "within_block_index": 1
@@ -2081,7 +2081,7 @@
       "block_index": 27,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "b91679a8b9b61215ea40b5586803ebb16c09e25896adbeaf4d00e67e9a335589",
         "dataset_id": "diabetes_readmission",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2096,7 +2096,7 @@
         "split_id": "patient-group-shuffle-seed-42-binary-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_aa8c76130b1c6791b8a24d84",
+      "condition_id": "cond_cf838b17f2e166ee9956010f",
       "product_mode": "gym_with_checklist",
       "sequence_index": 83,
       "within_block_index": 2
@@ -2106,7 +2106,7 @@
       "block_index": 28,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "b91679a8b9b61215ea40b5586803ebb16c09e25896adbeaf4d00e67e9a335589",
         "dataset_id": "diabetes_readmission",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2121,7 +2121,7 @@
         "split_id": "patient-group-shuffle-seed-42-binary-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_a711878b092caf6b27c24da0",
+      "condition_id": "cond_1741b781a7fa13e55507656a",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 84,
       "within_block_index": 0
@@ -2131,7 +2131,7 @@
       "block_index": 28,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "b91679a8b9b61215ea40b5586803ebb16c09e25896adbeaf4d00e67e9a335589",
         "dataset_id": "diabetes_readmission",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2146,7 +2146,7 @@
         "split_id": "patient-group-shuffle-seed-42-binary-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_45a1687c097f37bd8d659ff6",
+      "condition_id": "cond_7636325a8a2b4db388b221e2",
       "product_mode": "repeated_single_shot",
       "sequence_index": 85,
       "within_block_index": 1
@@ -2156,7 +2156,7 @@
       "block_index": 28,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "b91679a8b9b61215ea40b5586803ebb16c09e25896adbeaf4d00e67e9a335589",
         "dataset_id": "diabetes_readmission",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2171,7 +2171,7 @@
         "split_id": "patient-group-shuffle-seed-42-binary-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_3d989abac2ae5aa5ab2d3b9f",
+      "condition_id": "cond_e08023bac160d2dac7104a48",
       "product_mode": "gym_with_checklist",
       "sequence_index": 86,
       "within_block_index": 2
@@ -2181,7 +2181,7 @@
       "block_index": 29,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "b91679a8b9b61215ea40b5586803ebb16c09e25896adbeaf4d00e67e9a335589",
         "dataset_id": "diabetes_readmission",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2196,7 +2196,7 @@
         "split_id": "patient-group-shuffle-seed-42-binary-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_24a3bcb6bb70d009ac2cef51",
+      "condition_id": "cond_df003b865660ec725b426c4a",
       "product_mode": "repeated_single_shot",
       "sequence_index": 87,
       "within_block_index": 0
@@ -2206,7 +2206,7 @@
       "block_index": 29,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "b91679a8b9b61215ea40b5586803ebb16c09e25896adbeaf4d00e67e9a335589",
         "dataset_id": "diabetes_readmission",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2221,7 +2221,7 @@
         "split_id": "patient-group-shuffle-seed-42-binary-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_c9d277da87f7076cc148849b",
+      "condition_id": "cond_547d1a1e0589b09638240668",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 88,
       "within_block_index": 1
@@ -2231,7 +2231,7 @@
       "block_index": 29,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "b91679a8b9b61215ea40b5586803ebb16c09e25896adbeaf4d00e67e9a335589",
         "dataset_id": "diabetes_readmission",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2246,7 +2246,7 @@
         "split_id": "patient-group-shuffle-seed-42-binary-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_d572c6276ec676abf4c7dbb3",
+      "condition_id": "cond_974e66ed76b6af7618400a85",
       "product_mode": "gym_with_checklist",
       "sequence_index": 89,
       "within_block_index": 2
@@ -2256,7 +2256,7 @@
       "block_index": 30,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "c42ac56f6a5f1e2432812be1962ecba7a88bf3d8978ce50f8b74c175260ba847",
         "dataset_id": "student_dropout",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2271,7 +2271,7 @@
         "split_id": "stratified-random-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_7c17b1408328c6fec85e57a8",
+      "condition_id": "cond_a484f8fe45b843d4485abe4b",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 90,
       "within_block_index": 0
@@ -2281,7 +2281,7 @@
       "block_index": 30,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "c42ac56f6a5f1e2432812be1962ecba7a88bf3d8978ce50f8b74c175260ba847",
         "dataset_id": "student_dropout",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2296,7 +2296,7 @@
         "split_id": "stratified-random-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_428d4d0cf0177fc194917f63",
+      "condition_id": "cond_e629234f8bbc2f790dffe47b",
       "product_mode": "gym_with_checklist",
       "sequence_index": 91,
       "within_block_index": 1
@@ -2306,7 +2306,7 @@
       "block_index": 30,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "c42ac56f6a5f1e2432812be1962ecba7a88bf3d8978ce50f8b74c175260ba847",
         "dataset_id": "student_dropout",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2321,7 +2321,7 @@
         "split_id": "stratified-random-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_25d9a27b867b46e4439751c3",
+      "condition_id": "cond_66f80aff54781788580db527",
       "product_mode": "repeated_single_shot",
       "sequence_index": 92,
       "within_block_index": 2
@@ -2331,7 +2331,7 @@
       "block_index": 31,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "c42ac56f6a5f1e2432812be1962ecba7a88bf3d8978ce50f8b74c175260ba847",
         "dataset_id": "student_dropout",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2346,7 +2346,7 @@
         "split_id": "stratified-random-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_82070989cc67aa71c3ff5fbd",
+      "condition_id": "cond_d07a15e34248bc35e8df0110",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 93,
       "within_block_index": 0
@@ -2356,7 +2356,7 @@
       "block_index": 31,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "c42ac56f6a5f1e2432812be1962ecba7a88bf3d8978ce50f8b74c175260ba847",
         "dataset_id": "student_dropout",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2371,7 +2371,7 @@
         "split_id": "stratified-random-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_0f05995511dc518a2207d739",
+      "condition_id": "cond_4108574131a41ecd8625aaf3",
       "product_mode": "gym_with_checklist",
       "sequence_index": 94,
       "within_block_index": 1
@@ -2381,7 +2381,7 @@
       "block_index": 31,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "c42ac56f6a5f1e2432812be1962ecba7a88bf3d8978ce50f8b74c175260ba847",
         "dataset_id": "student_dropout",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2396,7 +2396,7 @@
         "split_id": "stratified-random-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_e5cc4adcc229cbddc031fcd1",
+      "condition_id": "cond_4207ce565be166372d84abf9",
       "product_mode": "repeated_single_shot",
       "sequence_index": 95,
       "within_block_index": 2
@@ -2406,7 +2406,7 @@
       "block_index": 32,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "c42ac56f6a5f1e2432812be1962ecba7a88bf3d8978ce50f8b74c175260ba847",
         "dataset_id": "student_dropout",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2421,7 +2421,7 @@
         "split_id": "stratified-random-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_3119b1650c1801a1be9e1e7e",
+      "condition_id": "cond_30a6fdbf0519ee4fa23f6aeb",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 96,
       "within_block_index": 0
@@ -2431,7 +2431,7 @@
       "block_index": 32,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "c42ac56f6a5f1e2432812be1962ecba7a88bf3d8978ce50f8b74c175260ba847",
         "dataset_id": "student_dropout",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2446,7 +2446,7 @@
         "split_id": "stratified-random-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_cf72652cc49fcf227ad6a2e8",
+      "condition_id": "cond_e01e74942a2a8690a6e4b584",
       "product_mode": "repeated_single_shot",
       "sequence_index": 97,
       "within_block_index": 1
@@ -2456,7 +2456,7 @@
       "block_index": 32,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "c42ac56f6a5f1e2432812be1962ecba7a88bf3d8978ce50f8b74c175260ba847",
         "dataset_id": "student_dropout",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2471,7 +2471,7 @@
         "split_id": "stratified-random-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_efc41d22645a7fe39ebfcc00",
+      "condition_id": "cond_584e6038441cb018b36f1e57",
       "product_mode": "gym_with_checklist",
       "sequence_index": 98,
       "within_block_index": 2
@@ -2481,7 +2481,7 @@
       "block_index": 33,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "c42ac56f6a5f1e2432812be1962ecba7a88bf3d8978ce50f8b74c175260ba847",
         "dataset_id": "student_dropout",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2496,7 +2496,7 @@
         "split_id": "stratified-random-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_ea33375859d26bb11fc43129",
+      "condition_id": "cond_51678a0813122a253bc36a53",
       "product_mode": "repeated_single_shot",
       "sequence_index": 99,
       "within_block_index": 0
@@ -2506,7 +2506,7 @@
       "block_index": 33,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "c42ac56f6a5f1e2432812be1962ecba7a88bf3d8978ce50f8b74c175260ba847",
         "dataset_id": "student_dropout",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2521,7 +2521,7 @@
         "split_id": "stratified-random-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_c142861673a95dfdfc09351d",
+      "condition_id": "cond_32706657f8634ae5629f1a03",
       "product_mode": "gym_with_checklist",
       "sequence_index": 100,
       "within_block_index": 1
@@ -2531,7 +2531,7 @@
       "block_index": 33,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "c42ac56f6a5f1e2432812be1962ecba7a88bf3d8978ce50f8b74c175260ba847",
         "dataset_id": "student_dropout",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2546,7 +2546,7 @@
         "split_id": "stratified-random-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_899fe0796ff050bd13f5a0ae",
+      "condition_id": "cond_d536504eb6f96db37fd6208e",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 101,
       "within_block_index": 2
@@ -2556,7 +2556,7 @@
       "block_index": 34,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "c42ac56f6a5f1e2432812be1962ecba7a88bf3d8978ce50f8b74c175260ba847",
         "dataset_id": "student_dropout",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2571,7 +2571,7 @@
         "split_id": "stratified-random-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_0f5e2ef10eb9899a06cbe016",
+      "condition_id": "cond_71717ab698156071508dac83",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 102,
       "within_block_index": 0
@@ -2581,7 +2581,7 @@
       "block_index": 34,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "c42ac56f6a5f1e2432812be1962ecba7a88bf3d8978ce50f8b74c175260ba847",
         "dataset_id": "student_dropout",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2596,7 +2596,7 @@
         "split_id": "stratified-random-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_829551b18ec62b5f0b930417",
+      "condition_id": "cond_102a02767ffb81d4aeedf32f",
       "product_mode": "gym_with_checklist",
       "sequence_index": 103,
       "within_block_index": 1
@@ -2606,7 +2606,7 @@
       "block_index": 34,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "c42ac56f6a5f1e2432812be1962ecba7a88bf3d8978ce50f8b74c175260ba847",
         "dataset_id": "student_dropout",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2621,7 +2621,7 @@
         "split_id": "stratified-random-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_9e58973f7499b0dd3cb0f747",
+      "condition_id": "cond_7f346863609f1df62f8f835e",
       "product_mode": "repeated_single_shot",
       "sequence_index": 104,
       "within_block_index": 2
@@ -2631,7 +2631,7 @@
       "block_index": 35,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "c42ac56f6a5f1e2432812be1962ecba7a88bf3d8978ce50f8b74c175260ba847",
         "dataset_id": "student_dropout",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2646,7 +2646,7 @@
         "split_id": "stratified-random-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_4a51fa422f18b4b86d9e9ed2",
+      "condition_id": "cond_4d7ef158d49133c3412814dc",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 105,
       "within_block_index": 0
@@ -2656,7 +2656,7 @@
       "block_index": 35,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "c42ac56f6a5f1e2432812be1962ecba7a88bf3d8978ce50f8b74c175260ba847",
         "dataset_id": "student_dropout",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2671,7 +2671,7 @@
         "split_id": "stratified-random-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_206cd44c470b9d3c7578a4de",
+      "condition_id": "cond_acef130820fd5ccfb639dbdd",
       "product_mode": "repeated_single_shot",
       "sequence_index": 106,
       "within_block_index": 1
@@ -2681,7 +2681,7 @@
       "block_index": 35,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "c42ac56f6a5f1e2432812be1962ecba7a88bf3d8978ce50f8b74c175260ba847",
         "dataset_id": "student_dropout",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2696,7 +2696,7 @@
         "split_id": "stratified-random-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_5b3a39bb70ef284c3795542f",
+      "condition_id": "cond_a892113b345ae96fadb79531",
       "product_mode": "gym_with_checklist",
       "sequence_index": 107,
       "within_block_index": 2
@@ -2706,7 +2706,7 @@
       "block_index": 36,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "c42ac56f6a5f1e2432812be1962ecba7a88bf3d8978ce50f8b74c175260ba847",
         "dataset_id": "student_dropout",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2721,7 +2721,7 @@
         "split_id": "stratified-random-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_d923b5a9c6c189b66667ae19",
+      "condition_id": "cond_0f9beaa4743d88f5ec1d5403",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 108,
       "within_block_index": 0
@@ -2731,7 +2731,7 @@
       "block_index": 36,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "c42ac56f6a5f1e2432812be1962ecba7a88bf3d8978ce50f8b74c175260ba847",
         "dataset_id": "student_dropout",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2746,7 +2746,7 @@
         "split_id": "stratified-random-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_8fd90ca867ec202eab1ceed0",
+      "condition_id": "cond_116c069bc4f09b0c525cca34",
       "product_mode": "repeated_single_shot",
       "sequence_index": 109,
       "within_block_index": 1
@@ -2756,7 +2756,7 @@
       "block_index": 36,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "c42ac56f6a5f1e2432812be1962ecba7a88bf3d8978ce50f8b74c175260ba847",
         "dataset_id": "student_dropout",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2771,7 +2771,7 @@
         "split_id": "stratified-random-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_67cdcfdcd672e15585fd01df",
+      "condition_id": "cond_945e23faacec699eb56d6ec1",
       "product_mode": "gym_with_checklist",
       "sequence_index": 110,
       "within_block_index": 2
@@ -2781,7 +2781,7 @@
       "block_index": 37,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "c42ac56f6a5f1e2432812be1962ecba7a88bf3d8978ce50f8b74c175260ba847",
         "dataset_id": "student_dropout",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2796,7 +2796,7 @@
         "split_id": "stratified-random-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_16be689c004457aa31064b88",
+      "condition_id": "cond_69af25af19a67755fa0c5a3e",
       "product_mode": "gym_with_checklist",
       "sequence_index": 111,
       "within_block_index": 0
@@ -2806,7 +2806,7 @@
       "block_index": 37,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "c42ac56f6a5f1e2432812be1962ecba7a88bf3d8978ce50f8b74c175260ba847",
         "dataset_id": "student_dropout",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2821,7 +2821,7 @@
         "split_id": "stratified-random-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_d1959152094316e2245a1bd1",
+      "condition_id": "cond_fcd8e3fd1688888bd660d62d",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 112,
       "within_block_index": 1
@@ -2831,7 +2831,7 @@
       "block_index": 37,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "c42ac56f6a5f1e2432812be1962ecba7a88bf3d8978ce50f8b74c175260ba847",
         "dataset_id": "student_dropout",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2846,7 +2846,7 @@
         "split_id": "stratified-random-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_9ffc8820cec56be0ad7565d9",
+      "condition_id": "cond_747ba89aaaca8caca033c784",
       "product_mode": "repeated_single_shot",
       "sequence_index": 113,
       "within_block_index": 2
@@ -2856,7 +2856,7 @@
       "block_index": 38,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "c42ac56f6a5f1e2432812be1962ecba7a88bf3d8978ce50f8b74c175260ba847",
         "dataset_id": "student_dropout",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2871,7 +2871,7 @@
         "split_id": "stratified-random-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_a067d2a51b26eedefb8f197e",
+      "condition_id": "cond_173e3bda42d1c8b9dc5e702e",
       "product_mode": "gym_with_checklist",
       "sequence_index": 114,
       "within_block_index": 0
@@ -2881,7 +2881,7 @@
       "block_index": 38,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "c42ac56f6a5f1e2432812be1962ecba7a88bf3d8978ce50f8b74c175260ba847",
         "dataset_id": "student_dropout",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2896,7 +2896,7 @@
         "split_id": "stratified-random-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_c462616060c370a06b44f3d9",
+      "condition_id": "cond_46a8a8df927153ca46e2860e",
       "product_mode": "repeated_single_shot",
       "sequence_index": 115,
       "within_block_index": 1
@@ -2906,7 +2906,7 @@
       "block_index": 38,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "c42ac56f6a5f1e2432812be1962ecba7a88bf3d8978ce50f8b74c175260ba847",
         "dataset_id": "student_dropout",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2921,7 +2921,7 @@
         "split_id": "stratified-random-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_7c46f3925f98dafc12a6f8ef",
+      "condition_id": "cond_bb24d908bfacb44452a45c3e",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 116,
       "within_block_index": 2
@@ -2931,7 +2931,7 @@
       "block_index": 39,
       "condition": {
         "arm": "C",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "c42ac56f6a5f1e2432812be1962ecba7a88bf3d8978ce50f8b74c175260ba847",
         "dataset_id": "student_dropout",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2946,7 +2946,7 @@
         "split_id": "stratified-random-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_d2800fb96d17aad3686ee1e6",
+      "condition_id": "cond_9ad05734475d8a921f29edef",
       "product_mode": "gym_with_checklist",
       "sequence_index": 117,
       "within_block_index": 0
@@ -2956,7 +2956,7 @@
       "block_index": 39,
       "condition": {
         "arm": "A",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "c42ac56f6a5f1e2432812be1962ecba7a88bf3d8978ce50f8b74c175260ba847",
         "dataset_id": "student_dropout",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2971,7 +2971,7 @@
         "split_id": "stratified-random-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_807770af055fe3a360fda359",
+      "condition_id": "cond_06ef0d62ec6a4ecd9237c789",
       "product_mode": "repeated_single_shot",
       "sequence_index": 118,
       "within_block_index": 1
@@ -2981,7 +2981,7 @@
       "block_index": 39,
       "condition": {
         "arm": "B",
-        "budget_policy_hash": "d6c543285718b8c9e389f5c529386e6f56623e413963b253412ea1d4c282db03",
+        "budget_policy_hash": "ae9a6576e88a5f0c8b7c1a13e98ddf827a08fbd3d1ce8ae12f5c4441091d45f2",
         "dataset_hash": "c42ac56f6a5f1e2432812be1962ecba7a88bf3d8978ce50f8b74c175260ba847",
         "dataset_id": "student_dropout",
         "decoding_config_hash": "876bb20047dc9fb7f57e6be0b0dbe37925db5635e9996b2f0a7d8750df2dc097",
@@ -2996,13 +2996,13 @@
         "split_id": "stratified-random-seed-42-v1",
         "split_seed": 42
       },
-      "condition_id": "cond_6aec51c1988970062b1e63e6",
+      "condition_id": "cond_cea4cc5d53c13c95e3ec46c9",
       "product_mode": "iterative_no_checklist",
       "sequence_index": 119,
       "within_block_index": 2
     }
   ],
-  "config_hash": "964a189f0aef527a44d6014cff97084875e3040e3e4abb6d30a9fead5457d081",
+  "config_hash": "3725988ddcb02a45c11ee480328c18d2fb8ef37f4eef32975acc010dfb738473",
   "experiment_id": "autovibe-gym-paper-v1-confirmatory",
   "kind": "confirmatory_experiment_plan",
   "matrix": {
@@ -3032,8 +3032,8 @@
     "replicates_per_cell": 5,
     "within_block_order": "sha256_seeded_permutation_of_A_B_C"
   },
-  "plan_hash": "1c2ad2a922165e0d27471ae79c2cff1e7266ac29dbc137f7ca3a1f1e8784b593",
-  "plan_id": "plan_1c2ad2a922165e0d27471ae7",
-  "protocol_hash": "9c94618419e9c86053dec510495ea91d5a87a592964f599d874a5702bdad38f8",
+  "plan_hash": "793d85d310427d848a09302c3c4583870fd3fafb6a8a0590d95e61384edf310f",
+  "plan_id": "plan_793d85d310427d848a09302c",
+  "protocol_hash": "de690a4e975781c516b25d2016416bf44e5d416ee61a00d305eae39331ce49c5",
   "schema_version": "1.0"
 }
