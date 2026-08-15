@@ -141,7 +141,7 @@ def test_preflight_rejects_dirty_execution_worktree(tmp_path, monkeypatch):
             freeze_repo=tmp_path,
             execution_repo=tmp_path,
             datasets_root=tmp_path,
-            runs_root=tmp_path / "runs",
+            runs_root=tmp_path / study.record["results_series_id"] / "runs",
             models_config=tmp_path / "models.json",
             sandbox_image="fixture",
         )
@@ -177,13 +177,28 @@ def test_preflight_accepts_exact_clean_contract(tmp_path, monkeypatch):
         freeze_repo=tmp_path,
         execution_repo=tmp_path,
         datasets_root=tmp_path,
-        runs_root=tmp_path / "runs",
+        runs_root=tmp_path / study.record["results_series_id"] / "runs",
         models_config=tmp_path / "models.json",
         sandbox_image="fixture",
     )
 
     assert ready.report["counts"]["pending"] == 120
     assert ready.report["counts"]["terminal"] == 0
+
+
+def test_preflight_rejects_reused_v1_results_root(tmp_path):
+    study = _study()
+
+    with pytest.raises(LauncherError, match="Results series root"):
+        preflight(
+            study,
+            freeze_repo=tmp_path,
+            execution_repo=tmp_path,
+            datasets_root=tmp_path,
+            runs_root=tmp_path / study.record["superseded_results_series_id"] / "runs",
+            models_config=tmp_path / "models.json",
+            sandbox_image="fixture",
+        )
 
 
 def test_launcher_history_rejects_image_drift(tmp_path):

@@ -5,6 +5,8 @@
   "amendment_file": "research/protocols/amendments/2026-08-15-freeze-v2.md",
   "amendment_scope": "numeric serialization only; wall-clock limit remains 1800 seconds",
   "provider_requests_before_amendment": 0,
+  "results_series_id": "paper-v1-confirmatory-20260815-v2",
+  "superseded_results_series_id": "paper-v1-confirmatory-20260815",
   "execution_git_commit": "b4e3da29e1c6b7db42848f7eee82c6a8ef3e9dae",
   "protocol_file": "research/protocols/protocol_v1.yaml",
   "protocol_hash": "de690a4e975781c516b25d2016416bf44e5d416ee61a00d305eae39331ce49c5",

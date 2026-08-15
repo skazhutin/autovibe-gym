@@ -181,7 +181,7 @@ history.
 python -m research.confirmatory_launcher `
   --execution-repo path/to/detached-frozen-worktree `
   --datasets-root path/to/frozen-datasets `
-  --runs-root path/to/external-results/runs `
+  --runs-root path/to/paper-v1-confirmatory-20260815-v2/runs `
   --models-config path/to/private-models.json `
   --sandbox-image autovibe-gym-sandbox:paper-v1 `
   --dry-run

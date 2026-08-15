@@ -267,6 +267,13 @@ def preflight(
     datasets = Path(datasets_root).resolve()
     runs = Path(runs_root).resolve()
     registry = Path(models_config).resolve()
+    expected_series_id = str(study.record.get("results_series_id") or "")
+    if not expected_series_id:
+        raise LauncherError("Freeze record does not bind a results series ID")
+    if runs.parent.name != expected_series_id:
+        raise LauncherError(
+            f"Results series root must be named {expected_series_id}; got {runs.parent.name}"
+        )
     tag = str(study.record["freeze_tag"])
     try:
         if _git(freeze_root, "cat-file", "-t", tag) != "tag":
