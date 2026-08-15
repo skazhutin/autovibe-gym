@@ -125,6 +125,12 @@ def validate_protocol(data: dict[str, Any]) -> list[str]:
         errors.append("hidden evaluation must be attempted at most once per agent outcome")
     if submission.get("feedback_after_hidden_evaluation_can_change_outcome") is not False:
         errors.append("hidden evaluation cannot create an outcome-changing feedback loop")
+    if submission.get("candidate_prediction_backend") != "isolated_ephemeral_docker":
+        errors.append("confirmatory candidate prediction must use isolated ephemeral Docker")
+    if submission.get("candidate_prediction_network") != "none":
+        errors.append("confirmatory candidate prediction must disable networking")
+    if submission.get("host_side_candidate_predict_execution") is not False:
+        errors.append("confirmatory candidate code must not execute in the host recorder")
 
     analysis = data.get("analysis") or {}
     primary = analysis.get("primary_comparison") or {}

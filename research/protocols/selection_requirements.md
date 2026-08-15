@@ -75,13 +75,15 @@ confirmatory outcomes are inspected and must update protocol/config hashes.
 
 ## Freeze checklist
 
-- [ ] D01: two exact models/providers/endpoints/decoding configs approved.
-- [ ] D02: fourth dataset approved.
-- [ ] D03: global budget approved.
-- [ ] D05: immutable large-artifact storage approved.
-- [ ] D08: monetary hard stop approved.
-- [ ] D09: dataset cards, hashes, splits, metric directions, dummy/reference
+- [x] D01: two exact models/providers/endpoints/decoding configs approved.
+- [x] D02: fourth dataset approved.
+- [x] D03: global budget approved from result-blind 64k/128k/256k pilots.
+- [x] D05: immutable large-artifact storage approved.
+- [x] D08: zero-ruble client hard stop and no paid fallback approved.
+- [x] D09: dataset cards, hashes, splits, metric directions, dummy/reference
       pipelines, and scores approved.
-- [ ] Every selected endpoint returns usable usage metadata.
-- [ ] Every dataset passes leakage/license/privacy review.
+- [x] Every selected endpoint returns usable input/output usage metadata; cached
+      and reasoning zeros are conservatively interpreted as none-or-not-exposed.
+- [x] Every dataset has a leakage/license/privacy card. Air Quality remains
+      research-only under the conservative reading, and no raw data is committed.
 - [ ] Confirmatory matrix is generated and hashed before outcomes are inspected.

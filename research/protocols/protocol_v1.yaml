@@ -1,16 +1,20 @@
 schema_version: "1.0"
 protocol_id: autovibe-gym-paper-v1
 title: "When Does Feedback Pay Off? A Budget-Matched, Failure-Aware Evaluation of LLM Agents for Tabular Machine Learning"
-status: draft_unfrozen
+status: frozen
 prepared_at: "2026-08-12"
 target_first_version: "2026-10-15"
 
 freeze:
-  allowed: false
-  tag: null
+  allowed: true
+  tag: paper-v1-experiment-freeze
   rule: Resolve every freeze_blocking TODO before confirmatory runs begin.
   required_clean_worktree: true
   existing_outputs_are_pilot_only: true
+  frozen_input_manifest: research/protocols/freeze_manifest_v1.json
+  frozen_input_manifest_hash: 91e4a98523e336929057bb0a4b5b27b54aa2a7b9f2ec0f0057a37989b562d7ac
+  fanu_reference_file: research/protocols/fanu_reference_values_v1.json
+  fanu_reference_hash: e867776aa650b7445a9fb17d16686e176dca8b14cc0c1460426708fe162e0570
 
 research_questions:
   primary: >-
@@ -103,34 +107,44 @@ unit_of_analysis:
   rerun_rule: Every intentional rerun receives a new run_id, rerun_of, and reason; condition_id remains stable.
 
 matrix:
-  status: provisional_pending_freeze_decisions
+  status: frozen
   models:
     - slot: strong_model
-      provider: TODO
-      id: TODO
-      version: TODO
-      decision_todo: D01
+      provider: internal_openai_compatible_gateway
+      endpoint: http://llm.letovo.site:8809/openai
+      id: deepseek-v4-flash
+      version: service-snapshot-2026-08-15
+      provider_weight_revision_exposed: false
+      context_window: 65536
+      temperature: 0.4
+      max_output_tokens: 4096
     - slot: compact_or_mid_model
-      provider: TODO
-      id: TODO
-      version: TODO
-      decision_todo: D01
+      provider: internal_openai_compatible_gateway
+      endpoint: http://llm.letovo.site:8809/openai
+      id: gemma-4-26b
+      version: service-snapshot-2026-08-15
+      provider_weight_revision_exposed: false
+      context_window: 32768
+      temperature: 0.4
+      max_output_tokens: 4096
+  endpoint_snapshot: research/protocols/model_endpoint_snapshot_2026-08-15.json
   datasets:
     - id: air_quality
       task_type: regression
-      status: candidate_requires_frozen_card_hash_and_split
-    - id: diabetes
+      status: frozen
+      dataset_hash: 594c0bdd0a9891c954204ac36bf3410c3624b94b0539bb9c2c6c35650d13529c
+    - id: diabetes_readmission
       task_type: binary_classification
-      status: candidate_requires_frozen_card_hash_and_split
+      status: frozen
+      dataset_hash: b91679a8b9b61215ea40b5586803ebb16c09e25896adbeaf4d00e67e9a335589
     - id: student_dropout
       task_type: multiclass_classification
-      status: candidate_requires_frozen_card_hash_and_split
-    - id: dataset_4_tbd
-      candidates:
-        - bank_marketing
-        - phishing
-      status: unresolved
-      decision_todo: D02
+      status: frozen
+      dataset_hash: c42ac56f6a5f1e2432812be1962ecba7a88bf3d8978ce50f8b74c175260ba847
+    - id: bank_marketing
+      task_type: binary_classification
+      status: frozen
+      dataset_hash: 2f996e2d2dfe734f4cdf9ce0c600377699c0b535dbed3187db207c8759681733
   confirmatory_arms:
     - A
     - B
@@ -146,11 +160,14 @@ matrix:
   digits_role: infrastructure_smoke_only
 
 budget:
-  status: pilot_default_not_frozen
+  status: frozen
   token_accounting: raw_input_plus_raw_output_plus_reported_reasoning
   cached_input_policy: count_as_raw_input_for_context_budget
-  monetary_cost_policy: report_separately_from_token_budget
-  total_token_limit: 64000
+  monetary_cost_policy: internal_endpoint_only_no_paid_fallback
+  client_paid_external_limit_rub: 0
+  paid_provider_fallback: forbidden
+  internal_operator_billing_independently_verified: false
+  total_token_limit: 256000
   max_output_tokens_per_call: 4096
   max_llm_calls: 12
   max_code_executions: 20
@@ -178,6 +195,9 @@ submission_policy:
   feedback_after_hidden_evaluation_can_change_outcome: false
   hidden_evaluation_failure_class: invalid_submission
   confirmatory_kernel_backend: docker
+  candidate_prediction_backend: isolated_ephemeral_docker
+  candidate_prediction_network: none
+  host_side_candidate_predict_execution: false
   hidden_files_and_host_secrets_must_be_inaccessible: true
 
 endpoints:
@@ -290,7 +310,10 @@ checklist_validation:
   inter_annotator_metric:
     - cohens_kappa_or_krippendorffs_alpha
   low_accuracy_interpretation: checklist_coverage_is_process_proxy_not_quality_outcome
-  second_annotator_todo: D06
+  primary_annotator: JapanDino
+  second_annotator_nominee: Daniil Skazhutin
+  adjudicator_nominee: Alexey Suntsov
+  written_consent_required_before_annotation: true
 
 exclusions:
   allowed:
@@ -309,53 +332,62 @@ todos:
     decision: Freeze two exact model IDs, versions, providers, endpoints, and decoding configurations after availability pilot.
     owner: project_owner
     deadline: "2026-09-07"
-    status: open
+    status: resolved
+    resolution: deepseek-v4-flash and gemma-4-26b through the authenticated internal OpenAI-compatible gateway; provider weight revisions are not exposed, so the honest service snapshot label is used.
     freeze_blocking: true
   - id: D02
     decision: Select and freeze the fourth dataset as bank_marketing or phishing.
     owner: project_owner
     deadline: "2026-09-07"
-    status: open
+    status: resolved
+    resolution: bank_marketing; phishing was rejected because the local snapshot is 235795 rows and exceeds the predeclared task-size range.
     freeze_blocking: true
   - id: D03
     decision: Freeze the final global token and execution budget after a result-blind availability/budget pilot.
     owner: project_owner
     deadline: "2026-09-07"
-    status: open
+    status: resolved
+    resolution: 256000 total accounted tokens, 4096 output tokens per call, 12 LLM calls, 20 code executions, 20 tool calls, and 1800 seconds per episode. Result-blind pilots rejected 64000 and 128000 because they stopped iterative episodes on pre-call token reservation; 256000 let both models reach the 12-call ceiling.
     freeze_blocking: true
   - id: D04
     decision: Decide whether plain single_shot remains as a separate cost/Pareto reference arm.
     owner: project_owner
     deadline: "2026-09-07"
-    status: open
+    status: resolved
+    resolution: retained as a cost-quality Pareto reference only; excluded from confirmatory causal comparisons.
     freeze_blocking: false
   - id: D05
     decision: Select immutable storage for large trajectories and MLflow artifacts.
     owner: project_owner
     deadline: "2026-09-07"
-    status: open
+    status: resolved
+    resolution: GitHub Release for versioned code plus a Zenodo immutable record for final data/software artifacts; no upload occurs before separate publication approval.
     freeze_blocking: true
   - id: D06
     decision: Name the second independent checklist annotator.
     owner: project_owner
     deadline: "2026-09-07"
-    status: open
+    status: resolved
+    resolution: Daniil Skazhutin is the second-annotator nominee; annotation cannot start without written consent. Alexey Suntsov is the adjudicator nominee under the same consent gate.
     freeze_blocking: true
   - id: D07
     decision: Select arXiv-style report or a specific workshop/conference template.
     owner: project_owner
     deadline: "2026-09-07"
-    status: open
+    status: resolved
+    resolution: TMLR-style working manuscript; external submission, arXiv posting, and venue selection remain separately authorized actions after the study and manuscript are complete.
     freeze_blocking: false
   - id: D08
     decision: Approve the monetary/API budget and hard cost stop for the main series.
     owner: project_owner
     deadline: "2026-09-07"
-    status: open
+    status: resolved
+    resolution: zero-ruble client-side hard stop, authenticated internal endpoint only, and no paid-provider fallback. Internal operator billing is not independently verifiable from the client.
     freeze_blocking: true
   - id: D09
     decision: Freeze dataset hashes, splits, metric directions, S_dummy, and S_reference values for all four datasets.
     owner: research_lead
     deadline: "2026-09-07"
-    status: open
+    status: resolved
+    resolution: freeze_manifest_v1.json and fanu_reference_values_v1.json bind all four transformed snapshots, split policies, metric directions, and dummy/reference endpoints.
     freeze_blocking: true

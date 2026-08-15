@@ -1,0 +1,31 @@
+{
+  "datasets": [
+    {
+      "dataset_id": "air_quality",
+      "dummy_score": -1.2972362274456626,
+      "metric_direction": "higher",
+      "reference_score": -0.4723911216062075
+    },
+    {
+      "dataset_id": "diabetes_readmission",
+      "dummy_score": 0.34687228496959166,
+      "metric_direction": "higher",
+      "reference_score": 0.6267850735458453
+    },
+    {
+      "dataset_id": "student_dropout",
+      "dummy_score": 0.22177554438860972,
+      "metric_direction": "higher",
+      "reference_score": 0.7365674242555017
+    },
+    {
+      "dataset_id": "bank_marketing",
+      "dummy_score": 0.8311878681885125,
+      "metric_direction": "higher",
+      "reference_score": 0.8461090439520241
+    }
+  ],
+  "reference_hash": "e867776aa650b7445a9fb17d16686e176dca8b14cc0c1460426708fe162e0570",
+  "reference_pipeline_id": "tabular-hist-gradient-boosting-v1",
+  "schema_version": "1.0"
+}

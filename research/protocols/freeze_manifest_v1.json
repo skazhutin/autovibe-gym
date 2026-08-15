@@ -1,0 +1,161 @@
+{
+  "datasets": [
+    {
+      "dataset_hash": "594c0bdd0a9891c954204ac36bf3410c3624b94b0539bb9c2c6c35650d13529c",
+      "dataset_id": "air_quality",
+      "drop_columns": [
+        "NMHC(GT)",
+        "C6H6(GT)",
+        "NOx(GT)",
+        "NO2(GT)"
+      ],
+      "group_split_audit": null,
+      "metric": "neg_rmse",
+      "metric_direction": "higher",
+      "rows": {
+        "test": 1152,
+        "train": 5371,
+        "val": 1151
+      },
+      "source_artifact_hash": "390b4372d744711067246a3ec93bec7595ac7bee134fb9fcbda55efa7dbd03f9",
+      "split_id": "chronological-sensor-only-local-snapshot-v1",
+      "split_policy": {
+        "type": "preserve_source"
+      },
+      "split_seed": 42,
+      "target_col": "CO(GT)",
+      "target_transform": "identity",
+      "task_type": "regression"
+    },
+    {
+      "dataset_hash": "b91679a8b9b61215ea40b5586803ebb16c09e25896adbeaf4d00e67e9a335589",
+      "dataset_id": "diabetes_readmission",
+      "drop_columns": [
+        "encounter_id",
+        "patient_nbr"
+      ],
+      "group_split_audit": {
+        "group_column_removed": true,
+        "pairwise_group_overlap": {
+          "train_test": 0,
+          "train_val": 0,
+          "val_test": 0
+        },
+        "unique_groups": {
+          "test": 2719,
+          "train": 12686,
+          "val": 2719
+        }
+      },
+      "metric": "f1_macro",
+      "metric_direction": "higher",
+      "rows": {
+        "test": 3007,
+        "train": 14002,
+        "val": 2991
+      },
+      "source_artifact_hash": "0847a5948f0c322dd5666834e168e6340b4fd0ba8daaa6302680fea0c3793646",
+      "split_id": "patient-group-shuffle-seed-42-binary-v1",
+      "split_policy": {
+        "group_column": "patient_nbr",
+        "test_fraction": 0.15,
+        "train_fraction": 0.7,
+        "type": "group_shuffle",
+        "validation_fraction": 0.15
+      },
+      "split_seed": 42,
+      "target_col": "readmitted",
+      "target_transform": "non_no_readmission_binary",
+      "task_type": "binary_classification"
+    },
+    {
+      "dataset_hash": "c42ac56f6a5f1e2432812be1962ecba7a88bf3d8978ce50f8b74c175260ba847",
+      "dataset_id": "student_dropout",
+      "drop_columns": [],
+      "group_split_audit": null,
+      "metric": "f1_macro",
+      "metric_direction": "higher",
+      "rows": {
+        "test": 664,
+        "train": 3096,
+        "val": 664
+      },
+      "source_artifact_hash": "20c546da0b18832ab3419baa301e8db547afc02bb92973963e1020f5a0e15296",
+      "split_id": "stratified-random-seed-42-v1",
+      "split_policy": {
+        "type": "preserve_source"
+      },
+      "split_seed": 42,
+      "target_col": "Target",
+      "target_transform": "identity",
+      "task_type": "multiclass_classification"
+    },
+    {
+      "dataset_hash": "2f996e2d2dfe734f4cdf9ce0c600377699c0b535dbed3187db207c8759681733",
+      "dataset_id": "bank_marketing",
+      "drop_columns": [
+        "duration"
+      ],
+      "group_split_audit": null,
+      "metric": "f1_weighted",
+      "metric_direction": "higher",
+      "rows": {
+        "test": 679,
+        "train": 3164,
+        "val": 678
+      },
+      "source_artifact_hash": "44039a77cbef36731bc2db55923e71f03df7c098a123ae6251160dc6000d4367",
+      "split_id": "predefined-local-snapshot-no-duration-seed-42-v1",
+      "split_policy": {
+        "type": "preserve_source"
+      },
+      "split_seed": 42,
+      "target_col": "y",
+      "target_transform": "identity",
+      "task_type": "binary_classification"
+    }
+  ],
+  "kind": "autovibe-paper-v1-freeze-inputs",
+  "manifest_hash": "91e4a98523e336929057bb0a4b5b27b54aa2a7b9f2ec0f0057a37989b562d7ac",
+  "pandas_version": "2.3.3",
+  "reference_hash": "e867776aa650b7445a9fb17d16686e176dca8b14cc0c1460426708fe162e0570",
+  "reference_pipeline": {
+    "estimator": {
+      "classification_class_weight": "balanced",
+      "family": "sklearn_hist_gradient_boosting",
+      "l2_regularization": 1.0,
+      "learning_rate": 0.08,
+      "max_iter": 200,
+      "max_leaf_nodes": 31,
+      "random_state": 42
+    },
+    "preprocessing": {
+      "categorical": "most_frequent_imputation_then_ordinal_encoding",
+      "encoded_missing_value": -2,
+      "numeric": "median_imputation_with_missing_indicators",
+      "unknown_category_value": -1
+    },
+    "selection_rule": "fixed_before_hidden_test_and_not_tuned_per_dataset"
+  },
+  "reference_pipeline_id": "tabular-hist-gradient-boosting-v1",
+  "schema_version": "1.0",
+  "sklearn_version": "1.7.2",
+  "validation_diagnostics": {
+    "air_quality": {
+      "dummy_score": -1.5596807080637514,
+      "reference_score": -0.8797625512350293
+    },
+    "bank_marketing": {
+      "dummy_score": 0.839433223346633,
+      "reference_score": 0.8542030627092531
+    },
+    "diabetes_readmission": {
+      "dummy_score": 0.3476553980370774,
+      "reference_score": 0.6411411169973938
+    },
+    "student_dropout": {
+      "dummy_score": 0.2222222222222222,
+      "reference_score": 0.6874210726474214
+    }
+  }
+}

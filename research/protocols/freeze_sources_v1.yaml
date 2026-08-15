@@ -1,0 +1,77 @@
+schema_version: "1.0"
+reference_pipeline_id: tabular-hist-gradient-boosting-v1
+reference_pipeline:
+  preprocessing:
+    numeric: median_imputation_with_missing_indicators
+    categorical: most_frequent_imputation_then_ordinal_encoding
+    unknown_category_value: -1
+    encoded_missing_value: -2
+  estimator:
+    family: sklearn_hist_gradient_boosting
+    max_iter: 200
+    learning_rate: 0.08
+    max_leaf_nodes: 31
+    l2_regularization: 1.0
+    random_state: 42
+    classification_class_weight: balanced
+  selection_rule: fixed_before_hidden_test_and_not_tuned_per_dataset
+datasets:
+  - dataset_id: air_quality
+    source_relative_path: air_quality_co/prepared
+    target_col: CO(GT)
+    task_type: regression
+    metric: neg_rmse
+    metric_direction: higher
+    split_id: chronological-sensor-only-local-snapshot-v1
+    split_seed: 42
+    target_transform: identity
+    drop_columns:
+      - NMHC(GT)
+      - C6H6(GT)
+      - NOx(GT)
+      - NO2(GT)
+    split_policy:
+      type: preserve_source
+  - dataset_id: diabetes_readmission
+    source_relative_path: hospital_readmission/prepared
+    target_col: readmitted
+    task_type: binary_classification
+    metric: f1_macro
+    metric_direction: higher
+    split_id: patient-group-shuffle-seed-42-binary-v1
+    split_seed: 42
+    target_transform: non_no_readmission_binary
+    drop_columns:
+      - encounter_id
+      - patient_nbr
+    split_policy:
+      type: group_shuffle
+      group_column: patient_nbr
+      train_fraction: 0.70
+      validation_fraction: 0.15
+      test_fraction: 0.15
+  - dataset_id: student_dropout
+    source_relative_path: example_student_dropout/prepared
+    target_col: Target
+    task_type: multiclass_classification
+    metric: f1_macro
+    metric_direction: higher
+    split_id: stratified-random-seed-42-v1
+    split_seed: 42
+    target_transform: identity
+    drop_columns: []
+    split_policy:
+      type: preserve_source
+  - dataset_id: bank_marketing
+    source_relative_path: bank_marketing
+    target_col: y
+    task_type: binary_classification
+    metric: f1_weighted
+    metric_direction: higher
+    split_id: predefined-local-snapshot-no-duration-seed-42-v1
+    split_seed: 42
+    target_transform: identity
+    drop_columns:
+      - duration
+    split_policy:
+      type: preserve_source

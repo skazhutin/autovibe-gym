@@ -1,0 +1,61 @@
+{
+  "agent_quality_scores_inspected_for_selection": false,
+  "artifact_checks": {
+    "completed_manifests": 9,
+    "completed_runs_with_execution_ledger": 9,
+    "completed_runs_with_manifest_events": 9,
+    "completed_runs_with_usage_ledger": 9
+  },
+  "budget_decision": {
+    "max_code_executions": 20,
+    "max_llm_calls": 12,
+    "max_output_tokens_per_call": 4096,
+    "max_tool_calls": 20,
+    "total_token_limit": 256000,
+    "wall_clock_limit_seconds": 1800
+  },
+  "budget_evidence": [
+    {
+      "decision": "rejected",
+      "limit": 64000,
+      "result_blind_reason": "Iterative pilots stopped at 4-6 calls because of pre-call token reservation or the pilot's six-call ceiling."
+    },
+    {
+      "decision": "rejected",
+      "limit": 128000,
+      "result_blind_reason": "The DeepSeek B pilot stopped on pre-call token reservation after 10 calls and 94540 accounted tokens."
+    },
+    {
+      "decision": "frozen",
+      "limit": 256000,
+      "result_blind_reason": "Both DeepSeek and Gemma B pilots reached the predeclared 12-call ceiling without a token-reservation stop. Accounted totals were 108283 and 134878 tokens, respectively."
+    }
+  ],
+  "completed_episode_count": 9,
+  "endpoint": "http://llm.letovo.site:8809/openai",
+  "endpoint_authentication_required": true,
+  "external_paid_fallback_used": false,
+  "infrastructure_findings": {
+    "interrupted_attempts": 2,
+    "rejected_before_episode_start": 1,
+    "resolution": "Agent candidate prediction is crash-contained; confirmatory Docker runs select a separate ephemeral network-none Docker evaluator with no host secrets, while local mode uses a spawned-process fallback. The two interrupted attempts remain non-overwritten infrastructure evidence and are excluded from completed pilot counts."
+  },
+  "models": [
+    "deepseek-v4-flash",
+    "gemma-4-26b"
+  ],
+  "observed_usage_semantics": {
+    "cached_input_tokens": "reported as zero; interpret as none_or_not_exposed",
+    "input_tokens": "reported",
+    "output_tokens": "reported",
+    "reasoning_tokens": "reported as zero; interpret as none_or_not_exposed"
+  },
+  "pilot_arms_exercised": [
+    "A",
+    "B",
+    "C"
+  ],
+  "pilot_dataset": "example_room_occupancy",
+  "pilot_outputs_are_confirmatory": false,
+  "schema_version": "1.0"
+}

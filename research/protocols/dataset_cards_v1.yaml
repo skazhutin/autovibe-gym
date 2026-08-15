@@ -1,0 +1,82 @@
+schema_version: "1.0"
+retrieved_or_verified_at: "2026-08-15"
+cards:
+  - dataset_id: air_quality
+    source:
+      name: UCI Air Quality
+      url: https://archive.ics.uci.edu/dataset/360/air+quality
+      doi: 10.24432/C59K5F
+      citation: "Vito, S. (2008). Air Quality [Dataset]. UCI Machine Learning Repository."
+      license: CC BY 4.0
+      license_note: UCI also states research-only use in the dataset description; treat research-only as the conservative controlling restriction.
+    local_source_raw_sha256: 9c839efab0c4be102d2ab92b94bbc67514ebc0721dc73a7600a865f35cab8f9b
+    frozen_dataset_hash: 594c0bdd0a9891c954204ac36bf3410c3624b94b0539bb9c2c6c35650d13529c
+    target: CO(GT)
+    task: hourly CO regression
+    rows: 7674
+    split: chronological 70/15/15 local snapshot
+    exclusions: [NMHC(GT), C6H6(GT), NOx(GT), NO2(GT)]
+    risks:
+      - Time drift means random-split claims would be misleading; the chronological split is retained.
+      - Other reference-analyzer ground-truth concentrations are excluded to avoid privileged contemporaneous measurements.
+      - Exact frozen rows are not committed to Git; redistribution requires the final artifact/license gate.
+    contamination_note: A public and widely used UCI benchmark, so model pretraining contamination is plausible.
+  - dataset_id: diabetes_readmission
+    source:
+      name: UCI Diabetes 130-US Hospitals for Years 1999-2008
+      url: https://archive.ics.uci.edu/dataset/296/diabetes+130-us+hospitals+for+years+1999-2008
+      doi: 10.24432/C5230J
+      citation: "Clore, J., Cios, K., DeShazo, J., & Strack, B. (2014). Diabetes 130-US Hospitals for Years 1999-2008 [Dataset]. UCI Machine Learning Repository."
+      license: CC BY 4.0
+    local_source_raw_sha256: 181d8693b4a38da3f7ea293a9bf3071789575729849f1bc7a4791f32a4e2a908
+    official_raw_sha256: 0689e7ec031237dc63031b938805c48377748761a3b26acab621567afa24df97
+    frozen_dataset_hash: b91679a8b9b61215ea40b5586803ebb16c09e25896adbeaf4d00e67e9a335589
+    target: readmitted != NO
+    task: binary readmission classification
+    rows: 20000
+    split: patient-group 70/15/15 with seed 42
+    exclusions: [encounter_id, patient_nbr]
+    risks:
+      - Public records contain sensitive demographic attributes including age, gender, and race; use only for aggregate benchmark analysis.
+      - The local dirty snapshot is a transformed subset rather than a byte-identical slice of the official raw file; both hashes are disclosed.
+      - Patient grouping prevents the same patient from appearing in multiple splits.
+      - The binary target combines readmission within and after 30 days; interpretation is any recorded readmission, not early readmission alone.
+    contamination_note: A public and widely used UCI benchmark, so model pretraining contamination is plausible.
+  - dataset_id: student_dropout
+    source:
+      name: UCI Predict Students' Dropout and Academic Success
+      url: https://archive.ics.uci.edu/dataset/697/predict+students+dropout+and+academic+success
+      doi: 10.24432/C5MC89
+      citation: "Realinho, V., Vieira Martins, M., Machado, J., & Baptista, L. (2021). Predict Students' Dropout and Academic Success [Dataset]. UCI Machine Learning Repository."
+      license: CC BY 4.0
+    local_source_raw_sha256: 3ef126de5cefff26eb11fbb4237f1a1401cb64b488e2f1d598c23cedeb4c45ae
+    frozen_dataset_hash: c42ac56f6a5f1e2432812be1962ecba7a88bf3d8978ce50f8b74c175260ba847
+    target: Target
+    task: three-class dropout/enrolled/graduate classification
+    rows: 4424
+    split: stratified random 70/15/15 with seed 42
+    exclusions: []
+    risks:
+      - Demographic and socioeconomic attributes can encode protected-group disparities; results are benchmark performance, not intervention policy.
+      - Second-semester outcomes are present, so the task is prediction after two observed semesters rather than enrollment-time early warning.
+    contamination_note: Public UCI data and published notebooks make contamination plausible, though less canonical than older benchmarks.
+  - dataset_id: bank_marketing
+    source:
+      name: UCI Bank Marketing bank.csv 10-percent sample
+      url: https://archive.ics.uci.edu/dataset/222/bank+marketing
+      doi: 10.24432/C5K306
+      citation: "Moro, S., Rita, P., & Cortez, P. (2014). Bank Marketing [Dataset]. UCI Machine Learning Repository."
+      license: CC BY 4.0
+    official_bank_csv_sha256: dc8d576e9bda0f41ee891251bd84bab9a39ce576cba715aac08adc2374a01fde
+    official_snapshot_audit: Local train/val/test rows exactly partition the 4521 unique rows in official bank.csv.
+    frozen_dataset_hash: 2f996e2d2dfe734f4cdf9ce0c600377699c0b535dbed3187db207c8759681733
+    target: y
+    task: binary term-deposit subscription classification
+    rows: 4521
+    split: predefined local 70/15/15 with seed 42
+    exclusions: [duration]
+    risks:
+      - Call duration is only known after the call and is excluded to avoid post-contact privileged information.
+      - Age, job, marital status, and education can encode protected or socioeconomic differences; no deployment or fairness claim is made.
+      - Weighted F1 can obscure minority-class performance, so class-specific diagnostics must be reported descriptively.
+    contamination_note: A highly public UCI benchmark with substantial contamination risk.
