@@ -9,6 +9,8 @@
     "evidence_class",
     "plan_id",
     "plan_hash",
+    "protocol_hash",
+    "analysis_reference_hash",
     "analysis_config",
     "analysis_config_hash",
     "completeness",
@@ -22,6 +24,8 @@
     "evidence_class": { "const": "confirmatory_analysis" },
     "plan_id": { "type": "string", "pattern": "^plan_[0-9a-f]{24}$" },
     "plan_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "protocol_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "analysis_reference_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "analysis_config": { "type": "object" },
     "analysis_config_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "completeness": {

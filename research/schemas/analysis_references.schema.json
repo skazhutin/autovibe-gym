@@ -4,9 +4,16 @@
   "title": "AutoVibe Gym Paper V1 Frozen FANU References",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "plan_id", "plan_hash", "datasets"],
+  "required": [
+    "schema_version",
+    "reference_hash",
+    "plan_id",
+    "plan_hash",
+    "datasets"
+  ],
   "properties": {
     "schema_version": { "const": "1.0" },
+    "reference_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "plan_id": { "type": "string", "pattern": "^plan_[0-9a-f]{24}$" },
     "plan_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "datasets": {

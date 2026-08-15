@@ -21,6 +21,7 @@ def _config(**overrides):
         "experiment_id": "paper-v1-confirmatory-fixture",
         "git_commit": "a" * 40,
         "budget_policy_hash": "b" * 64,
+        "analysis_reference_hash": "7" * 64,
         "matrix": {
             "datasets": [
                 {

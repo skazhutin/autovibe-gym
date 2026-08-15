@@ -123,10 +123,11 @@ satisfy the later freeze or confirmatory-plan gate.
 
 ## Confirmatory planner
 
-The planner does not infer unresolved model, dataset, budget, prompt, or
-execution decisions. Its input must contain exact Git/config/dataset/split/model
-identities and SHA-256 hashes for the budget, decoding, execution, and prompt
-contracts. Values such as `TODO`, `TBD`, `unversioned`, or `unknown` are rejected.
+The planner does not infer unresolved model, dataset, budget, prompt, reference,
+or execution decisions. Its input must contain exact Git/config/dataset/split/
+model identities and SHA-256 hashes for the budget, frozen FANU-reference,
+decoding, execution, and prompt contracts. Values such as `TODO`, `TBD`,
+`unversioned`, or `unknown` are rejected.
 
 After those owner decisions are resolved, build the complete plan without
 executing any episode:
@@ -181,6 +182,11 @@ keeps agent failures at dummy performance and rejects infrastructure attempts as
 terminal outcomes. H1 (`B-A`) and H2 (`C-B`) are paired by
 dataset/model/replicate, aggregate dataset-model strata equally, and apply the
 protocol bootstrap, permutation, exact McNemar, and Holm procedures.
+
+The immutable plan carries both the canonical protocol hash and the canonical
+FANU-reference hash. Analysis recomputes both hashes, refuses a mismatch, and
+propagates them into the result so seeds, resample counts, directions, dummy
+scores, and reference scores cannot be changed after outcomes are visible.
 
 The output path is concurrent-safe and cannot be overwritten. This PR validates
 the pipeline only with synthetic manifests; confirmatory values remain

@@ -141,6 +141,10 @@ reference scores, and exclusions must be committed and tagged before outcomes ar
 inspected. Tables and figures must be generated from immutable manifests; manual
 copying of reported numbers is prohibited.
 
+The immutable plan records canonical hashes of both the complete protocol and
+the frozen FANU reference payload. The primary pipeline recomputes both and
+stops on mismatch, then propagates both hashes into its result.
+
 The primary analysis output is content-hashed and published with no-overwrite
 semantics. An identical rerun is idempotent; a different output at the same path
 is an error rather than an implicit replacement.

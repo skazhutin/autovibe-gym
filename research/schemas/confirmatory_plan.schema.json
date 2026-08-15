@@ -10,6 +10,7 @@
     "experiment_id",
     "protocol_hash",
     "config_hash",
+    "analysis_reference_hash",
     "plan_id",
     "plan_hash",
     "matrix",
@@ -21,6 +22,7 @@
     "experiment_id": { "type": "string", "minLength": 1 },
     "protocol_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "config_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "analysis_reference_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "plan_id": { "type": "string", "pattern": "^plan_[0-9a-f]{24}$" },
     "plan_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "matrix": {

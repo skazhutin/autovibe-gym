@@ -13,6 +13,21 @@ from research.analysis import (
     write_analysis_result,
 )
 from research.planner import build_confirmatory_plan
+from research.run_artifacts import canonical_hash
+
+
+def _reference_payload():
+    return {
+        "schema_version": "1.0",
+        "datasets": [
+            {
+                "dataset_id": "dataset-a",
+                "metric_direction": "higher",
+                "dummy_score": 0.5,
+                "reference_score": 0.9,
+            }
+        ],
+    }
 
 
 def _config():
@@ -21,6 +36,7 @@ def _config():
         "experiment_id": "paper-v1-analysis-fixture",
         "git_commit": "a" * 40,
         "budget_policy_hash": "b" * 64,
+        "analysis_reference_hash": canonical_hash(_reference_payload()),
         "matrix": {
             "datasets": [
                 {
@@ -116,18 +132,12 @@ def _protocol():
 
 
 def _references(plan):
+    payload = _reference_payload()
     return {
-        "schema_version": "1.0",
+        **payload,
+        "reference_hash": canonical_hash(payload),
         "plan_id": plan["plan_id"],
         "plan_hash": plan["plan_hash"],
-        "datasets": [
-            {
-                "dataset_id": "dataset-a",
-                "metric_direction": "higher",
-                "dummy_score": 0.5,
-                "reference_score": 0.9,
-            }
-        ],
     }
 
 
@@ -279,6 +289,40 @@ def test_reference_identity_and_denominator_are_gates():
     references["datasets"][0]["reference_score"] = 0.5
     with pytest.raises(AnalysisError, match="equals dummy"):
         run_primary_analysis(plan=plan, manifests=manifests, references=references, protocol=_protocol())
+
+
+def test_reference_values_and_protocol_are_bound_to_the_plan():
+    plan, manifests = _complete_fixture()
+    references = _references(plan)
+    references["datasets"][0]["reference_score"] = 0.85
+    with pytest.raises(AnalysisError, match="reference_hash"):
+        run_primary_analysis(
+            plan=plan,
+            manifests=manifests,
+            references=references,
+            protocol=_protocol(),
+        )
+
+    references["reference_hash"] = canonical_hash(
+        {"schema_version": "1.0", "datasets": references["datasets"]}
+    )
+    with pytest.raises(AnalysisError, match="immutable plan"):
+        run_primary_analysis(
+            plan=plan,
+            manifests=manifests,
+            references=references,
+            protocol=_protocol(),
+        )
+
+    changed_protocol = _protocol()
+    changed_protocol["analysis"]["confidence_interval"]["seed"] = 99
+    with pytest.raises(AnalysisError, match="protocol hash"):
+        run_primary_analysis(
+            plan=plan,
+            manifests=manifests,
+            references=_references(plan),
+            protocol=changed_protocol,
+        )
 
 
 def test_exact_permutation_mcnemar_and_holm_helpers():

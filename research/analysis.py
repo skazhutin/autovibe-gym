@@ -147,6 +147,14 @@ def validate_references(
     by_id: dict[str, dict[str, Any]] = {}
     for raw in items:
         item = dict(_mapping(raw, "dataset reference"))
+        expected_keys = {
+            "dataset_id",
+            "metric_direction",
+            "dummy_score",
+            "reference_score",
+        }
+        if set(item) != expected_keys:
+            raise AnalysisError("dataset reference fields do not match the frozen schema")
         dataset_id = str(item.get("dataset_id") or "")
         if not dataset_id or dataset_id in by_id:
             raise AnalysisError("dataset references must have unique non-empty dataset_id values")
@@ -167,6 +175,15 @@ def validate_references(
     planned_ids = set(plan["matrix"]["dataset_ids"])
     if set(by_id) != planned_ids:
         raise AnalysisError("dataset references do not match the immutable plan dataset IDs")
+    reference_payload = {
+        "schema_version": ANALYSIS_SCHEMA_VERSION,
+        "datasets": [by_id[dataset_id] for dataset_id in sorted(by_id)],
+    }
+    reference_hash = canonical_hash(reference_payload)
+    if references.get("reference_hash") != reference_hash:
+        raise AnalysisError("references.reference_hash does not match the canonical payload")
+    if plan.get("analysis_reference_hash") != reference_hash:
+        raise AnalysisError("frozen reference hash does not match the immutable plan")
     return by_id
 
 
@@ -537,6 +554,9 @@ def run_primary_analysis(
     references: Mapping[str, Any],
     protocol: Mapping[str, Any],
 ) -> dict[str, Any]:
+    protocol_hash = canonical_hash(protocol)
+    if plan.get("protocol_hash") != protocol_hash:
+        raise AnalysisError("protocol hash does not match the immutable plan")
     config = analysis_config_from_protocol(protocol)
     rows, reconciliation = build_analysis_rows(plan, manifests, references)
     completeness = completeness_table(plan, manifests, rows)
@@ -562,6 +582,8 @@ def run_primary_analysis(
         "evidence_class": "confirmatory_analysis",
         "plan_id": plan["plan_id"],
         "plan_hash": plan["plan_hash"],
+        "protocol_hash": protocol_hash,
+        "analysis_reference_hash": plan["analysis_reference_hash"],
         "analysis_config": config,
         "analysis_config_hash": canonical_hash(config),
         "completeness": completeness,

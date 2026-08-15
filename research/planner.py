@@ -196,6 +196,9 @@ def build_confirmatory_plan(
     _validate_protocol_contract(config, protocol)
 
     budget_policy_hash = _require_hash(config.get("budget_policy_hash"), "config.budget_policy_hash")
+    analysis_reference_hash = _require_hash(
+        config.get("analysis_reference_hash"), "config.analysis_reference_hash"
+    )
     for item in datasets:
         _require_hash(item.get("dataset_hash"), f"dataset {item.get('dataset_id')} dataset_hash")
         if int(item.get("split_seed", -1)) < 0:
@@ -271,6 +274,7 @@ def build_confirmatory_plan(
         "experiment_id": experiment_id,
         "protocol_hash": canonical_hash(protocol),
         "config_hash": canonical_hash(normalized_config),
+        "analysis_reference_hash": analysis_reference_hash,
         "matrix": {
             "dataset_ids": [str(item["dataset_id"]) for item in datasets],
             "model_ids": [str(item["model_id"]) for item in models],
@@ -298,6 +302,7 @@ def validate_plan(plan: Mapping[str, Any]) -> None:
         "experiment_id",
         "protocol_hash",
         "config_hash",
+        "analysis_reference_hash",
         "plan_id",
         "plan_hash",
         "matrix",
@@ -310,6 +315,7 @@ def validate_plan(plan: Mapping[str, Any]) -> None:
         raise PlanError("Unsupported confirmatory plan schema or kind")
     _require_hash(plan["protocol_hash"], "plan.protocol_hash")
     _require_hash(plan["config_hash"], "plan.config_hash")
+    _require_hash(plan["analysis_reference_hash"], "plan.analysis_reference_hash")
     expected_hash = _plan_digest(plan)
     if plan["plan_hash"] != expected_hash:
         raise PlanError("plan_hash does not match the canonical plan payload")
