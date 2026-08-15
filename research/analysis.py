@@ -11,7 +11,7 @@ import sys
 import uuid
 from collections import Counter, defaultdict
 from pathlib import Path
-from statistics import mean, median
+from statistics import NormalDist, mean, median
 from typing import Any, Iterable, Mapping, Sequence
 
 import numpy as np
@@ -69,6 +69,10 @@ def analysis_config_from_protocol(protocol: Mapping[str, Any]) -> dict[str, Any]
     analysis = _mapping(protocol.get("analysis"), "protocol.analysis")
     confidence = _mapping(analysis.get("confidence_interval"), "confidence_interval")
     hypothesis = _mapping(analysis.get("hypothesis_test"), "hypothesis_test")
+    rate_interval = _mapping(
+        analysis.get("valid_submission_rate_interval"),
+        "valid_submission_rate_interval",
+    )
     expected = {
         "primary_comparison": {
             "treatment": "B",
@@ -86,6 +90,10 @@ def analysis_config_from_protocol(protocol: Mapping[str, Any]) -> dict[str, Any]
         "hypothesis_method": "two_sided_paired_permutation",
         "familywise_correction": "holm_for_H1_and_H2_FANU_tests",
         "valid_submission_test": "exact_mcnemar",
+        "valid_submission_rate_interval": {
+            "method": "wilson_score",
+            "level": 0.95,
+        },
     }
     actual = {
         "primary_comparison": analysis.get("primary_comparison"),
@@ -96,6 +104,7 @@ def analysis_config_from_protocol(protocol: Mapping[str, Any]) -> dict[str, Any]
         "hypothesis_method": hypothesis.get("method"),
         "familywise_correction": hypothesis.get("familywise_correction"),
         "valid_submission_test": analysis.get("valid_submission_test"),
+        "valid_submission_rate_interval": dict(rate_interval),
     }
     if actual != expected:
         raise AnalysisError("protocol.analysis does not match the preregistered pipeline contract")
@@ -128,6 +137,7 @@ def analysis_config_from_protocol(protocol: Mapping[str, Any]) -> dict[str, Any]
             "alpha": alpha,
         },
         "valid_submission_test": expected["valid_submission_test"],
+        "valid_submission_rate_interval": expected["valid_submission_rate_interval"],
     }
 
 
@@ -476,6 +486,49 @@ def exact_mcnemar_pvalue(pairs: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     }
 
 
+def wilson_score_interval(successes: int, total: int, *, level: float) -> tuple[float, float]:
+    if total <= 0 or successes < 0 or successes > total or not 0 < level < 1:
+        raise AnalysisError("Wilson interval inputs are invalid")
+    probability = successes / total
+    z_value = NormalDist().inv_cdf(0.5 + level / 2.0)
+    z_squared = z_value**2
+    denominator = 1.0 + z_squared / total
+    center = (probability + z_squared / (2.0 * total)) / denominator
+    half_width = (
+        z_value
+        * math.sqrt(
+            probability * (1.0 - probability) / total
+            + z_squared / (4.0 * total**2)
+        )
+        / denominator
+    )
+    return max(0.0, center - half_width), min(1.0, center + half_width)
+
+
+def valid_submission_rates(
+    rows: Sequence[Mapping[str, Any]], *, level: float
+) -> dict[str, dict[str, Any]]:
+    result: dict[str, dict[str, Any]] = {}
+    for arm in ARM_IDS:
+        arm_rows = [row for row in rows if row["arm"] == arm]
+        if not arm_rows:
+            raise AnalysisError(f"valid-submission rate has no rows for arm {arm}")
+        valid = sum(bool(row["valid_submit"]) for row in arm_rows)
+        low, high = wilson_score_interval(valid, len(arm_rows), level=level)
+        result[arm] = {
+            "valid_submissions": valid,
+            "total_agent_outcomes": len(arm_rows),
+            "rate": valid / len(arm_rows),
+            "confidence_interval": {
+                "method": "wilson_score",
+                "level": level,
+                "low": low,
+                "high": high,
+            },
+        }
+    return result
+
+
 def holm_adjust(pvalues: Mapping[str, float]) -> dict[str, float]:
     ordered = sorted((float(value), key) for key, value in pvalues.items())
     adjusted: dict[str, float] = {}
@@ -589,6 +642,10 @@ def run_primary_analysis(
         "completeness": completeness,
         "reconciliation_hash": reconciliation["reconciliation_hash"],
         "rows": rows,
+        "valid_submission_rates": valid_submission_rates(
+            rows,
+            level=float(config["valid_submission_rate_interval"]["level"]),
+        ),
         "comparisons": comparisons,
     }
     result["result_hash"] = canonical_hash(result)

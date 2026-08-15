@@ -235,6 +235,9 @@ analysis:
     familywise_correction: holm_for_H1_and_H2_FANU_tests
     alpha: 0.05
   valid_submission_test: exact_mcnemar
+  valid_submission_rate_interval:
+    method: wilson_score
+    level: 0.95
   report_dataset_level_results: true
   mixed_effects_model_role: exploratory_only
   inspect_confirmatory_results_before_freeze: false

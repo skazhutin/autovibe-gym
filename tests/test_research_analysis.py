@@ -10,6 +10,8 @@ from research.analysis import (
     holm_adjust,
     paired_permutation_pvalue,
     run_primary_analysis,
+    valid_submission_rates,
+    wilson_score_interval,
     write_analysis_result,
 )
 from research.planner import build_confirmatory_plan
@@ -127,6 +129,10 @@ def _protocol():
                 "alpha": 0.05,
             },
             "valid_submission_test": "exact_mcnemar",
+            "valid_submission_rate_interval": {
+                "method": "wilson_score",
+                "level": 0.95,
+            },
         },
     }
 
@@ -227,6 +233,8 @@ def test_complete_analysis_is_deterministic_and_paired():
     assert first["comparisons"]["H1"]["equal_stratum_mean_difference"] == pytest.approx(0.25)
     assert first["comparisons"]["H2"]["equal_stratum_mean_difference"] == pytest.approx(0.25)
     assert first["comparisons"]["H1"]["bootstrap_ci"] == pytest.approx({"low": 0.25, "high": 0.25})
+    assert first["valid_submission_rates"]["A"]["rate"] == 1.0
+    assert first["valid_submission_rates"]["A"]["confidence_interval"]["method"] == "wilson_score"
 
 
 def test_agent_failure_remains_at_dummy_performance():
@@ -345,6 +353,19 @@ def test_exact_permutation_mcnemar_and_holm_helpers():
     ]
     assert exact_mcnemar_pvalue(paired_validity)["p_value"] == 1.0
     assert holm_adjust({"H1": 0.01, "H2": 0.04}) == {"H1": 0.02, "H2": 0.04}
+
+
+def test_wilson_rate_intervals_are_preregistered_per_arm():
+    low, high = wilson_score_interval(1, 2, level=0.95)
+    assert 0.0 < low < 0.5 < high < 1.0
+    rows = [
+        {"arm": arm, "valid_submit": replicate == 0}
+        for arm in ("A", "B", "C")
+        for replicate in range(2)
+    ]
+    rates = valid_submission_rates(rows, level=0.95)
+    assert set(rates) == {"A", "B", "C"}
+    assert all(item["rate"] == 0.5 for item in rates.values())
 
 
 def test_result_publish_is_idempotent_and_concurrent_safe(tmp_path):

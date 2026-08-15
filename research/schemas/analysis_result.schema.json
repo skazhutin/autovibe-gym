@@ -16,6 +16,7 @@
     "completeness",
     "reconciliation_hash",
     "rows",
+    "valid_submission_rates",
     "comparisons",
     "result_hash"
   ],
@@ -39,6 +40,16 @@
     },
     "reconciliation_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "rows": { "type": "array", "minItems": 1 },
+    "valid_submission_rates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["A", "B", "C"],
+      "properties": {
+        "A": { "type": "object" },
+        "B": { "type": "object" },
+        "C": { "type": "object" }
+      }
+    },
     "comparisons": {
       "type": "object",
       "additionalProperties": false,

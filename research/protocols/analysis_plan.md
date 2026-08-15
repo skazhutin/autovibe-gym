@@ -91,7 +91,7 @@ counts.
 ## Valid submission and failure outcomes
 
 - Compare paired valid/failed status with exact McNemar testing.
-- Report arm-specific rates with confidence intervals.
+- Report arm-specific rates with 95% Wilson score confidence intervals.
 - Show every failure category by arm, dataset, and model.
 - Report hidden-test score twice: over all agent outcomes using the declared
   failure adjustment, and conditionally among successful submissions. The latter

@@ -22,7 +22,7 @@ that block a budget-matched confirmatory study.
 | Auditable run artifacts (PR 2) | Merged | PR 2 was rebased onto merged PR 1, reverified (`289 passed, 2 skipped` locally plus required GitHub `Python tests` success), and squash-merged as `67069a3` |
 | Causal runner behavior changes (PR 3) | Merged as PR #65 | Research-mode A/B/C runners share one pre-call-enforced episode budget, common no-autofit submission validation, and at most one hidden evaluation. Default product behavior remains compatible. After review fixes, `307 passed, 2 skipped` locally and both GitHub checks passed. Fast-forward merge preserved all three commits with author/committer `JapanDino`; `main` advanced to `385a09f` |
 | Confirmatory experiment planner (PR 4) | Merged as PR #66 | Deterministic immutable A/B/C matrix expansion, portable blocked randomization, plan/config hashes, concurrent-safe no-overwrite writes, manifest-based resume, duplicate/condition-drift/category rejection, and same-condition infrastructure replacement queue. Review-fix full suite: `338 passed, 2 skipped`; both GitHub checks passed. Fast-forward merge preserved JapanDino authorship and advanced `main` to `1b12017` |
-| Preregistered primary analysis (PR 5a) | In review as PR #67 | Synthetic-only FANU, fail-closed completeness, paired B-A/C-B analysis, equal-stratum bootstrap/permutation, exact McNemar, Holm correction, raw pairs/stratum summaries, content hashes, schemas, and concurrent-safe no-overwrite output. Review fixes bind protocol and FANU references to the immutable plan. Focused: `63 passed`; no real manifest or outcome was read |
+| Preregistered primary analysis (PR 5a) | In review as PR #67 | Synthetic-only FANU, fail-closed completeness, paired B-A/C-B analysis, equal-stratum bootstrap/permutation, exact McNemar, 95% Wilson rate intervals, Holm correction, raw pairs/stratum summaries, content hashes, schemas, and concurrent-safe no-overwrite output. Review fixes bind protocol and FANU references to the immutable plan. Focused: `64 passed`; no real manifest or outcome was read |
 | Research PR policy | Done | `docs/RESEARCH_PR_POLICY.md` defines authorization, identity, Draft/Ready/Merge gates, PR 1–6 timing, pilot/freeze/confirmatory boundaries, PR body, commit evidence, and post-merge rules |
 | Commit/PR identity | Enforced by policy/config | Commits use `JapanDino <klim.i.rumyantsev@gmail.com>`; PR author must be GitHub login `JapanDino`; identity is checked independently before commit and before PR |
 
@@ -227,10 +227,15 @@ Paper V1 preregistered-analysis cycle (PR 5a, 2026-08-15):
   planner now carries both canonical hashes; analysis recomputes, rejects drift,
   and propagates them into the result. Synthetic tampering regressions cover
   changed seeds/resampling and changed directions/dummy/reference values.
+- Follow-up review correctly identified that arm-specific valid-submission
+  confidence intervals were required but not frozen. The protocol and pipeline
+  now specify and emit 95% Wilson score intervals; paired rate differences still
+  use exact McNemar. A separate identity comment cited a nonexistent commit SHA;
+  both actual PR commits independently show JapanDino as author and committer.
 - Added versioned frozen-reference/result schemas, CLI/docs, and synthetic
   fixtures. Review-fix focused planner/analysis/protocol/artifact suite:
-  `63 passed`.
-- Full `python -m pytest -q`: `348 passed, 2 skipped`, one existing Jupyter path
+  `64 passed`.
+- Full `python -m pytest -q`: `349 passed, 2 skipped`, one existing Jupyter path
   deprecation warning. `git diff --check` passed.
 - No API call, pilot, exact confirmatory plan, real manifest, hidden-test score,
   confirmatory result, table, or claim was created or inspected.
@@ -526,7 +531,7 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 
 | Date | Change |
 |------|--------|
-| 2026-08-15 | Fast-forward merged Paper V1 PR 4 (#66) at `1b12017` after all review threads and GitHub checks passed, preserving author/committer `JapanDino`. Published PR 5a as #67: fail-closed completeness, frozen FANU references, paired H1/H2, equal-stratum bootstrap/permutation, exact McNemar, Holm, raw/stratum outputs, schemas, and immutable content-hashed publication. Review fixes cryptographically bind protocol and reference payloads to the plan. Synthetic-only focused suite after fixes: `63 passed`; full suite: `348 passed, 2 skipped`. No API/pilot/confirmatory outcome was created or inspected. |
+| 2026-08-15 | Fast-forward merged Paper V1 PR 4 (#66) at `1b12017` after all review threads and GitHub checks passed, preserving author/committer `JapanDino`. Published PR 5a as #67: fail-closed completeness, frozen FANU references, paired H1/H2, equal-stratum bootstrap/permutation, exact McNemar, 95% Wilson rate intervals, Holm, raw/stratum outputs, schemas, and immutable content-hashed publication. Review fixes cryptographically bind protocol and reference payloads to the plan. Synthetic-only focused suite after fixes: `64 passed`; full suite: `349 passed, 2 skipped`. No API/pilot/confirmatory outcome was created or inspected. |
 | 2026-08-15 | Fast-forward merged Paper V1 PR 3 (#65) at `385a09f`, preserving author/committer `JapanDino`; all final GitHub checks passed. Published PR 4 as #66: deterministic immutable condition planning, 120-condition acceptance fixture, SHA-256 blocked A/B/C ordering, concurrent-safe no-overwrite plan creation, exact frozen-budget/category gates, manifest resume/duplicate checks, and infrastructure-only replacement queue. Review-fix focused suite: `66 passed`; full suite: `338 passed, 2 skipped`. No plan with real identities and no API/pilot/confirmatory run was created. |
 | 2026-08-14 | Merged Paper V1 PR 1 (`6bb75d1`) and PR 2 (`67069a3`) in order after required checks. Published PR 3 as #65: pre-call global episode budgets and audit events, common no-autofit submission validation, one-shot hidden evaluation without repair feedback, reasoning/cached-token observability, and research-only suppression of post-outcome LLM summaries. Review follow-up removed reasoning-token double counting and ensured budget exhaustion still finalizes the single-shot manifest. Full offline suite: `307 passed, 2 skipped`; required GitHub `Python tests` passed; the separate Docker integration job remains flaky at kernel readiness. No API/pilot/confirmatory run occurred. |
 | 2026-08-12 | Codified mandatory authorship and publication rules: every commit must use `JapanDino <klim.i.rumyantsev@gmail.com>`, every PR must be authored by GitHub login `JapanDino`, and stage/commit/push/PR/merge require separate explicit authorization. Added `docs/RESEARCH_PR_POLICY.md` with Draft/Ready/Merge timing, PR 1–6 sequencing, preregistered PR 5a before freeze, pilot/confirmatory gates, PR-body evidence requirements, and post-merge provenance rules. |
