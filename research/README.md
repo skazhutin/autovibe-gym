@@ -10,7 +10,8 @@ pilot evidence and must not be merged with the future confirmatory series.
 
 ## Current state
 
-- Protocol status: frozen by annotated tag `paper-v1-experiment-freeze`.
+- Protocol status: result-blind freeze amendment v2 is awaiting review and tag
+  `paper-v1-experiment-freeze-v2`; it supersedes the immutable original tag.
 - Phase 0 code audit: complete at Git commit `1504cc0` (`origin/main` on
   2026-08-12).
 - Confirmatory runs: authorized but not started; the fail-closed launcher must
@@ -25,9 +26,13 @@ pilot evidence and must not be merged with the future confirmatory series.
 - Primary analysis pipeline: preregistered in PR 5a and tested only on synthetic
   manifests; it does not contain or imply a confirmatory result.
 
-The frozen contract and exact plan were merged in PR #69 and are anchored by
-the annotated tag above. Future documentation changes do not alter that tagged
-contract or the bound execution commit.
+The original contract and exact plan were merged in PR #69 and anchored by tag
+`paper-v1-experiment-freeze`. The first launch stopped before manifest creation
+or provider access because integer `1800` and runner-emitted float `1800.0`
+produced different canonical hashes. The v2 amendment changes only that numeric
+serialization, regenerates the complete plan before outcomes, and retains the
+original tag and failed-launch audit trail. See
+[`protocols/amendments/2026-08-15-freeze-v2.md`](protocols/amendments/2026-08-15-freeze-v2.md).
 
 ## Arm mapping
 
