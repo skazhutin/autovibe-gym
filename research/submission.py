@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import multiprocessing
 import os
 import subprocess
@@ -20,19 +21,36 @@ DEFAULT_PREDICTION_TIMEOUT_SECONDS = 120.0
 DOCKER_PREDICTION_WORKER = """\
 from pathlib import Path
 import cloudpickle
+import json
+import numpy as np
 
 root = Path('/work')
 try:
     model = cloudpickle.loads((root / 'model.pkl').read_bytes())
     features = cloudpickle.loads((root / 'features.pkl').read_bytes())
-    result = {'ok': True, 'predictions': model.predict(features)}
+    values = np.asarray(model.predict(features))
+    if values.ndim != 1:
+        raise ValueError('Predictions must be a one-dimensional vector.')
+    encoded = []
+    for value in values.tolist():
+        if isinstance(value, np.generic):
+            value = value.item()
+        if value is not None and not isinstance(value, (str, bool, int, float)):
+            raise TypeError(
+                'Predictions must contain only JSON scalar values, not '
+                + type(value).__name__
+            )
+        encoded.append(value)
+    result = {'ok': True, 'predictions': encoded}
+    payload = json.dumps(result, allow_nan=False)
 except BaseException as error:
     result = {
         'ok': False,
         'error_type': type(error).__name__,
         'error_message': str(error)[:2000],
     }
-(root / 'result.pkl').write_bytes(cloudpickle.dumps(result))
+    payload = json.dumps(result, allow_nan=False)
+(root / 'result.json').write_text(payload, encoding='utf-8')
 """
 
 
@@ -50,11 +68,20 @@ class SubmissionValidation:
     predictions: Any = field(default=None, repr=False, compare=False)
 
 
+def prediction_backend_for_execution(execution_backend: str | None) -> str:
+    return (
+        "docker"
+        if (execution_backend or "").strip().lower() == "docker"
+        else "process"
+    )
+
+
 def validate_submission_candidate(
     model: Any,
     raw_features: pd.DataFrame,
     *,
     timeout_seconds: float | None = None,
+    prediction_backend: str | None = None,
 ) -> SubmissionValidation:
     if model is None:
         return SubmissionValidation(
@@ -88,6 +115,7 @@ def validate_submission_candidate(
         model_payload,
         raw_features,
         timeout_seconds=_prediction_timeout(timeout_seconds),
+        prediction_backend=prediction_backend,
     )
     if not prediction["ok"]:
         return SubmissionValidation(
@@ -121,9 +149,15 @@ class HiddenEvaluationAlreadyAttempted(RuntimeError):
 
 
 class HiddenEvaluationGate:
-    def __init__(self, *, prediction_timeout_seconds: float | None = None):
+    def __init__(
+        self,
+        *,
+        prediction_timeout_seconds: float | None = None,
+        prediction_backend: str | None = None,
+    ):
         self.attempted = False
         self.prediction_timeout_seconds = prediction_timeout_seconds
+        self.prediction_backend = prediction_backend
 
     def evaluate(
         self,
@@ -147,6 +181,7 @@ class HiddenEvaluationGate:
             model_payload,
             raw_features,
             timeout_seconds=_prediction_timeout(self.prediction_timeout_seconds),
+            prediction_backend=self.prediction_backend,
         )
         if not prediction["ok"]:
             raise RuntimeError(
@@ -220,8 +255,11 @@ def _predict_isolated(
     raw_features: pd.DataFrame,
     *,
     timeout_seconds: float,
+    prediction_backend: str | None = None,
 ) -> dict[str, Any]:
-    backend = os.getenv("AUTOVIBE_SUBMISSION_PREDICT_BACKEND", "").strip().lower()
+    backend = (prediction_backend or "").strip().lower()
+    if not backend:
+        backend = os.getenv("AUTOVIBE_SUBMISSION_PREDICT_BACKEND", "").strip().lower()
     if not backend:
         backend = (
             "docker"
@@ -384,7 +422,7 @@ def _predict_docker(
                 "error_type": "PredictionBackendError",
                 "error_message": str(error)[:2000],
             }
-        result_path = root / "result.pkl"
+        result_path = root / "result.json"
         if completed.returncode != 0 or not result_path.is_file():
             detail = (completed.stderr or completed.stdout or "no process output")[-1000:]
             return {
@@ -395,11 +433,49 @@ def _predict_docker(
                     f"(exit code {completed.returncode}): {detail}"
                 ),
             }
-        try:
-            return cloudpickle.loads(result_path.read_bytes())
-        except Exception as error:
+        return _decode_docker_result(result_path.read_text(encoding="utf-8"))
+
+
+def _decode_docker_result(payload: str) -> dict[str, Any]:
+    def reject_nonfinite(value: str) -> None:
+        raise ValueError(f"Non-finite JSON number is forbidden: {value}")
+
+    try:
+        result = json.loads(payload, parse_constant=reject_nonfinite)
+    except Exception as error:
+        return {
+            "ok": False,
+            "error_type": "PredictionContractError",
+            "error_message": f"Cannot read isolated predictions: {error}",
+        }
+    if not isinstance(result, dict) or not isinstance(result.get("ok"), bool):
+        return {
+            "ok": False,
+            "error_type": "PredictionContractError",
+            "error_message": "Isolated evaluator returned an invalid result envelope.",
+        }
+    if result["ok"]:
+        predictions = result.get("predictions")
+        if not isinstance(predictions, list) or any(
+            value is not None and not isinstance(value, (str, bool, int, float))
+            for value in predictions
+        ):
             return {
                 "ok": False,
                 "error_type": "PredictionContractError",
-                "error_message": f"Cannot read isolated predictions: {error}",
+                "error_message": "Isolated predictions are not a JSON scalar vector.",
             }
+        return {"ok": True, "predictions": predictions}
+    if not isinstance(result.get("error_type"), str) or not isinstance(
+        result.get("error_message"), str
+    ):
+        return {
+            "ok": False,
+            "error_type": "PredictionContractError",
+            "error_message": "Isolated evaluator returned an invalid error envelope.",
+        }
+    return {
+        "ok": False,
+        "error_type": result["error_type"],
+        "error_message": result["error_message"],
+    }

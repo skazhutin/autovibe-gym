@@ -10,6 +10,7 @@ import research.submission as submission_module
 from research.submission import (
     HiddenEvaluationAlreadyAttempted,
     HiddenEvaluationGate,
+    prediction_backend_for_execution,
     validate_submission_candidate,
 )
 
@@ -119,6 +120,57 @@ def test_docker_kernel_selects_secret_isolated_prediction_backend(monkeypatch):
     assert captured["model_payload"]
     assert captured["rows"] == len(features)
     assert captured["timeout_seconds"] == 120.0
+
+
+def test_execution_backend_selects_matching_prediction_isolation():
+    assert prediction_backend_for_execution("docker") == "docker"
+    assert prediction_backend_for_execution("DOCKER") == "docker"
+    assert prediction_backend_for_execution("subprocess") == "process"
+    assert prediction_backend_for_execution(None) == "process"
+
+
+def test_explicit_prediction_backend_overrides_kernel_environment(monkeypatch):
+    features, _ = _data()
+    captured = {}
+
+    def fake_docker(model_payload, raw_features, *, timeout_seconds):
+        captured["rows"] = len(raw_features)
+        return {"ok": True, "predictions": [0.0] * len(raw_features)}
+
+    monkeypatch.setenv("AUTOVIBE_KERNEL_BACKEND", "local")
+    monkeypatch.setattr(submission_module, "_predict_docker", fake_docker)
+
+    result = validate_submission_candidate(
+        _NullModel(), features, prediction_backend="docker"
+    )
+
+    assert result.valid
+    assert captured["rows"] == len(features)
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        '{"ok": true, "predictions": [{"value": 1}]}',
+        '{"ok": true, "predictions": [NaN]}',
+        '{"ok": false, "error_type": "RuntimeError"}',
+    ],
+)
+def test_docker_result_decoder_rejects_non_scalar_or_incomplete_payloads(payload):
+    result = submission_module._decode_docker_result(payload)
+
+    assert not result["ok"]
+    assert result["error_type"] == "PredictionContractError"
+
+
+def test_docker_result_decoder_accepts_typed_json_scalar_vector():
+    result = submission_module._decode_docker_result(
+        '{"ok": true, "predictions": [1, 2.5, "yes", true, null]}'
+    )
+
+    assert result == {"ok": True, "predictions": [1, 2.5, "yes", True, None]}
+    assert "result.json" in submission_module.DOCKER_PREDICTION_WORKER
+    assert "cloudpickle.dumps(result)" not in submission_module.DOCKER_PREDICTION_WORKER
 
 
 def test_hidden_evaluation_gate_allows_exactly_one_attempt_even_after_failure():

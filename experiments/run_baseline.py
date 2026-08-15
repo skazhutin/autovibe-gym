@@ -32,7 +32,11 @@ from research.runner_integration import (
     wrap_llm,
 )
 from research.budget import BudgetExhausted
-from research.submission import HiddenEvaluationGate, validate_submission_candidate
+from research.submission import (
+    HiddenEvaluationGate,
+    prediction_backend_for_execution,
+    validate_submission_candidate,
+)
 from gym.data_profile import build_dataset_card
 from gym.datasets import load_dataset_splits, resolve_metric
 from gym.executor import CodeExecutor
@@ -131,6 +135,10 @@ def main():
         "Assign your best trained model to: model"
     )
 
+    execution_backend = args.executor_backend or os.getenv(
+        "AUTOVIBE_EXECUTOR_BACKEND", "docker"
+    )
+    prediction_backend = prediction_backend_for_execution(execution_backend)
     recorder = start_research_run(
         args,
         arm="single_shot",
@@ -147,7 +155,7 @@ def main():
             else {"logical_llm_calls": 1, "max_tokens_per_call": max_tokens}
         ),
         execution_policy={
-            "backend": args.executor_backend or os.getenv("AUTOVIBE_EXECUTOR_BACKEND", "docker"),
+            "backend": execution_backend,
             "timeout_seconds": args.sandbox_timeout,
         },
         episode_budget=episode_budget,
@@ -172,7 +180,7 @@ def main():
             "dataset": dataset_name,
             "experiment_type": "baseline_single_shot",
             "max_tokens": max_tokens,
-            "executor_backend": args.executor_backend or os.getenv("AUTOVIBE_EXECUTOR_BACKEND", "docker"),
+            "executor_backend": execution_backend,
             **mode_metadata_params(args, "single_shot"),
             **research_mlflow_params(recorder),
         })
@@ -197,7 +205,7 @@ def main():
         executor = wrap_executor(
             CodeExecutor(
                 timeout=args.sandbox_timeout,
-                backend=args.executor_backend,
+                backend=execution_backend,
                 docker_image=args.sandbox_image,
             ),
             recorder,
@@ -223,7 +231,7 @@ def main():
         submit_failure_type = "no_candidate_found"
         finalize_path = "failed"
         submit_error = ""
-        hidden_gate = HiddenEvaluationGate()
+        hidden_gate = HiddenEvaluationGate(prediction_backend=prediction_backend)
         if budget_stop_reason is not None:
             final_status = "budget_exhausted"
             null_reason = f"Episode stopped before a valid candidate: {budget_stop_reason}."
@@ -254,7 +262,11 @@ def main():
                         preflight_ok = False
                         validation_error = f"{type(exc).__name__}: {exc}"
             else:
-                validation = validate_submission_candidate(model_obj, X_val)
+                validation = validate_submission_candidate(
+                    model_obj,
+                    X_val,
+                    prediction_backend=prediction_backend,
+                )
                 preflight_ok = validation.valid
                 validation_error = (
                     f"{validation.error_type or 'SubmissionValidationError'}: "

@@ -34,7 +34,11 @@ from research.runner_integration import (
     wrap_llm,
 )
 from research.budget import BudgetExhausted
-from research.submission import HiddenEvaluationGate, validate_submission_candidate
+from research.submission import (
+    HiddenEvaluationGate,
+    prediction_backend_for_execution,
+    validate_submission_candidate,
+)
 from gym.data_profile import build_dataset_card
 from gym.datasets import load_dataset_splits, resolve_metric
 from gym.executor import CodeExecutor
@@ -177,6 +181,10 @@ def main():
         "Assign your trained model to variable: model"
     )
 
+    execution_backend = args.executor_backend or os.getenv(
+        "AUTOVIBE_EXECUTOR_BACKEND", "docker"
+    )
+    prediction_backend = prediction_backend_for_execution(execution_backend)
     recorder = start_research_run(
         args,
         arm="repeated_single_shot",
@@ -196,7 +204,7 @@ def main():
             }
         ),
         execution_policy={
-            "backend": args.executor_backend or os.getenv("AUTOVIBE_EXECUTOR_BACKEND", "docker"),
+            "backend": execution_backend,
             "timeout_seconds": sandbox_timeout,
         },
         episode_budget=episode_budget,
@@ -210,7 +218,7 @@ def main():
     executor = wrap_executor(
         CodeExecutor(
             timeout=sandbox_timeout,
-            backend=args.executor_backend,
+            backend=execution_backend,
             docker_image=args.sandbox_image,
         ),
         recorder,
@@ -230,7 +238,7 @@ def main():
             "max_attempts": max_attempts,
             "max_tokens": max_tokens,
             "sandbox_timeout": sandbox_timeout,
-            "executor_backend": args.executor_backend or os.getenv("AUTOVIBE_EXECUTOR_BACKEND", "docker"),
+            "executor_backend": execution_backend,
             "dataset_split_strategy": splits.metadata.split_strategy,
             "dataset_role": splits.metadata.role,
             "dataset_sampled": str(splits.metadata.sampled),
@@ -250,7 +258,7 @@ def main():
         attempt_records: list[dict] = []
         best_attempt_idx = -1
         budget_stop_reason = None
-        hidden_gate = HiddenEvaluationGate()
+        hidden_gate = HiddenEvaluationGate(prediction_backend=prediction_backend)
 
         for attempt in range(max_attempts):
             prompt = _build_attempt_prompt(task_prompt, best_val, attempt)
@@ -310,7 +318,11 @@ def main():
                 validation = None
                 try:
                     if episode_budget is not None:
-                        validation = validate_submission_candidate(model_obj, X_val)
+                        validation = validate_submission_candidate(
+                            model_obj,
+                            X_val,
+                            prediction_backend=prediction_backend,
+                        )
                         if not validation.valid:
                             raise RuntimeError(
                                 f"{validation.error_type or 'SubmissionValidationError'}: "
@@ -384,6 +396,7 @@ def main():
                     validation = validate_submission_candidate(
                         best_model,
                         val.drop(columns=[target_col]),
+                        prediction_backend=prediction_backend,
                     )
                     if not validation.valid:
                         raise RuntimeError(
