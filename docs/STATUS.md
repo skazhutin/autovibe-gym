@@ -1,6 +1,6 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-08-15 (Paper V1 PR 1–4 are merged; PR 5a primary-analysis code is locally verified, and no research run was executed)
+**Last updated:** 2026-08-15 (Paper V1 PR 1–5a are merged; protocol freeze remains blocked, and no research run was executed)
 **Phase:** Paper V1 provenance infrastructure alongside product hardening.
 
 ---
@@ -22,7 +22,7 @@ that block a budget-matched confirmatory study.
 | Auditable run artifacts (PR 2) | Merged | PR 2 was rebased onto merged PR 1, reverified (`289 passed, 2 skipped` locally plus required GitHub `Python tests` success), and squash-merged as `67069a3` |
 | Causal runner behavior changes (PR 3) | Merged as PR #65 | Research-mode A/B/C runners share one pre-call-enforced episode budget, common no-autofit submission validation, and at most one hidden evaluation. Default product behavior remains compatible. After review fixes, `307 passed, 2 skipped` locally and both GitHub checks passed. Fast-forward merge preserved all three commits with author/committer `JapanDino`; `main` advanced to `385a09f` |
 | Confirmatory experiment planner (PR 4) | Merged as PR #66 | Deterministic immutable A/B/C matrix expansion, portable blocked randomization, plan/config hashes, concurrent-safe no-overwrite writes, manifest-based resume, duplicate/condition-drift/category rejection, and same-condition infrastructure replacement queue. Review-fix full suite: `338 passed, 2 skipped`; both GitHub checks passed. Fast-forward merge preserved JapanDino authorship and advanced `main` to `1b12017` |
-| Preregistered primary analysis (PR 5a) | In review as PR #67 | Synthetic-only FANU, fail-closed completeness, paired B-A/C-B analysis, equal-stratum bootstrap/permutation, exact McNemar, 95% Wilson rate intervals, all-outcome/successful-only score summaries, ledger reconciliation, Holm correction, raw pairs/stratum summaries, content hashes, schemas, and concurrent-safe no-overwrite output. Review fixes bind protocol and FANU references to the immutable plan. Focused: `66 passed`; no real manifest or outcome was read |
+| Preregistered primary analysis (PR 5a) | Merged as PR #67 | Synthetic-only FANU, fail-closed completeness, paired B-A/C-B analysis, equal-stratum bootstrap/permutation, exact McNemar, 95% Wilson rate intervals, all-outcome/successful-only score summaries, ledger reconciliation, Holm correction, raw pairs/stratum summaries, content hashes, schemas, and concurrent-safe no-overwrite output. Final focused suite: `66 passed`; full: `351 passed, 2 skipped`; GitHub `Python tests` passed. Fast-forward merge preserved four JapanDino commits and advanced `main` to `b1cd5f5` |
 | Research PR policy | Done | `docs/RESEARCH_PR_POLICY.md` defines authorization, identity, Draft/Ready/Merge gates, PR 1–6 timing, pilot/freeze/confirmatory boundaries, PR body, commit evidence, and post-merge rules |
 | Commit/PR identity | Enforced by policy/config | Commits use `JapanDino <klim.i.rumyantsev@gmail.com>`; PR author must be GitHub login `JapanDino`; identity is checked independently before commit and before PR |
 
@@ -246,6 +246,11 @@ Paper V1 preregistered-analysis cycle (PR 5a, 2026-08-15):
   deprecation warning. `git diff --check` passed.
 - No API call, pilot, exact confirmatory plan, real manifest, hidden-test score,
   confirmatory result, table, or claim was created or inspected.
+- PR #67 passed the final GitHub `Python tests` job in 5m02s. All actionable
+  review threads were answered and resolved; repeated identity comments citing
+  repository-absent SHAs were closed with local-object, GitHub-API, and exact
+  PR-range evidence. The PR was fast-forward merged at `b1cd5f5`, preserving all
+  four commits with JapanDino as both author and committer.
 
 Last local run:
 
@@ -521,9 +526,9 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 4. [x] Reviewed and fast-forward merged PR #66: complete
        condition matrix/hash, blocked randomization, resume/idempotency,
        duplicate rejection, replacement queue, schemas, CLI, and acceptance checks.
-5. [ ] Publish and review PR 5a: preregistered FANU, completeness, paired
-       analysis, and synthetic fixtures before protocol freeze or confirmatory
-       outcome inspection. Local implementation and regression verification pass.
+5. [x] Published, reviewed, and fast-forward merged PR #67: preregistered FANU,
+       completeness, paired analysis, valid-rate intervals, score sensitivities,
+       ledger reconciliation, and synthetic fixtures before any outcome inspection.
 6. [ ] Run only a labeled availability/budget pilot after PR 2–5a and before
        protocol freeze; do not run confirmatory episodes or inspect confirmatory
        outcomes in the meantime.
@@ -538,6 +543,7 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 
 | Date | Change |
 |------|--------|
+| 2026-08-15 | Fast-forward merged Paper V1 PR 5a (#67) at `b1cd5f5` after final GitHub `Python tests` success and resolution of all actionable review threads. Preserved four commits with author/committer `JapanDino`. The frozen analysis now fails closed on incomplete/dirty/drifted inputs, binds protocol/reference hashes, reconciles disk ledgers, and preregisters FANU H1/H2, Wilson valid-rate intervals, McNemar/Holm, and all-outcome/successful-only summaries. No API, pilot, real manifest, confirmatory outcome, or scientific claim was created or inspected. |
 | 2026-08-15 | Fast-forward merged Paper V1 PR 4 (#66) at `1b12017` after all review threads and GitHub checks passed, preserving author/committer `JapanDino`. Published PR 5a as #67: fail-closed completeness, frozen FANU references, paired H1/H2, equal-stratum bootstrap/permutation, exact McNemar, 95% Wilson rate intervals, all-outcome/successful-only score summaries, ledger reconciliation, Holm, raw/stratum outputs, schemas, and immutable content-hashed publication. Review fixes cryptographically bind protocol and reference payloads to the plan. Synthetic-only focused suite after fixes: `66 passed`; full suite: `351 passed, 2 skipped`. No API/pilot/confirmatory outcome was created or inspected. |
 | 2026-08-15 | Fast-forward merged Paper V1 PR 3 (#65) at `385a09f`, preserving author/committer `JapanDino`; all final GitHub checks passed. Published PR 4 as #66: deterministic immutable condition planning, 120-condition acceptance fixture, SHA-256 blocked A/B/C ordering, concurrent-safe no-overwrite plan creation, exact frozen-budget/category gates, manifest resume/duplicate checks, and infrastructure-only replacement queue. Review-fix focused suite: `66 passed`; full suite: `338 passed, 2 skipped`. No plan with real identities and no API/pilot/confirmatory run was created. |
 | 2026-08-14 | Merged Paper V1 PR 1 (`6bb75d1`) and PR 2 (`67069a3`) in order after required checks. Published PR 3 as #65: pre-call global episode budgets and audit events, common no-autofit submission validation, one-shot hidden evaluation without repair feedback, reasoning/cached-token observability, and research-only suppression of post-outcome LLM summaries. Review follow-up removed reasoning-token double counting and ensured budget exhaustion still finalizes the single-shot manifest. Full offline suite: `307 passed, 2 skipped`; required GitHub `Python tests` passed; the separate Docker integration job remains flaky at kernel readiness. No API/pilot/confirmatory run occurred. |
