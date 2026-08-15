@@ -224,14 +224,94 @@ def _hidden_score(manifest: Mapping[str, Any]) -> float:
     raise AnalysisError(f"successful run {manifest.get('run_id')} is missing its hidden score")
 
 
+def _read_jsonl(path: Path, label: str) -> list[dict[str, Any]]:
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            records = [json.loads(line) for line in handle if line.strip()]
+    except (OSError, json.JSONDecodeError) as exc:
+        raise AnalysisError(f"cannot read {label}: {path}") from exc
+    if not all(isinstance(item, dict) for item in records):
+        raise AnalysisError(f"{label} must contain JSON objects")
+    return records
+
+
+def reconcile_manifest_ledgers(manifest: Mapping[str, Any]) -> dict[str, int]:
+    manifest_path_value = manifest.get("_manifest_path")
+    if not manifest_path_value:
+        raise AnalysisError(
+            "confirmatory analysis requires manifests discovered from immutable disk artifacts"
+        )
+    manifest_path = Path(str(manifest_path_value)).resolve()
+    run_dir = manifest_path.parent
+    artifacts = _mapping(manifest.get("artifacts"), "manifest.artifacts")
+
+    def artifact_path(key: str) -> Path:
+        relative = artifacts.get(key)
+        if not isinstance(relative, str) or not relative:
+            raise AnalysisError(f"manifest.artifacts.{key} is required")
+        resolved = (run_dir / relative).resolve()
+        if not resolved.is_relative_to(run_dir):
+            raise AnalysisError(f"manifest.artifacts.{key} escapes the run directory")
+        return resolved
+
+    usage = _read_jsonl(artifact_path("usage_ledger"), "usage ledger")
+    executions = _read_jsonl(artifact_path("execution_ledger"), "execution ledger")
+    logical_calls = [item for item in usage if item.get("event") == "logical_llm_call"]
+    provider_attempts = [
+        item for item in usage if item.get("event") == "provider_request_attempt"
+    ]
+    expected = {
+        "logical_llm_calls": len(logical_calls),
+        "provider_request_attempts": len(provider_attempts),
+        "input_tokens": sum(int(item.get("input_tokens") or 0) for item in logical_calls),
+        "output_tokens": sum(int(item.get("output_tokens") or 0) for item in logical_calls),
+        "reasoning_tokens": sum(
+            int(item.get("reasoning_tokens") or 0) for item in logical_calls
+        ),
+        "cached_input_tokens": sum(
+            int(item.get("cached_input_tokens") or 0) for item in logical_calls
+        ),
+        "execution_events": len(executions),
+    }
+    declared = _mapping(manifest.get("ledger_totals"), "manifest.ledger_totals")
+    mismatches = {
+        key: {"declared": declared.get(key), "recomputed": value}
+        for key, value in expected.items()
+        if declared.get(key) != value
+    }
+    if mismatches:
+        raise AnalysisError(
+            f"manifest {manifest.get('run_id')} ledger totals do not reconcile",
+            details={"code": "ledger_totals_mismatch", "mismatches": mismatches},
+        )
+    return expected
+
+
 def build_analysis_rows(
     plan: Mapping[str, Any],
     manifests: Iterable[Mapping[str, Any]],
     references: Mapping[str, Any],
+    *,
+    allow_synthetic_in_memory: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     manifests = [dict(item) for item in manifests]
+    reconciled_ledgers: dict[str, Mapping[str, Any]] = {}
     for manifest in manifests:
         validate_manifest(manifest)
+        if manifest["state"] == "completed":
+            provenance = _mapping(manifest.get("provenance"), "manifest.provenance")
+            if provenance.get("git_dirty") is not False:
+                raise AnalysisError(
+                    f"completed run {manifest.get('run_id')} lacks definitive clean-worktree provenance"
+                )
+            if allow_synthetic_in_memory and not manifest.get("_manifest_path"):
+                reconciled_ledgers[str(manifest["run_id"])] = _mapping(
+                    manifest.get("ledger_totals"), "manifest.ledger_totals"
+                )
+            else:
+                reconciled_ledgers[str(manifest["run_id"])] = reconcile_manifest_ledgers(
+                    manifest
+                )
     try:
         reconciliation = reconcile_plan(plan, manifests)
     except PlanError as exc:
@@ -289,7 +369,7 @@ def build_analysis_rows(
         else:
             raise AnalysisError(f"unsupported terminal failure category: {category}")
         condition = planned["condition"]
-        ledger = _mapping(manifest.get("ledger_totals"), "manifest.ledger_totals")
+        ledger = reconciled_ledgers[str(manifest["run_id"])]
         rows.append(
             {
                 "sequence_index": planned["sequence_index"],
@@ -529,6 +609,37 @@ def valid_submission_rates(
     return result
 
 
+def hidden_score_summaries(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    groups: dict[tuple[str, str, str], list[Mapping[str, Any]]] = defaultdict(list)
+    for row in rows:
+        groups[(str(row["arm"]), str(row["dataset_id"]), str(row["model_id"]))].append(
+            row
+        )
+    summaries = []
+    for (arm, dataset_id, model_id), items in sorted(groups.items()):
+        adjusted = [float(item["analysis_score"]) for item in items]
+        successful = [
+            float(item["analysis_score"])
+            for item in items
+            if bool(item["hidden_score_observed"])
+        ]
+        summaries.append(
+            {
+                "arm": arm,
+                "dataset_id": dataset_id,
+                "model_id": model_id,
+                "agent_outcomes": len(items),
+                "failure_adjusted_mean": mean(adjusted),
+                "failure_adjusted_median": median(adjusted),
+                "successful_outcomes": len(successful),
+                "successful_only_mean": mean(successful) if successful else None,
+                "successful_only_median": median(successful) if successful else None,
+                "successful_only_is_selection_biased": True,
+            }
+        )
+    return summaries
+
+
 def holm_adjust(pvalues: Mapping[str, float]) -> dict[str, float]:
     ordered = sorted((float(value), key) for key, value in pvalues.items())
     adjusted: dict[str, float] = {}
@@ -606,12 +717,18 @@ def run_primary_analysis(
     manifests: Sequence[Mapping[str, Any]],
     references: Mapping[str, Any],
     protocol: Mapping[str, Any],
+    allow_synthetic_in_memory: bool = False,
 ) -> dict[str, Any]:
     protocol_hash = canonical_hash(protocol)
     if plan.get("protocol_hash") != protocol_hash:
         raise AnalysisError("protocol hash does not match the immutable plan")
     config = analysis_config_from_protocol(protocol)
-    rows, reconciliation = build_analysis_rows(plan, manifests, references)
+    rows, reconciliation = build_analysis_rows(
+        plan,
+        manifests,
+        references,
+        allow_synthetic_in_memory=allow_synthetic_in_memory,
+    )
     completeness = completeness_table(plan, manifests, rows)
     comparisons = {
         hypothesis_id: analyze_comparison(
@@ -646,6 +763,7 @@ def run_primary_analysis(
             rows,
             level=float(config["valid_submission_rate_interval"]["level"]),
         ),
+        "hidden_score_summaries": hidden_score_summaries(rows),
         "comparisons": comparisons,
     }
     result["result_hash"] = canonical_hash(result)

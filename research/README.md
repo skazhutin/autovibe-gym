@@ -177,13 +177,18 @@ python -m research.analysis `
 
 The pipeline refuses incomplete matrices, condition drift, invalid replacement
 chains, mismatched plan/reference identities, zero FANU denominators, successful
-runs without exactly one hidden evaluation, and failed runs marked as valid. It
-keeps agent failures at dummy performance and rejects infrastructure attempts as
-terminal outcomes. H1 (`B-A`) and H2 (`C-B`) are paired by
+runs without exactly one hidden evaluation, dirty or unknown worktree
+provenance, ledger/manifest total drift, and failed runs marked as valid. It
+recomputes resource totals from immutable usage/execution ledgers, keeps agent
+failures at dummy performance, and rejects infrastructure attempts as terminal
+outcomes. H1 (`B-A`) and H2 (`C-B`) are paired by
 dataset/model/replicate, aggregate dataset-model strata equally, and apply the
 protocol bootstrap, permutation, exact McNemar, and Holm procedures.
 Arm-specific valid-submission rates use the preregistered 95% Wilson score
 interval; the paired rate comparison remains exact McNemar.
+Per-arm/dataset/model hidden-score summaries include both failure-adjusted all-
+outcome statistics and successful-only sensitivity statistics, with the latter
+explicitly marked as selection-biased.
 
 The immutable plan carries both the canonical protocol hash and the canonical
 FANU-reference hash. Analysis recomputes both hashes, refuses a mismatch, and

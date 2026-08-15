@@ -1,4 +1,5 @@
 import copy
+import json
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
@@ -9,6 +10,7 @@ from research.analysis import (
     exact_mcnemar_pvalue,
     holm_adjust,
     paired_permutation_pvalue,
+    reconcile_manifest_ledgers,
     run_primary_analysis,
     valid_submission_rates,
     wilson_score_interval,
@@ -16,6 +18,10 @@ from research.analysis import (
 )
 from research.planner import build_confirmatory_plan
 from research.run_artifacts import canonical_hash
+
+
+def _run_analysis(**kwargs):
+    return run_primary_analysis(allow_synthetic_in_memory=True, **kwargs)
 
 
 def _reference_payload():
@@ -160,7 +166,10 @@ def _manifest(item, run_id, *, category="success", score=0.7, rerun_of=None):
         "started_at": "2026-08-15T00:00:00Z",
         "completed_at": "2026-08-15T00:01:00Z",
         "condition": copy.deepcopy(item["condition"]),
-        "provenance": {"git_commit": item["condition"]["git_commit"]},
+        "provenance": {
+            "git_commit": item["condition"]["git_commit"],
+            "git_dirty": False,
+        },
         "failure_category": category,
         "final_status": category,
         "summary": {
@@ -215,13 +224,13 @@ def test_fanu_supports_both_directions_and_does_not_clip():
 
 def test_complete_analysis_is_deterministic_and_paired():
     plan, manifests = _complete_fixture()
-    first = run_primary_analysis(
+    first = _run_analysis(
         plan=plan,
         manifests=manifests,
         references=_references(plan),
         protocol=_protocol(),
     )
-    second = run_primary_analysis(
+    second = _run_analysis(
         plan=plan,
         manifests=list(reversed(manifests)),
         references=_references(plan),
@@ -243,7 +252,7 @@ def test_agent_failure_remains_at_dummy_performance():
     manifests = [item for item in manifests if item["condition_id"] != target["condition_id"]]
     manifests.append(_manifest(target, "run_failed", category="invalid_submission"))
 
-    result = run_primary_analysis(
+    result = _run_analysis(
         plan=plan,
         manifests=manifests,
         references=_references(plan),
@@ -252,12 +261,84 @@ def test_agent_failure_remains_at_dummy_performance():
     row = next(item for item in result["rows"] if item["run_id"] == "run_failed")
     assert row["fanu"] == 0.0
     assert row["hidden_score_observed"] is False
+    summary = next(
+        item
+        for item in result["hidden_score_summaries"]
+        if item["arm"] == "B"
+    )
+    assert summary["agent_outcomes"] == 2
+    assert summary["successful_outcomes"] == 1
+    assert summary["successful_only_is_selection_biased"] is True
+
+
+def test_dirty_or_unknown_worktree_provenance_blocks_analysis():
+    plan, manifests = _complete_fixture()
+    manifests[0]["provenance"]["git_dirty"] = True
+    with pytest.raises(AnalysisError, match="clean-worktree"):
+        _run_analysis(
+            plan=plan,
+            manifests=manifests,
+            references=_references(plan),
+            protocol=_protocol(),
+        )
+
+    manifests[0]["provenance"].pop("git_dirty")
+    with pytest.raises(AnalysisError, match="clean-worktree"):
+        _run_analysis(
+            plan=plan,
+            manifests=manifests,
+            references=_references(plan),
+            protocol=_protocol(),
+        )
+
+
+def test_disk_manifest_totals_are_recomputed_from_ledgers(tmp_path):
+    usage = [
+        {
+            "event": "logical_llm_call",
+            "input_tokens": 10,
+            "output_tokens": 3,
+            "reasoning_tokens": 2,
+            "cached_input_tokens": 1,
+        },
+        {"event": "provider_request_attempt"},
+    ]
+    executions = [{"event": "code_execution"}]
+    (tmp_path / "usage_ledger.jsonl").write_text(
+        "".join(json.dumps(item) + "\n" for item in usage), encoding="utf-8"
+    )
+    (tmp_path / "execution_ledger.jsonl").write_text(
+        "".join(json.dumps(item) + "\n" for item in executions), encoding="utf-8"
+    )
+    manifest = {
+        "run_id": "run_ledger",
+        "_manifest_path": str(tmp_path / "run_manifest.json"),
+        "artifacts": {
+            "usage_ledger": "usage_ledger.jsonl",
+            "execution_ledger": "execution_ledger.jsonl",
+        },
+        "ledger_totals": {
+            "logical_llm_calls": 1,
+            "provider_request_attempts": 1,
+            "input_tokens": 10,
+            "output_tokens": 3,
+            "reasoning_tokens": 2,
+            "cached_input_tokens": 1,
+            "execution_events": 1,
+        },
+    }
+
+    assert reconcile_manifest_ledgers(manifest) == manifest["ledger_totals"]
+    manifest["ledger_totals"]["input_tokens"] = 999
+    with pytest.raises(AnalysisError, match="do not reconcile") as caught:
+        reconcile_manifest_ledgers(manifest)
+    assert caught.value.details["code"] == "ledger_totals_mismatch"
 
 
 def test_incomplete_run_set_blocks_effects():
     plan, manifests = _complete_fixture()
     with pytest.raises(AnalysisError, match="incomplete") as caught:
-        run_primary_analysis(
+        _run_analysis(
             plan=plan,
             manifests=manifests[:-1],
             references=_references(plan),
@@ -278,7 +359,7 @@ def test_success_requires_valid_submit_and_exactly_one_hidden_evaluation(summary
     plan, manifests = _complete_fixture()
     manifests[0]["summary"].update(summary_patch)
     with pytest.raises(AnalysisError, match=message):
-        run_primary_analysis(
+        _run_analysis(
             plan=plan,
             manifests=manifests,
             references=_references(plan),
@@ -291,12 +372,12 @@ def test_reference_identity_and_denominator_are_gates():
     references = _references(plan)
     references["plan_hash"] = "0" * 64
     with pytest.raises(AnalysisError, match="plan_hash"):
-        run_primary_analysis(plan=plan, manifests=manifests, references=references, protocol=_protocol())
+        _run_analysis(plan=plan, manifests=manifests, references=references, protocol=_protocol())
 
     references = _references(plan)
     references["datasets"][0]["reference_score"] = 0.5
     with pytest.raises(AnalysisError, match="equals dummy"):
-        run_primary_analysis(plan=plan, manifests=manifests, references=references, protocol=_protocol())
+        _run_analysis(plan=plan, manifests=manifests, references=references, protocol=_protocol())
 
 
 def test_reference_values_and_protocol_are_bound_to_the_plan():
@@ -304,7 +385,7 @@ def test_reference_values_and_protocol_are_bound_to_the_plan():
     references = _references(plan)
     references["datasets"][0]["reference_score"] = 0.85
     with pytest.raises(AnalysisError, match="reference_hash"):
-        run_primary_analysis(
+        _run_analysis(
             plan=plan,
             manifests=manifests,
             references=references,
@@ -315,7 +396,7 @@ def test_reference_values_and_protocol_are_bound_to_the_plan():
         {"schema_version": "1.0", "datasets": references["datasets"]}
     )
     with pytest.raises(AnalysisError, match="immutable plan"):
-        run_primary_analysis(
+        _run_analysis(
             plan=plan,
             manifests=manifests,
             references=references,
@@ -325,7 +406,7 @@ def test_reference_values_and_protocol_are_bound_to_the_plan():
     changed_protocol = _protocol()
     changed_protocol["analysis"]["confidence_interval"]["seed"] = 99
     with pytest.raises(AnalysisError, match="protocol hash"):
-        run_primary_analysis(
+        _run_analysis(
             plan=plan,
             manifests=manifests,
             references=_references(plan),
