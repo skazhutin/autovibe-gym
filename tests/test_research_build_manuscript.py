@@ -5,7 +5,13 @@ from pathlib import Path
 
 import pytest
 
-from research.build_manuscript import ManuscriptError, build_manuscript, write_or_check
+from research.build_manuscript import (
+    ManuscriptError,
+    build_manuscript,
+    validate_publication_directory,
+    write_or_check,
+)
+from research.report_results import publication_files
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -42,3 +48,18 @@ def test_manifest_binds_analysis_and_manuscript():
 def test_check_rejects_missing_analysis_package(tmp_path):
     with pytest.raises(ManuscriptError, match="analysis file is missing"):
         write_or_check(tmp_path, check=True)
+
+
+def test_publication_validation_rejects_modified_derived_artifact(tmp_path):
+    result = json.loads(
+        (ROOT / "research/publication/paper_v1/primary-analysis.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    for name, content in publication_files(result).items():
+        (tmp_path / name).write_bytes(content)
+    validate_publication_directory(result, tmp_path)
+
+    (tmp_path / "primary-effects.csv").write_text("tampered\n", encoding="utf-8")
+    with pytest.raises(ManuscriptError, match="changed=primary-effects.csv"):
+        validate_publication_directory(result, tmp_path)

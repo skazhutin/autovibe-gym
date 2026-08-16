@@ -221,12 +221,37 @@ def _results_section(result: Mapping[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def validate_publication_directory(
+    result: Mapping[str, Any], publication_dir: Path
+) -> None:
+    """Require every committed derived artifact to match canonical rendering."""
+    expected_files = publication_files(result)
+    missing = []
+    changed = []
+    for name, expected in expected_files.items():
+        path = publication_dir / name
+        if not path.is_file():
+            missing.append(name)
+        elif path.read_bytes() != expected:
+            changed.append(name)
+    if missing or changed:
+        details = []
+        if missing:
+            details.append("missing=" + ",".join(sorted(missing)))
+        if changed:
+            details.append("changed=" + ",".join(sorted(changed)))
+        raise ManuscriptError(
+            "publication directory does not match canonical analysis rendering: "
+            + "; ".join(details)
+        )
+
+
 def build_manuscript(root: Path) -> tuple[bytes, bytes]:
     analysis_path = root / "research/publication/paper_v1/primary-analysis.json"
     if not analysis_path.is_file():
         raise ManuscriptError(f"required analysis file is missing: {analysis_path}")
     result = json.loads(analysis_path.read_text(encoding="utf-8"))
-    publication_files(result)  # Fail closed on incomplete or tampered evidence.
+    validate_publication_directory(result, analysis_path.parent)
 
     template_path = root / "paper/manuscript.template.md"
     template = template_path.read_text(encoding="utf-8")

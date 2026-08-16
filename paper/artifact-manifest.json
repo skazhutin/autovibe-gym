@@ -6,7 +6,7 @@
     "paper/manuscript.md": "582256c513de065016e6605d56fe6042c23fdf135c787215578729980deb01b5",
     "paper/manuscript.template.md": "ae44175a984a1319230d02444458dbcdad49238c73131c6a4faa489d2cf48165",
     "paper/references.bib": "fc2c9fceb298a820a9947484d30a771f845574dc6940f67404849c7071496080",
-    "research/build_manuscript.py": "9b44de317cc478d23a479f414682de1e4e38c761ad5387dc2328a29dddbafa86",
+    "research/build_manuscript.py": "86dfb89d8ed4613b9abcc7bec731c80805ea023627897b92a8e0fafec7368ef7",
     "research/protocols/analysis_plan.md": "5e61926cc72c3ab478b932c88a110b10d481940540f4c1e6626bc5c576256d59",
     "research/protocols/failure_policy.md": "bd25ce1fff37077acb2168ee5508a588e1512d22c54749cb9e9d9b301219ff56",
     "research/protocols/freeze_manifest_v1.json": "95801bdcce1d9a2eaede268df02977d87463cfd026a9d50fa93eb36719a45207",
@@ -23,7 +23,7 @@
     "research/publication/paper_v1/stratum-effects.csv": "c3b4f36aec0fce3c5f244d11d4a73d0908f73eb62ccedb0bb921273e38896d17",
     "research/publication/paper_v1/valid-submission-rates.csv": "09f673805b6b9e52862e0dac8c1343d20c8eac8ea98c881886de120249932573",
     "research/publication/paper_v1/valid-submission-rates.svg": "c4443a951631cbbfefc860559b6ee1c763c0a01612e5058848613c1ecbd74cdf",
-    "tests/test_research_build_manuscript.py": "dfae07bd1950c9875417c004ee7e395f1713760585103c029a7c4aeda707805f"
+    "tests/test_research_build_manuscript.py": "2a9928b9979f1507672b32170188bd9f1bfe844266e9444ab35665c87a10aa62"
   },
   "package": "autovibe-gym-paper-v1-working-manuscript",
   "plan_hash": "793d85d310427d848a09302c3c4583870fd3fafb6a8a0590d95e61384edf310f",
