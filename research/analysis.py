@@ -145,16 +145,24 @@ def validate_references(
     references: Mapping[str, Any], *, plan: Mapping[str, Any]
 ) -> dict[str, dict[str, Any]]:
     references = dict(_mapping(references, "references"))
+    expected_reference_keys = {
+        "schema_version",
+        "reference_pipeline_id",
+        "datasets",
+        "reference_hash",
+    }
+    if set(references) != expected_reference_keys:
+        raise AnalysisError("references fields do not match the frozen reference schema")
     if references.get("schema_version") != ANALYSIS_SCHEMA_VERSION:
         raise AnalysisError("references.schema_version must be '1.0'")
-    if references.get("plan_id") != plan.get("plan_id"):
-        raise AnalysisError("references.plan_id does not match the immutable plan")
-    if references.get("plan_hash") != plan.get("plan_hash"):
-        raise AnalysisError("references.plan_hash does not match the immutable plan")
+    reference_pipeline_id = str(references.get("reference_pipeline_id") or "")
+    if not reference_pipeline_id:
+        raise AnalysisError("references.reference_pipeline_id must be non-empty")
     items = references.get("datasets")
     if not isinstance(items, list) or not items:
         raise AnalysisError("references.datasets must be a non-empty list")
     by_id: dict[str, dict[str, Any]] = {}
+    normalized_items: list[dict[str, Any]] = []
     for raw in items:
         item = dict(_mapping(raw, "dataset reference"))
         expected_keys = {
@@ -182,12 +190,14 @@ def validate_references(
         item["dummy_score"] = dummy
         item["reference_score"] = reference
         by_id[dataset_id] = item
+        normalized_items.append(item)
     planned_ids = set(plan["matrix"]["dataset_ids"])
     if set(by_id) != planned_ids:
         raise AnalysisError("dataset references do not match the immutable plan dataset IDs")
     reference_payload = {
         "schema_version": ANALYSIS_SCHEMA_VERSION,
-        "datasets": [by_id[dataset_id] for dataset_id in sorted(by_id)],
+        "reference_pipeline_id": reference_pipeline_id,
+        "datasets": normalized_items,
     }
     reference_hash = canonical_hash(reference_payload)
     if references.get("reference_hash") != reference_hash:

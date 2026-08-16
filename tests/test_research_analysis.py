@@ -27,6 +27,7 @@ def _run_analysis(**kwargs):
 def _reference_payload():
     return {
         "schema_version": "1.0",
+        "reference_pipeline_id": "fixture-reference-pipeline-v1",
         "datasets": [
             {
                 "dataset_id": "dataset-a",
@@ -148,8 +149,6 @@ def _references(plan):
     return {
         **payload,
         "reference_hash": canonical_hash(payload),
-        "plan_id": plan["plan_id"],
-        "plan_hash": plan["plan_hash"],
     }
 
 
@@ -367,11 +366,11 @@ def test_success_requires_valid_submit_and_exactly_one_hidden_evaluation(summary
         )
 
 
-def test_reference_identity_and_denominator_are_gates():
+def test_reference_payload_and_denominator_are_gates():
     plan, manifests = _complete_fixture()
     references = _references(plan)
-    references["plan_hash"] = "0" * 64
-    with pytest.raises(AnalysisError, match="plan_hash"):
+    references["reference_pipeline_id"] = "changed-after-freeze"
+    with pytest.raises(AnalysisError, match="reference_hash"):
         _run_analysis(plan=plan, manifests=manifests, references=references, protocol=_protocol())
 
     references = _references(plan)
@@ -393,7 +392,11 @@ def test_reference_values_and_protocol_are_bound_to_the_plan():
         )
 
     references["reference_hash"] = canonical_hash(
-        {"schema_version": "1.0", "datasets": references["datasets"]}
+        {
+            "schema_version": "1.0",
+            "reference_pipeline_id": references["reference_pipeline_id"],
+            "datasets": references["datasets"],
+        }
     )
     with pytest.raises(AnalysisError, match="immutable plan"):
         _run_analysis(
