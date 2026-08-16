@@ -126,7 +126,13 @@ def _result():
 
 def test_publication_files_are_deterministic_and_complete():
     first = publication_files(_result())
-    second = publication_files(_result())
+    reordered = _result()
+    summary = reordered["hidden_score_summaries"][0]
+    reordered["hidden_score_summaries"][0] = dict(reversed(list(summary.items())))
+    payload = dict(reordered)
+    payload.pop("result_hash")
+    reordered["result_hash"] = canonical_hash(payload)
+    second = publication_files(reordered)
 
     assert first == second
     assert {
@@ -149,6 +155,11 @@ def test_publication_files_are_deterministic_and_complete():
     assert b"mean_protocol_tokens_per_outcome" in first["resource-usage.csv"]
     assert b"125.00" in first["resource-usage.csv"]
     assert b"reasoning tokens" in first["resource-usage.svg"]
+    assert first["hidden-score-summaries.csv"].splitlines()[0] == (
+        b"arm,dataset_id,model_id,agent_outcomes,successful_outcomes,"
+        b"failure_adjusted_mean,failure_adjusted_median,successful_only_mean,"
+        b"successful_only_median,successful_only_is_selection_biased"
+    )
 
 
 def test_publication_rejects_tampered_analysis_hash():

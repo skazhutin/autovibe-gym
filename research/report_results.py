@@ -19,6 +19,18 @@ ARM_LABELS = {
     "B": "B: iterative feedback",
     "C": "C: feedback + checklist",
 }
+HIDDEN_SUMMARY_FIELDS = (
+    "arm",
+    "dataset_id",
+    "model_id",
+    "agent_outcomes",
+    "successful_outcomes",
+    "failure_adjusted_mean",
+    "failure_adjusted_median",
+    "successful_only_mean",
+    "successful_only_median",
+    "successful_only_is_selection_biased",
+)
 
 
 class ReportingError(ValueError):
@@ -401,7 +413,7 @@ def publication_files(result: Mapping[str, Any]) -> dict[str, bytes]:
         "failure-categories.csv": _csv(failure_rows, ("arm", "failure_category", "count")),
         "resource-usage.csv": _csv(resource_rows, list(resource_rows[0])),
         "stratum-effects.csv": _csv(stratum_rows, list(stratum_rows[0])),
-        "hidden-score-summaries.csv": _csv(hidden_rows, list(hidden_rows[0])),
+        "hidden-score-summaries.csv": _csv(hidden_rows, HIDDEN_SUMMARY_FIELDS),
         "primary-effects.svg": _effect_svg(result),
         "valid-submission-rates.svg": _rate_svg(result),
         "failure-categories.svg": _failure_svg(result),
