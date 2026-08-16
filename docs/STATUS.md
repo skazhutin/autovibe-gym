@@ -1,15 +1,15 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-08-16 (primary analysis complete; PR 5b results package in progress)
-**Phase:** Paper V1 confirmatory results and reproducible publication artifacts.
+**Last updated:** 2026-08-16 (PR 6 working manuscript ready for review)
+**Phase:** Paper V1 manuscript and reproducibility package.
 
 ---
 
 ## Current Sprint Goal
 
-Review the complete confirmatory evidence without changing the preregistered
-estimands, publish deterministic PR 5b tables/figures, and preserve a precise
-audit boundary for the subsequent manuscript PR 6.
+Review and merge the PR 6 working manuscript and its reproducibility package
+without overstating the negative H1 result, the inconclusive checklist increment,
+or the unvalidated checklist detector. External submission remains out of scope.
 
 ## Paper V1 Research Protocol
 
@@ -20,7 +20,8 @@ audit boundary for the subsequent manuscript PR 6.
 | Protocol freeze | Amendment v2 merged and tagged | PR #71 fast-forward merged at `60295bd`; annotated tag `paper-v1-experiment-freeze-v2` binds plan `793d85...310f`, the fresh v2 series root, and unchanged effective scientific conditions. Original PR #69/tag and the stopped pre-provider v1 root remain immutable |
 | Confirmatory execution | Complete | V2 reconciliation is `terminal=120`, `pending=0`, `running=0`, `replacement_required=0`. Collection used execution commit `b4e3da2`, the frozen datasets/models/prompts/arms/randomization, and Docker image `sha256:b8c3...7466d` |
 | Primary-analysis binding repair | Merged as PR #72 | The real frozen plan/reference pair validates and local/GitHub tests passed. The repair was merged before a successful analysis. GitHub rebase created `4ab8804` with correct JapanDino author/account/email but committer display name `J D`; the owner instructed work to continue without force-rewriting published `main`, and the deviation is recorded in the results audit |
-| PR 5b confirmatory results | Ready for review | The preregistered analysis completed over all 120 outcomes with result hash `22ff7ac1...c58a`. H1 `B-A=-0.731` (95% CI `[-0.848,-0.609]`, Holm p=`0.000020`) and valid rates A/B/C are `75.0%/15.0%/7.5%`. Deterministic CSV/SVG/provenance artifacts are generated under `research/publication/paper_v1`; focused tests pass (`21 passed`) and the full suite passes (`385 passed, 2 skipped`). No manual number copying or raw-run commit |
+| PR 5b confirmatory results | Merged as PR #73 | Fast-forward merged at `d1ec571` with exact JapanDino author/committer identity. The preregistered analysis covers all 120 outcomes with result hash `22ff7ac1...c58a`; deterministic CSV/SVG/provenance artifacts are under `research/publication/paper_v1`. Final full suite: `385 passed, 2 skipped`; GitHub tests and current-head review passed |
+| PR 6 manuscript package | Ready for review | A 3,757-word TMLR-style working manuscript, checked primary-source bibliography, limitations, AI/API disclosure, reproducibility guide, and SHA-256 artifact manifest are under `paper/`. `research.build_manuscript` derives every numeric Results statement/table from the content-hashed analysis and detects stale or tampered evidence. Focused suite: `20 passed`; full suite: `389 passed, 2 skipped`, one existing Jupyter warning. No submission, release, raw trajectories, private registry, or paid API request |
 | Confirmatory launcher | Merged as PR #70 | Fast-forward merged at `e07b76c` after local `383 passed`, GitHub PR tests, resolved review, and post-merge CI. It verifies the tagged contract, execution worktree, datasets, private model settings, Docker digest, and manifest/lifecycle history before every condition |
 | Candidate prediction isolation | Implemented and frozen | Confirmatory Docker runs explicitly bind agent execution and candidate prediction to Docker. Readiness and hidden evaluation run in a separate ephemeral, network-none, read-only/cap-dropped evaluator; its result crosses to the host only as a validated JSON scalar vector, never executable pickle output |
 | Auditable run artifacts (PR 2) | Merged | PR 2 was rebased onto merged PR 1, reverified (`289 passed, 2 skipped` locally plus required GitHub `Python tests` success), and squash-merged as `67069a3` |
@@ -601,12 +602,14 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 10. [x] Reviewed and merged the pre-analysis reference-binding implementation
         repair as PR #72, then ran the unchanged preregistered analysis over all
         120 reconciled terminal outcomes.
-11. [ ] Review and merge PR 5b deterministic tables, figures, audit, and
-        provenance package; then draft the PR 6 manuscript without overstating
-        the negative H1 result or unvalidated checklist detector.
-12. [ ] Keep the earlier H200 notebook-era matrix rerun and experiment-report
+11. [x] Reviewed and fast-forward merged PR #73 with deterministic tables,
+        figures, audit, and provenance at `d1ec571`.
+12. [ ] Review and merge PR 6: generated working manuscript, primary-source
+        bibliography, reproducibility guide, disclosures, and artifact manifest.
+        Do not submit or publicly release the package in this cycle.
+13. [ ] Keep the earlier H200 notebook-era matrix rerun and experiment-report
        refresh as product/pilot validation, clearly separated from Paper V1.
-13. [x] Existing product PRs were merged to `main`; TZ/PROTOCOL/EXPERIMENT_REPORT
+14. [x] Existing product PRs were merged to `main`; TZ/PROTOCOL/EXPERIMENT_REPORT
        were synchronized before this Paper V1 cycle.
 
 ---
@@ -615,6 +618,8 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 
 | Date | Change |
 |------|--------|
+| 2026-08-16 | Prepared PR 6 from merged PR #73 (`d1ec571`): added a 3,757-word TMLR-style working manuscript, primary-source bibliography, explicit limitations and AI/API disclosure, reproducibility guide, and SHA-256 artifact manifest. `research.build_manuscript` validates the canonical analysis before generating every numeric Results statement/table and fails on stale package state. Pandoc HTML preview rendered; focused suite `20 passed`; full suite `389 passed, 2 skipped`, one existing Jupyter warning. No journal submission, public release, raw-run commit, private registry access, or paid API request. |
+| 2026-08-16 | Fast-forward merged deterministic Paper V1 results PR #73 at `d1ec571` after exact-identity commits, local `385 passed, 2 skipped`, successful GitHub tests, no unresolved threads, and a current-head review with no major issue. The package preserves the content-hashed analysis, deterministic CSV/SVG outputs, resource accounting including reasoning tokens, stable hidden-summary columns, provenance, and the documented PR #72 metadata deviation. |
 | 2026-08-16 | Merged reference-binding repair PR #72 after local `384 passed`, GitHub tests, and review resolution, then ran the unchanged preregistered analysis once to fresh `analysis-v2/primary-analysis.json`. All 120 outcomes passed completeness. Result hash is `22ff7ac1...c58a`: H1 `B-A=-0.731124`, 95% CI `[-0.848360,-0.608697]`, Holm p=`0.000020`; H2 `C-B=-0.048985`, 95% CI `[-0.211189,0.107149]`, Holm p=`0.570312`; valid rates A/B/C are `75.0%/15.0%/7.5%`. Added deterministic, hash-validating CSV/SVG/provenance generation for PR 5b; focused suite `21 passed`, full suite `385 passed, 2 skipped`, one existing Jupyter warning. GitHub rebase rewrote PR #72 committer display name to `J D` despite correct account/email and exact source-commit identity; owner instructed continuation without a force rewrite, and the deviation is retained in the audit. |
 | 2026-08-16 | Completed the immutable freeze-v2 confirmatory series with reconciliation `terminal=120`, `pending=0`, `running=0`, `replacement_required=0`. The first preregistered analysis invocation failed closed before emitting statistics because `analysis.py` required the pre-plan frozen FANU reference file to contain later-created plan identity and recomputed its hash from a payload inconsistent with the freeze generator. Prepared an auditable implementation repair that validates the actual frozen payload and preserves every scientific and statistical invariant; focused tests pass (`18 passed`), the full suite passes (`384 passed`), and no confirmatory result was inspected before the repair. |
 | 2026-08-15 | Fast-forward merged fail-closed launcher PR #70 at `e07b76c` with both commits authored/committed by JapanDino; PR and post-merge GitHub tests passed. Its first real invocation stopped in `RunRecorder.create` before manifest creation, LLM client construction, provider request, hidden evaluation, or outcome because the plan hashed wall-clock `1800` as an integer while frozen argparse materialized `1800.0`. Prepared result-blind amendment v2: effective limits and all scientific factors remain unchanged; budget hash becomes `ae9a65...45f2`, regenerated plan `plan_793d85d310427d848a09302c` contains 120 conditions with hash `793d85...310f`, and the original tag/logs remain immutable. Review hardening binds a fresh v2 series root and rejects v1-root reuse. Focused suites: `47 passed` and `17 passed`; final full suite: `384 passed`. |
