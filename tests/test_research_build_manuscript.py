@@ -8,6 +8,7 @@ import pytest
 from research.build_manuscript import (
     ManuscriptError,
     build_manuscript,
+    canonical_text_sha256,
     validate_publication_directory,
     write_or_check,
 )
@@ -42,6 +43,7 @@ def test_manifest_binds_analysis_and_manuscript():
     manifest = json.loads((ROOT / "paper/artifact-manifest.json").read_text(encoding="utf-8"))
 
     assert manifest["publication_status"] == "internal_working_manuscript_not_released"
+    assert manifest["file_hash_policy"] == "sha256_utf8_text_normalized_to_lf"
     assert manifest["analysis_result_hash"] == "22ff7ac1ffeb7ce116c384ea32ab23f82984c01aa7b16f19993b8f8f1db3c58a"
     assert "research/publication/paper_v1/primary-analysis.json" in manifest["files"]
     assert "research/publication/paper_v1/hidden-score-summaries.csv" in manifest["files"]
@@ -69,3 +71,9 @@ def test_publication_validation_rejects_modified_derived_artifact(tmp_path):
     (tmp_path / "primary-effects.csv").write_text("tampered\n", encoding="utf-8")
     with pytest.raises(ManuscriptError, match="changed=primary-effects.csv"):
         validate_publication_directory(result, tmp_path)
+
+
+def test_manifest_text_hash_is_newline_independent():
+    assert canonical_text_sha256(b"first\nsecond\n") == canonical_text_sha256(
+        b"first\r\nsecond\r\n"
+    )

@@ -52,6 +52,12 @@ def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def canonical_text_sha256(data: bytes) -> str:
+    """Hash UTF-8 package text with platform-independent LF newlines."""
+    text = data.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
+    return _sha256(text.encode("utf-8"))
+
+
 def _effect_row(result: Mapping[str, Any], hypothesis: str) -> str:
     item = result["comparisons"][hypothesis]
     return (
@@ -279,12 +285,13 @@ def build_manuscript(root: Path) -> tuple[bytes, bytes]:
         path = root / relative
         if not path.is_file():
             raise ManuscriptError(f"required package file is missing: {relative}")
-        file_hashes[relative] = _sha256(path.read_bytes())
-    file_hashes["paper/manuscript.md"] = _sha256(manuscript_bytes)
+        file_hashes[relative] = canonical_text_sha256(path.read_bytes())
+    file_hashes["paper/manuscript.md"] = canonical_text_sha256(manuscript_bytes)
     manifest = {
         "schema_version": "1.0",
         "package": "autovibe-gym-paper-v1-working-manuscript",
         "publication_status": "internal_working_manuscript_not_released",
+        "file_hash_policy": "sha256_utf8_text_normalized_to_lf",
         "analysis_result_hash": result["result_hash"],
         "plan_id": result["plan_id"],
         "plan_hash": result["plan_hash"],

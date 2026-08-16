@@ -28,7 +28,8 @@ arXiv posting, GitHub Release, or Zenodo deposit.
 - Committed analysis-file SHA-256: `6cbe78eea2de19e85a350cb05521057214b47e44f9282a87cb6658a50b5c2948`
 
 `paper/artifact-manifest.json` binds every tracked input and the generated
-manuscript by SHA-256.
+manuscript by SHA-256 after normalizing UTF-8 text newlines to LF. This explicit
+policy makes the manifest identical on Windows and Linux checkouts.
 
 ## Offline verification
 
