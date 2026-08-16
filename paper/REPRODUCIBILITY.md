@@ -66,6 +66,13 @@ included in the package.
 Checklist detector validation is not reproducible yet because human annotation
 has not occurred. It is deliberately excluded from manuscript claims.
 
+The committed primary-analysis schema also omits preregistered cached-token,
+code/tool-execution, wall-clock, CPU-time, provider-retry, monetary-cost, and
+cost-quality-frontier fields. The manuscript reports the available token and
+logical-call aggregates and records the rest as a reporting deviation. A future
+secondary resource reconstruction must be separately versioned and labeled
+post-outcome; it must not be presented as the frozen primary analysis.
+
 ## Submission-only gates
 
 Before any external submission or public artifact release, a human must:

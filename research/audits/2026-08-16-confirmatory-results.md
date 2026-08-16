@@ -81,6 +81,12 @@ LightLLM traffic.
 5. The analysis is limited to four tabular datasets, two model endpoints, and
    five replicates per dataset-model-arm stratum. It is evidence against a broad
    benefit in this frozen setup, not proof that iterative feedback never helps.
+6. The frozen primary-analysis result schema emitted input, output, and reasoning
+   tokens plus logical model calls, but omitted preregistered cached-token,
+   code/tool-execution, wall-clock, CPU-time, provider-retry, monetary-cost, and
+   cost-quality-frontier fields. PR 6 records this as an incomplete resource-
+   reporting deviation rather than constructing an unregistered post-outcome
+   secondary analysis.
 
 ## Publication boundary
 

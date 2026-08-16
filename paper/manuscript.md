@@ -41,7 +41,7 @@ The unit of analysis was an independent agent episode. A stable condition identi
 
 Arm A, `budget_matched_best_of_n_single_shot`, made independent solution attempts without stateful execution feedback. Validation score was the only selection signal, and the best valid candidate was submitted. Arm B, `iterative_no_checklist`, used a persistent notebook-style workspace and received runtime, contract, and validation feedback after actions. Arm C, `gym_with_checklist`, used the same iterative mechanism plus selective implicit hints derived from a 12-item data-science process detector. Hints were designed as nudges rather than dataset-specific instructions.
 
-The arm contrast changes the interaction policy, so token use need not be equal ex post. Fairness is enforced by a common upper bound and pre-call accounting rather than by forcing every trajectory to consume the same number of tokens. Each arm had at most 256,000 raw input, raw output, and provider-reported reasoning tokens; 12 logical model calls; 20 code executions; 20 tool calls; and 1,800 wall-clock seconds. Cached input, if any, counted as raw input for the context budget. Post-outcome model summaries were disabled. The client-side paid-provider limit was zero, and fallback to a paid provider was forbidden.
+The arm contrast changes the interaction policy, so token use need not be equal ex post. Fairness is enforced by a common upper bound and pre-call accounting rather than by forcing every trajectory to consume the same number of tokens. Each arm had at most 256,000 accounted tokens in the combined sum of raw input, raw output, and provider-reported reasoning tokens; 12 logical model calls; 20 code executions; 20 tool calls; and 1,800 wall-clock seconds. Cached input, if any, counted as raw input for the context budget. Post-outcome model summaries were disabled. The client-side paid-provider limit was zero, and fallback to a paid provider was forbidden.
 
 ## 3.3 Models and serving
 
@@ -112,6 +112,8 @@ The terminal category distribution differed sharply by arm. Arm A had 30 success
 | C | 3 | 4,318,443 | 148,995 | 0 | 4,467,438 | 477 |
 
 Arms B and C consumed 2.78x and 2.89x the protocol-reported tokens of Arm A, respectively. Token volume is not converted to money because traffic used an internal endpoint and operator-side billing was not independently observable.
+
+The preregistered resource plan also called for cached-token, code- and tool-execution, wall-clock, CPU-time, provider-retry, monetary- cost, and cost-quality-frontier reporting. Those fields were not emitted by the frozen primary-analysis result schema. We record this as a reporting deviation rather than reconstructing a post-outcome secondary analysis here; consequently, the resource evidence in this manuscript is limited to input/output/reasoning tokens and logical model calls.
 
 ![Terminal outcomes by arm](../research/publication/paper_v1/failure-categories.svg)
 
@@ -184,6 +186,8 @@ Fifth, the study isolates an arm-level policy rather than individual feedback co
 Sixth, human checklist-detector validation is outstanding. Checklist coverage and detector accuracy cannot support a claim in the present manuscript. The nominated second annotator and adjudicator must provide written consent before trajectories are sampled or annotated.
 
 Seventh, a post-collection analysis-reference binding defect was repaired before any successful confirmatory statistic was emitted. The repair aligned the implementation with the already frozen reference file and changed no run, endpoint, estimand, resampling rule, or failure rule. The original failure and repair remain in the audit trail.
+
+Eighth, the frozen primary-analysis result schema did not emit several preregistered resource outcomes: cached tokens, code and tool executions, wall-clock time, CPU time, provider retries, monetary cost, and cost-quality frontiers. Tokens and logical model calls are reported, but the resource comparison is incomplete. We disclose the omission instead of adding an unregistered post-outcome reconstruction to the primary package.
 
 Finally, raw trajectories and dataset snapshots are not included in Git because they may contain large generated artifacts, sensitive-looking aggregate task features, provider metadata, and license-restricted data. A future public artifact requires a separate privacy, secret, and license review.
 

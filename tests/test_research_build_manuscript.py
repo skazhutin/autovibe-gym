@@ -31,6 +31,8 @@ def test_manuscript_has_required_evidence_boundaries():
     assert "120 terminal agent outcomes" in manuscript
     assert "did not detect a clear incremental benefit" in manuscript
     assert "makes no empirical checklist-coverage claim" in manuscript
+    assert "256,000 accounted tokens in the combined sum" in manuscript
+    assert "resource comparison is incomplete" in manuscript
     assert "no paid provider fallback" in manuscript.lower()
     assert "not a journal submission" in (ROOT / "paper/REPRODUCIBILITY.md").read_text(encoding="utf-8")
     assert "{{GENERATED_RESULTS}}" not in manuscript
@@ -42,6 +44,8 @@ def test_manifest_binds_analysis_and_manuscript():
     assert manifest["publication_status"] == "internal_working_manuscript_not_released"
     assert manifest["analysis_result_hash"] == "22ff7ac1ffeb7ce116c384ea32ab23f82984c01aa7b16f19993b8f8f1db3c58a"
     assert "research/publication/paper_v1/primary-analysis.json" in manifest["files"]
+    assert "research/publication/paper_v1/hidden-score-summaries.csv" in manifest["files"]
+    assert "research/publication/paper_v1/SUMMARY.md" in manifest["files"]
     assert "paper/manuscript.md" in manifest["files"]
 
 

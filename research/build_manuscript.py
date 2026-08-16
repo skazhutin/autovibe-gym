@@ -15,16 +15,19 @@ from research.report_results import publication_files
 RESULTS_TOKEN = "{{GENERATED_RESULTS}}"
 REQUIRED_PACKAGE_FILES = (
     "research/build_manuscript.py",
+    "research/audits/2026-08-16-confirmatory-results.md",
     "research/publication/paper_v1/primary-analysis.json",
     "research/publication/paper_v1/primary-effects.csv",
     "research/publication/paper_v1/valid-submission-rates.csv",
     "research/publication/paper_v1/failure-categories.csv",
     "research/publication/paper_v1/resource-usage.csv",
     "research/publication/paper_v1/stratum-effects.csv",
+    "research/publication/paper_v1/hidden-score-summaries.csv",
     "research/publication/paper_v1/primary-effects.svg",
     "research/publication/paper_v1/valid-submission-rates.svg",
     "research/publication/paper_v1/failure-categories.svg",
     "research/publication/paper_v1/resource-usage.svg",
+    "research/publication/paper_v1/SUMMARY.md",
     "research/publication/paper_v1/provenance.json",
     "research/protocols/protocol_v1.yaml",
     "research/protocols/analysis_plan.md",
@@ -194,6 +197,15 @@ def _results_section(result: Mapping[str, Any]) -> str:
             "protocol-reported tokens of Arm A, respectively. Token volume is not "
             "converted to money because traffic used an internal endpoint and "
             "operator-side billing was not independently observable.",
+            "",
+            "The preregistered resource plan also called for cached-token, code- "
+            "and tool-execution, wall-clock, CPU-time, provider-retry, monetary- "
+            "cost, and cost-quality-frontier reporting. Those fields were not "
+            "emitted by the frozen primary-analysis result schema. We record this "
+            "as a reporting deviation rather than reconstructing a post-outcome "
+            "secondary analysis here; consequently, the resource evidence in this "
+            "manuscript is limited to input/output/reasoning tokens and logical "
+            "model calls.",
             "",
             "![Terminal outcomes by arm](../research/publication/paper_v1/failure-categories.svg)",
             "",
