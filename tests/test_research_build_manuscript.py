@@ -21,8 +21,12 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_committed_manuscript_and_manifest_are_current():
     expected_manuscript, expected_manifest = build_manuscript(ROOT)
 
-    assert (ROOT / "paper/manuscript.md").read_bytes() == expected_manuscript
-    assert (ROOT / "paper/artifact-manifest.json").read_bytes() == expected_manifest
+    assert canonical_text_sha256(
+        (ROOT / "paper/manuscript.md").read_bytes()
+    ) == canonical_text_sha256(expected_manuscript)
+    assert canonical_text_sha256(
+        (ROOT / "paper/artifact-manifest.json").read_bytes()
+    ) == canonical_text_sha256(expected_manifest)
     write_or_check(ROOT, check=True)
 
 

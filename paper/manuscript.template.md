@@ -123,6 +123,8 @@ Seventh, a post-collection analysis-reference binding defect was repaired before
 
 Eighth, the frozen primary-analysis result schema did not emit several preregistered resource outcomes: cached tokens, code and tool executions, wall-clock time, CPU time, provider retries, monetary cost, and cost-quality frontiers. Tokens and logical model calls are reported, but the resource comparison is incomplete. We disclose the omission instead of adding an unregistered post-outcome reconstruction to the primary package.
 
+Ninth, other registered descriptive outcomes are also absent from the frozen result/reporting schema: validation-to-test gap, error-recovery rate, clean-replay success, and failure-category tables broken down by arm, dataset, and model. The aggregate failure categories by arm are reported, and row-level dataset/model/category fields remain in the committed primary analysis, but the preregistered breakdown was not rendered. These omissions are recorded as reporting deviations rather than silently treated as null results.
+
 Finally, raw trajectories and dataset snapshots are not included in Git because they may contain large generated artifacts, sensitive-looking aggregate task features, provider metadata, and license-restricted data. A future public artifact requires a separate privacy, secret, and license review.
 
 # 7 Reproducibility and ethics statement

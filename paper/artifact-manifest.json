@@ -3,11 +3,11 @@
   "file_hash_policy": "sha256_utf8_text_normalized_to_lf",
   "files": {
     "paper/README.md": "e9195f7d3fa865c39adcec235e648e2a1b83e1afb49a689df5ba0fc707757633",
-    "paper/REPRODUCIBILITY.md": "23f32516b77f9a67ef6b10d6489701b6051f2d8f46e2f47b8cd722dfa41529fe",
-    "paper/manuscript.md": "291c982e6b8fe84ffe26c2593f7e4ee1048dc8f742d65b44a61fcdf0ebbd3cfb",
-    "paper/manuscript.template.md": "20f12068e2f86cc33522b153963b00aeaad223b1ee6aaf1191767c158d04da86",
+    "paper/REPRODUCIBILITY.md": "0f063227be891d87a7f62ddc95e9a6de271ae45425a00467572e322ec75c86a6",
+    "paper/manuscript.md": "54cfd726c576795ceaadcbdd41b0e5c3c2b8f514b96f22daaf110c50e68f3228",
+    "paper/manuscript.template.md": "ad4394d0cc137c58d7258c5f1dd01dbb541f293ebcf26d8d5c92957ff2829ad7",
     "paper/references.bib": "fc2c9fceb298a820a9947484d30a771f845574dc6940f67404849c7071496080",
-    "research/audits/2026-08-16-confirmatory-results.md": "70f811942e3e6595ec9f7332054ebaae18e22c19a8f5e6651444692610feadaa",
+    "research/audits/2026-08-16-confirmatory-results.md": "1df26fcc48bb58033d333f00b027833dc9383126c9022456e3016cf3317351eb",
     "research/build_manuscript.py": "aa4fa78d6869e92654b399f438b35d0197e14627598cbabc6280d668524d68ab",
     "research/protocols/analysis_plan.md": "5e61926cc72c3ab478b932c88a110b10d481940540f4c1e6626bc5c576256d59",
     "research/protocols/failure_policy.md": "bd25ce1fff37077acb2168ee5508a588e1512d22c54749cb9e9d9b301219ff56",
@@ -29,7 +29,7 @@
     "research/publication/paper_v1/valid-submission-rates.svg": "c4443a951631cbbfefc860559b6ee1c763c0a01612e5058848613c1ecbd74cdf",
     "research/report_results.py": "50167f0240dbbf463e533b95496374ad836f0138f0e9827109d34a6d674cbf7b",
     "research/run_artifacts.py": "990e78bcb8e0ef5ab21f28c7faee0820db5263f2817c5992c72e9bb53ec4f55d",
-    "tests/test_research_build_manuscript.py": "a7cd98fb3ee803492653a34f76c4f9d3bac09761fd1dd040c1ae203cde2c819f"
+    "tests/test_research_build_manuscript.py": "eca7f86a50e22e7936095ff6877ebaed2b77795807f852d3e327b623c62f77c8"
   },
   "package": "autovibe-gym-paper-v1-working-manuscript",
   "plan_hash": "793d85d310427d848a09302c3c4583870fd3fafb6a8a0590d95e61384edf310f",

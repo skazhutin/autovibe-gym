@@ -74,6 +74,13 @@ logical-call aggregates and records the rest as a reporting deviation. A future
 secondary resource reconstruction must be separately versioned and labeled
 post-outcome; it must not be presented as the frozen primary analysis.
 
+The frozen result/reporting schema also omitted registered validation-to-test
+gap, error-recovery rate, clean-replay success, and failure-category tables by
+arm/dataset/model. Aggregate arm failure categories are available, and the
+committed result retains row-level dataset/model/category fields, but this
+package does not silently substitute a post-outcome reconstruction for the
+missing preregistered reports.
+
 ## Submission-only gates
 
 Before any external submission or public artifact release, a human must:

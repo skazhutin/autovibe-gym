@@ -87,6 +87,11 @@ LightLLM traffic.
    cost-quality-frontier fields. PR 6 records this as an incomplete resource-
    reporting deviation rather than constructing an unregistered post-outcome
    secondary analysis.
+7. The frozen result/reporting schema also omitted registered
+   `validation_to_test_gap`, `error_recovery_rate`, `clean_replay_success`, and
+   failure-category tables by arm/dataset/model. Aggregate arm failure counts
+   are reported and row-level dataset/model/category fields remain available,
+   but the omitted reports are not reconstructed post outcome in PR 6.
 
 ## Publication boundary
 
