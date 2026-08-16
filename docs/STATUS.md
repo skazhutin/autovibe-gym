@@ -1,15 +1,15 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-08-16 (confirmatory collection complete; pre-analysis binding repair in progress)
-**Phase:** Paper V1 post-collection, pre-primary-analysis implementation repair.
+**Last updated:** 2026-08-16 (primary analysis complete; PR 5b results package in progress)
+**Phase:** Paper V1 confirmatory results and reproducible publication artifacts.
 
 ---
 
 ## Current Sprint Goal
 
-Repair the frozen-reference validation mismatch discovered by the first
-fail-closed analysis invocation, publish the repair audit trail, then run the
-unchanged preregistered primary analysis and prepare PR 5b.
+Review the complete confirmatory evidence without changing the preregistered
+estimands, publish deterministic PR 5b tables/figures, and preserve a precise
+audit boundary for the subsequent manuscript PR 6.
 
 ## Paper V1 Research Protocol
 
@@ -18,8 +18,9 @@ unchanged preregistered primary analysis and prepare PR 5b.
 | Phase 0 code audit | Done | Audited freshly fetched `origin/main` commit `1504cc0`; mapped five modes, per-call token semantics, host autofit, step/tool counters, artifact paths, hidden-score privacy, hidden retry loop, and current tests |
 | `research/protocol-v1` scaffold | Done | Machine-readable protocol, hypotheses, analysis plan, failure policy, selection gates, validator, and offline tests |
 | Protocol freeze | Amendment v2 merged and tagged | PR #71 fast-forward merged at `60295bd`; annotated tag `paper-v1-experiment-freeze-v2` binds plan `793d85...310f`, the fresh v2 series root, and unchanged effective scientific conditions. Original PR #69/tag and the stopped pre-provider v1 root remain immutable |
-| Confirmatory execution | Complete; analysis not yet emitted | V2 reconciliation is `terminal=120`, `pending=0`, `running=0`, `replacement_required=0`. Collection used execution commit `b4e3da2`, the frozen datasets/models/prompts/arms/randomization, and Docker image `sha256:b8c3...7466d`. The first primary-analysis invocation stopped before statistics because the implementation expected an impossible reverse reference-to-plan binding |
-| Primary-analysis binding repair | Ready for review | `research/protocols/amendments/2026-08-16-analysis-reference-binding.md` records the post-collection, pre-analysis defect and invariant-preserving repair. The real frozen plan/reference pair validates, focused tests pass (`18 passed`), and the full suite passes (`384 passed`, one unrelated deprecation warning). No score, arm summary, effect estimate, interval, or hypothesis-test result was inspected before the repair |
+| Confirmatory execution | Complete | V2 reconciliation is `terminal=120`, `pending=0`, `running=0`, `replacement_required=0`. Collection used execution commit `b4e3da2`, the frozen datasets/models/prompts/arms/randomization, and Docker image `sha256:b8c3...7466d` |
+| Primary-analysis binding repair | Merged as PR #72 | The real frozen plan/reference pair validates and local/GitHub tests passed. The repair was merged before a successful analysis. GitHub rebase created `4ab8804` with correct JapanDino author/account/email but committer display name `J D`; the owner instructed work to continue without force-rewriting published `main`, and the deviation is recorded in the results audit |
+| PR 5b confirmatory results | Ready for review | The preregistered analysis completed over all 120 outcomes with result hash `22ff7ac1...c58a`. H1 `B-A=-0.731` (95% CI `[-0.848,-0.609]`, Holm p=`0.000020`) and valid rates A/B/C are `75.0%/15.0%/7.5%`. Deterministic CSV/SVG/provenance artifacts are generated under `research/publication/paper_v1`; focused tests pass (`21 passed`) and the full suite passes (`385 passed, 2 skipped`). No manual number copying or raw-run commit |
 | Confirmatory launcher | Merged as PR #70 | Fast-forward merged at `e07b76c` after local `383 passed`, GitHub PR tests, resolved review, and post-merge CI. It verifies the tagged contract, execution worktree, datasets, private model settings, Docker digest, and manifest/lifecycle history before every condition |
 | Candidate prediction isolation | Implemented and frozen | Confirmatory Docker runs explicitly bind agent execution and candidate prediction to Docker. Readiness and hidden evaluation run in a separate ephemeral, network-none, read-only/cap-dropped evaluator; its result crosses to the host only as a validated JSON scalar vector, never executable pickle output |
 | Auditable run artifacts (PR 2) | Merged | PR 2 was rebased onto merged PR 1, reverified (`289 passed, 2 skipped` locally plus required GitHub `Python tests` success), and squash-merged as `67069a3` |
@@ -597,12 +598,15 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
        `e07b76c`; PR and post-merge GitHub tests passed.
 9. [x] Merged and tagged result-blind freeze amendment v2, then executed its
        immutable 120-condition plan outcome-blind to complete reconciliation.
-10. [ ] Review and merge the pre-analysis reference-binding implementation
-        repair, then run the unchanged preregistered analysis over the complete
-        reconciled manifest set and prepare PR 5b.
-11. [ ] Keep the earlier H200 notebook-era matrix rerun and experiment-report
+10. [x] Reviewed and merged the pre-analysis reference-binding implementation
+        repair as PR #72, then ran the unchanged preregistered analysis over all
+        120 reconciled terminal outcomes.
+11. [ ] Review and merge PR 5b deterministic tables, figures, audit, and
+        provenance package; then draft the PR 6 manuscript without overstating
+        the negative H1 result or unvalidated checklist detector.
+12. [ ] Keep the earlier H200 notebook-era matrix rerun and experiment-report
        refresh as product/pilot validation, clearly separated from Paper V1.
-12. [x] Existing product PRs were merged to `main`; TZ/PROTOCOL/EXPERIMENT_REPORT
+13. [x] Existing product PRs were merged to `main`; TZ/PROTOCOL/EXPERIMENT_REPORT
        were synchronized before this Paper V1 cycle.
 
 ---
@@ -611,6 +615,7 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 
 | Date | Change |
 |------|--------|
+| 2026-08-16 | Merged reference-binding repair PR #72 after local `384 passed`, GitHub tests, and review resolution, then ran the unchanged preregistered analysis once to fresh `analysis-v2/primary-analysis.json`. All 120 outcomes passed completeness. Result hash is `22ff7ac1...c58a`: H1 `B-A=-0.731124`, 95% CI `[-0.848360,-0.608697]`, Holm p=`0.000020`; H2 `C-B=-0.048985`, 95% CI `[-0.211189,0.107149]`, Holm p=`0.570312`; valid rates A/B/C are `75.0%/15.0%/7.5%`. Added deterministic, hash-validating CSV/SVG/provenance generation for PR 5b; focused suite `21 passed`, full suite `385 passed, 2 skipped`, one existing Jupyter warning. GitHub rebase rewrote PR #72 committer display name to `J D` despite correct account/email and exact source-commit identity; owner instructed continuation without a force rewrite, and the deviation is retained in the audit. |
 | 2026-08-16 | Completed the immutable freeze-v2 confirmatory series with reconciliation `terminal=120`, `pending=0`, `running=0`, `replacement_required=0`. The first preregistered analysis invocation failed closed before emitting statistics because `analysis.py` required the pre-plan frozen FANU reference file to contain later-created plan identity and recomputed its hash from a payload inconsistent with the freeze generator. Prepared an auditable implementation repair that validates the actual frozen payload and preserves every scientific and statistical invariant; focused tests pass (`18 passed`), the full suite passes (`384 passed`), and no confirmatory result was inspected before the repair. |
 | 2026-08-15 | Fast-forward merged fail-closed launcher PR #70 at `e07b76c` with both commits authored/committed by JapanDino; PR and post-merge GitHub tests passed. Its first real invocation stopped in `RunRecorder.create` before manifest creation, LLM client construction, provider request, hidden evaluation, or outcome because the plan hashed wall-clock `1800` as an integer while frozen argparse materialized `1800.0`. Prepared result-blind amendment v2: effective limits and all scientific factors remain unchanged; budget hash becomes `ae9a65...45f2`, regenerated plan `plan_793d85d310427d848a09302c` contains 120 conditions with hash `793d85...310f`, and the original tag/logs remain immutable. Review hardening binds a fresh v2 series root and rejects v1-root reuse. Focused suites: `47 passed` and `17 passed`; final full suite: `384 passed`. |
 | 2026-08-15 | Verified the merged PR #69 freeze at `1d3e0bf` and annotated tag `paper-v1-experiment-freeze`. Added a fail-closed confirmatory launcher that validates the complete tagged contract, detached execution commit, clean worktree, dataset hashes, exact internal model settings, Docker image ID, and append-only `started`/`finished` lifecycle provenance before scheduling the next frozen condition. Built and no-network-smoked image `sha256:b8c3...7466d`; real dry-run selected sequence 0 without API access or output creation. Focused suite: `42 passed`; full suite: `383 passed`. No confirmatory outcome or external publication was created. |

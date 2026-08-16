@@ -1,0 +1,11 @@
+{
+  "analysis_config_hash": "b6c081765c17ae483f0e150a4f214138ddaa0a8b3da28b9e40d2695bde41673f",
+  "analysis_reference_hash": "e867776aa650b7445a9fb17d16686e176dca8b14cc0c1460426708fe162e0570",
+  "analysis_result_hash": "22ff7ac1ffeb7ce116c384ea32ab23f82984c01aa7b16f19993b8f8f1db3c58a",
+  "plan_hash": "793d85d310427d848a09302c3c4583870fd3fafb6a8a0590d95e61384edf310f",
+  "plan_id": "plan_793d85d310427d848a09302c",
+  "protocol_hash": "de690a4e975781c516b25d2016416bf44e5d416ee61a00d305eae39331ce49c5",
+  "reconciliation_hash": "805c6dfd3da10a9ae33ea80276d3643df2b2ec17fa64ca83cb781ddbee844e16",
+  "schema_version": "1.0",
+  "source_evidence_class": "confirmatory_analysis"
+}

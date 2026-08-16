@@ -1,0 +1,4 @@
+arm,label,valid_submissions,total_outcomes,rate,ci95_low,ci95_high,interval_method
+A,A: budget-matched best-of-N,30,40,0.750000,0.598060,0.858129,wilson_score
+B,B: iterative feedback,6,40,0.150000,0.070612,0.290723,wilson_score
+C,C: feedback + checklist,3,40,0.075000,0.025836,0.198642,wilson_score

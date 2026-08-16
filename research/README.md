@@ -238,6 +238,23 @@ The output path is concurrent-safe and cannot be overwritten. This PR validates
 the pipeline only with synthetic manifests; confirmatory values remain
 unavailable until the pilot, freeze, immutable tag, and execution gates pass.
 
+After the primary result exists, render the deterministic publication package:
+
+```powershell
+python -m research.report_results `
+  --analysis path/to/primary-analysis.json `
+  --output-dir path/to/publication-directory
+```
+
+The reporting command verifies the canonical analysis result hash and completed
+evidence class before rendering CSV tables, accessible SVG figures, a generated
+summary, the exact canonical analysis JSON, and a provenance file. It refuses to
+overwrite a differing artifact and is idempotent when every byte is unchanged.
+The committed Paper V1 package is in
+[`research/publication/paper_v1`](publication/paper_v1); it contains no raw
+trajectory, model-registry secret, dataset row, or manual transcription of a
+reported number.
+
 ## Offline validation
 
 ```powershell
@@ -246,6 +263,7 @@ python -m pytest tests/test_research_protocol.py -q
 python -m pytest tests/test_research_run_artifacts.py tests/test_llm.py -q
 python -m pytest tests/test_research_planner.py -q
 python -m pytest tests/test_research_analysis.py -q
+python -m pytest tests/test_research_report_results.py -q
 ```
 
 The validator checks structural consistency only. A passing validation does not

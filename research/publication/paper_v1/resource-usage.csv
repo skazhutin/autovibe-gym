@@ -1,0 +1,4 @@
+arm,outcomes,input_tokens,output_tokens,reasoning_tokens,logical_llm_calls,mean_total_tokens_per_outcome
+A,40,1167206,378165,0,480,38634.28
+B,40,4158059,137716,0,474,107394.38
+C,40,4318443,148995,0,477,111685.95

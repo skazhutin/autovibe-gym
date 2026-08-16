@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="440" viewBox="0 0 900 440" role="img" aria-label="Terminal outcomes by arm">
+<rect width="900" height="100%" fill="#ffffff"/>
+<text x="60" y="42" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#172033">Terminal outcomes by arm</text>
+<rect x="175" y="335.00" width="120" height="0.00" fill="#dc2626"/>
+<rect x="175" y="272.50" width="120" height="62.50" fill="#f59e0b"/>
+<rect x="175" y="85.00" width="120" height="187.50" fill="#16a34a"/>
+<text x="235" y="365" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" fill="#172033">Arm A</text>
+<rect x="415" y="122.50" width="120" height="212.50" fill="#dc2626"/>
+<rect x="415" y="122.50" width="120" height="0.00" fill="#f59e0b"/>
+<rect x="415" y="85.00" width="120" height="37.50" fill="#16a34a"/>
+<text x="475" y="365" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" fill="#172033">Arm B</text>
+<rect x="655" y="103.75" width="120" height="231.25" fill="#dc2626"/>
+<rect x="655" y="103.75" width="120" height="0.00" fill="#f59e0b"/>
+<rect x="655" y="85.00" width="120" height="18.75" fill="#16a34a"/>
+<text x="715" y="365" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" fill="#172033">Arm C</text>
+<rect x="100" y="390" width="16" height="16" fill="#dc2626"/>
+<text x="123" y="404" font-family="Arial, sans-serif" font-size="13" fill="#172033">budget_exhausted</text>
+<rect x="305" y="390" width="16" height="16" fill="#f59e0b"/>
+<text x="328" y="404" font-family="Arial, sans-serif" font-size="13" fill="#172033">invalid_submission</text>
+<rect x="510" y="390" width="16" height="16" fill="#16a34a"/>
+<text x="533" y="404" font-family="Arial, sans-serif" font-size="13" fill="#172033">success</text></svg>

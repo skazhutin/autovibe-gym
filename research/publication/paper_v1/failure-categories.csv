@@ -1,0 +1,7 @@
+arm,failure_category,count
+A,invalid_submission,10
+A,success,30
+B,budget_exhausted,34
+B,success,6
+C,budget_exhausted,37
+C,success,3

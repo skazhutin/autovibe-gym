@@ -1,0 +1,17 @@
+hypothesis,dataset_id,model_id,pairs,control_mean_fanu,treatment_mean_fanu,mean_difference,median_difference
+H1,air_quality,deepseek-v4-flash,5,0.000000,0.181379,0.181379,0.000000
+H1,air_quality,gemma-4-26b,5,0.000000,0.000000,0.000000,0.000000
+H1,bank_marketing,deepseek-v4-flash,5,1.697662,0.000000,-1.697662,-1.697662
+H1,bank_marketing,gemma-4-26b,5,1.527678,0.514420,-1.013257,-1.359623
+H1,diabetes_readmission,deepseek-v4-flash,5,0.973191,0.000000,-0.973191,-0.974491
+H1,diabetes_readmission,gemma-4-26b,5,0.982861,0.403121,-0.579740,-0.957402
+H1,student_dropout,deepseek-v4-flash,5,0.980425,0.000000,-0.980425,-0.987107
+H1,student_dropout,gemma-4-26b,5,0.986804,0.200709,-0.786095,-0.978413
+H2,air_quality,deepseek-v4-flash,5,0.181379,0.000000,-0.181379,0.000000
+H2,air_quality,gemma-4-26b,5,0.000000,0.000000,0.000000,0.000000
+H2,bank_marketing,deepseek-v4-flash,5,0.000000,0.000000,0.000000,0.000000
+H2,bank_marketing,gemma-4-26b,5,0.514420,0.701675,0.187255,0.000000
+H2,diabetes_readmission,deepseek-v4-flash,5,0.000000,0.000000,0.000000,0.000000
+H2,diabetes_readmission,gemma-4-26b,5,0.403121,0.206074,-0.197047,0.000000
+H2,student_dropout,deepseek-v4-flash,5,0.000000,0.000000,0.000000,0.000000
+H2,student_dropout,gemma-4-26b,5,0.200709,0.000000,-0.200709,0.000000

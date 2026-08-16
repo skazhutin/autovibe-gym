@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="420" viewBox="0 0 900 420" role="img" aria-label="Primary and key-secondary effects">
+<rect width="900" height="100%" fill="#ffffff"/>
+<text x="60" y="42" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#172033">Primary and key-secondary effects</text>
+<line x1="743.93" y1="75" x2="743.93" y2="300" stroke="#6b7280" stroke-dasharray="5 5"/>
+<text x="60" y="131" font-family="Arial, sans-serif" font-size="17" fill="#172033">H1: B − A</text>
+<line x1="300.00" y1="125" x2="425.41" y2="125" stroke="#2563eb" stroke-width="5"/>
+<circle cx="361.35" cy="125" r="9" fill="#0f3d91"/>
+<text x="260" y="159" font-family="Arial, sans-serif" font-size="14" fill="#4b5563">Δ=-0.731; 95% CI [-0.848, -0.609]</text>
+<text x="60" y="236" font-family="Arial, sans-serif" font-size="17" fill="#172033">H2: C − B</text>
+<line x1="633.42" y1="230" x2="800.00" y2="230" stroke="#2563eb" stroke-width="5"/>
+<circle cx="718.30" cy="230" r="9" fill="#0f3d91"/>
+<text x="260" y="264" font-family="Arial, sans-serif" font-size="14" fill="#4b5563">Δ=-0.049; 95% CI [-0.211, 0.107]</text>
+<text x="743.93" y="340" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="#4b5563">no difference</text>
+<text x="550" y="385" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" fill="#172033">Equal-stratum mean FANU difference</text></svg>
