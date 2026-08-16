@@ -73,6 +73,18 @@ def test_publication_validation_rejects_modified_derived_artifact(tmp_path):
         validate_publication_directory(result, tmp_path)
 
 
+def test_publication_validation_accepts_windows_newlines(tmp_path):
+    result = json.loads(
+        (ROOT / "research/publication/paper_v1/primary-analysis.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    for name, content in publication_files(result).items():
+        (tmp_path / name).write_bytes(content.replace(b"\n", b"\r\n"))
+
+    validate_publication_directory(result, tmp_path)
+
+
 def test_manifest_text_hash_is_newline_independent():
     assert canonical_text_sha256(b"first\nsecond\n") == canonical_text_sha256(
         b"first\r\nsecond\r\n"

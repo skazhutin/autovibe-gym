@@ -252,7 +252,9 @@ def validate_publication_directory(
         path = publication_dir / name
         if not path.is_file():
             missing.append(name)
-        elif path.read_bytes() != expected:
+        elif canonical_text_sha256(path.read_bytes()) != canonical_text_sha256(
+            expected
+        ):
             changed.append(name)
     if missing or changed:
         details = []
@@ -312,7 +314,13 @@ def write_or_check(root: Path, *, check: bool) -> None:
         root / "paper/artifact-manifest.json": manifest,
     }
     if check:
-        stale = [str(path) for path, content in expected.items() if not path.is_file() or path.read_bytes() != content]
+        stale = [
+            str(path)
+            for path, content in expected.items()
+            if not path.is_file()
+            or canonical_text_sha256(path.read_bytes())
+            != canonical_text_sha256(content)
+        ]
         if stale:
             raise ManuscriptError("paper package is stale: " + ", ".join(stale))
         return

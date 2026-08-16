@@ -8,7 +8,7 @@
     "paper/manuscript.template.md": "20f12068e2f86cc33522b153963b00aeaad223b1ee6aaf1191767c158d04da86",
     "paper/references.bib": "fc2c9fceb298a820a9947484d30a771f845574dc6940f67404849c7071496080",
     "research/audits/2026-08-16-confirmatory-results.md": "70f811942e3e6595ec9f7332054ebaae18e22c19a8f5e6651444692610feadaa",
-    "research/build_manuscript.py": "402dfe30579552fb4d9701673f8987ec31fc6fc2f93a0f434bd1fcb1c47e288c",
+    "research/build_manuscript.py": "aa4fa78d6869e92654b399f438b35d0197e14627598cbabc6280d668524d68ab",
     "research/protocols/analysis_plan.md": "5e61926cc72c3ab478b932c88a110b10d481940540f4c1e6626bc5c576256d59",
     "research/protocols/failure_policy.md": "bd25ce1fff37077acb2168ee5508a588e1512d22c54749cb9e9d9b301219ff56",
     "research/protocols/freeze_manifest_v1.json": "95801bdcce1d9a2eaede268df02977d87463cfd026a9d50fa93eb36719a45207",
@@ -29,7 +29,7 @@
     "research/publication/paper_v1/valid-submission-rates.svg": "c4443a951631cbbfefc860559b6ee1c763c0a01612e5058848613c1ecbd74cdf",
     "research/report_results.py": "50167f0240dbbf463e533b95496374ad836f0138f0e9827109d34a6d674cbf7b",
     "research/run_artifacts.py": "990e78bcb8e0ef5ab21f28c7faee0820db5263f2817c5992c72e9bb53ec4f55d",
-    "tests/test_research_build_manuscript.py": "712ce0f8a12a64a7c8949e85a36d6f6093303646598b3cf96640e2978f9b46c7"
+    "tests/test_research_build_manuscript.py": "a7cd98fb3ee803492653a34f76c4f9d3bac09761fd1dd040c1ae203cde2c819f"
   },
   "package": "autovibe-gym-paper-v1-working-manuscript",
   "plan_hash": "793d85d310427d848a09302c3c4583870fd3fafb6a8a0590d95e61384edf310f",
