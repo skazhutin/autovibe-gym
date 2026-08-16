@@ -3,11 +3,11 @@
   "files": {
     "paper/README.md": "e9195f7d3fa865c39adcec235e648e2a1b83e1afb49a689df5ba0fc707757633",
     "paper/REPRODUCIBILITY.md": "3ad4e879dc902bbbb8a936f22e4d73e7f17a7a1adcdf6b551b8159339443e151",
-    "paper/manuscript.md": "a7bda2e4ef25b69ddcdf2d303c1b397c73838f7c4f1f22742e7b16e469226279",
-    "paper/manuscript.template.md": "5d8b78c1ef79ad772946be9c0eeff517d1671bf7daa0f93c65765bd1de225795",
+    "paper/manuscript.md": "291c982e6b8fe84ffe26c2593f7e4ee1048dc8f742d65b44a61fcdf0ebbd3cfb",
+    "paper/manuscript.template.md": "20f12068e2f86cc33522b153963b00aeaad223b1ee6aaf1191767c158d04da86",
     "paper/references.bib": "fc2c9fceb298a820a9947484d30a771f845574dc6940f67404849c7071496080",
     "research/audits/2026-08-16-confirmatory-results.md": "70f811942e3e6595ec9f7332054ebaae18e22c19a8f5e6651444692610feadaa",
-    "research/build_manuscript.py": "2fcb18c16c2882cf57a7cd727c71cb31f96e0d98345f50b0f3d7cfc0e96620ec",
+    "research/build_manuscript.py": "4ac6e18f22a683cc71a2dd95a34a192e57001a70e9043cbdbc90c6bb99388521",
     "research/protocols/analysis_plan.md": "5e61926cc72c3ab478b932c88a110b10d481940540f4c1e6626bc5c576256d59",
     "research/protocols/failure_policy.md": "bd25ce1fff37077acb2168ee5508a588e1512d22c54749cb9e9d9b301219ff56",
     "research/protocols/freeze_manifest_v1.json": "95801bdcce1d9a2eaede268df02977d87463cfd026a9d50fa93eb36719a45207",
@@ -26,7 +26,9 @@
     "research/publication/paper_v1/stratum-effects.csv": "c3b4f36aec0fce3c5f244d11d4a73d0908f73eb62ccedb0bb921273e38896d17",
     "research/publication/paper_v1/valid-submission-rates.csv": "09f673805b6b9e52862e0dac8c1343d20c8eac8ea98c881886de120249932573",
     "research/publication/paper_v1/valid-submission-rates.svg": "c4443a951631cbbfefc860559b6ee1c763c0a01612e5058848613c1ecbd74cdf",
-    "tests/test_research_build_manuscript.py": "be0357a6f7419c7be061503301382aa2eb59531590043014675fc5572fa1cc0b"
+    "research/report_results.py": "50167f0240dbbf463e533b95496374ad836f0138f0e9827109d34a6d674cbf7b",
+    "research/run_artifacts.py": "42ab41d398730bff3c31e18ed968fdec19bb92519d2bbfce1d223b5f4c7fb838",
+    "tests/test_research_build_manuscript.py": "b2b3026f550ed7f4118cbb3ad53303d581f595af332d010dfe190738fd6cf327"
   },
   "package": "autovibe-gym-paper-v1-working-manuscript",
   "plan_hash": "793d85d310427d848a09302c3c4583870fd3fafb6a8a0590d95e61384edf310f",

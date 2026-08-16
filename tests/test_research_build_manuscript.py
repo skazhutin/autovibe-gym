@@ -46,6 +46,8 @@ def test_manifest_binds_analysis_and_manuscript():
     assert "research/publication/paper_v1/primary-analysis.json" in manifest["files"]
     assert "research/publication/paper_v1/hidden-score-summaries.csv" in manifest["files"]
     assert "research/publication/paper_v1/SUMMARY.md" in manifest["files"]
+    assert "research/report_results.py" in manifest["files"]
+    assert "research/run_artifacts.py" in manifest["files"]
     assert "paper/manuscript.md" in manifest["files"]
 
 

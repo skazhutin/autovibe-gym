@@ -16,6 +16,8 @@ RESULTS_TOKEN = "{{GENERATED_RESULTS}}"
 REQUIRED_PACKAGE_FILES = (
     "research/build_manuscript.py",
     "research/audits/2026-08-16-confirmatory-results.md",
+    "research/report_results.py",
+    "research/run_artifacts.py",
     "research/publication/paper_v1/primary-analysis.json",
     "research/publication/paper_v1/primary-effects.csv",
     "research/publication/paper_v1/valid-submission-rates.csv",
