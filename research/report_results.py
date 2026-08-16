@@ -145,8 +145,13 @@ def _resource_rows(result: Mapping[str, Any]) -> list[dict[str, Any]]:
                 "output_tokens": sum(row["output_tokens"] for row in arm_rows),
                 "reasoning_tokens": sum(row["reasoning_tokens"] for row in arm_rows),
                 "logical_llm_calls": sum(row["logical_llm_calls"] for row in arm_rows),
-                "mean_total_tokens_per_outcome": _fmt(
-                    sum(row["input_tokens"] + row["output_tokens"] for row in arm_rows)
+                "mean_protocol_tokens_per_outcome": _fmt(
+                    sum(
+                        row["input_tokens"]
+                        + row["output_tokens"]
+                        + row["reasoning_tokens"]
+                        for row in arm_rows
+                    )
                     / len(arm_rows),
                     2,
                 ),
@@ -278,24 +283,33 @@ def _failure_svg(result: Mapping[str, Any]) -> bytes:
 
 def _resource_svg(result: Mapping[str, Any]) -> bytes:
     resources = _resource_rows(result)
-    maximum = max(row["input_tokens"] + row["output_tokens"] for row in resources)
+    maximum = max(
+        row["input_tokens"] + row["output_tokens"] + row["reasoning_tokens"]
+        for row in resources
+    )
     parts = []
     for index, row in enumerate(resources):
         y = 105 + index * 90
         input_width = row["input_tokens"] / maximum * 560
         output_width = row["output_tokens"] / maximum * 560
+        reasoning_width = row["reasoning_tokens"] / maximum * 560
+        total_tokens = (
+            row["input_tokens"] + row["output_tokens"] + row["reasoning_tokens"]
+        )
         parts.extend(
             [
                 f'<text x="70" y="{y+22}" font-family="Arial, sans-serif" font-size="17" fill="#172033">Arm {row["arm"]}</text>',
                 f'<rect x="155" y="{y}" width="{input_width:.2f}" height="32" fill="#2563eb"/>',
                 f'<rect x="{155+input_width:.2f}" y="{y}" width="{output_width:.2f}" height="32" fill="#93c5fd"/>',
-                f'<text x="{165+input_width+output_width:.2f}" y="{y+22}" font-family="Arial, sans-serif" font-size="14" fill="#172033">{row["input_tokens"]+row["output_tokens"]:,}</text>',
+                f'<rect x="{155+input_width+output_width:.2f}" y="{y}" width="{reasoning_width:.2f}" height="32" fill="#7c3aed"/>',
+                f'<text x="{165+input_width+output_width+reasoning_width:.2f}" y="{y+22}" font-family="Arial, sans-serif" font-size="14" fill="#172033">{total_tokens:,}</text>',
             ]
         )
     parts.extend(
         [
             '<rect x="250" y="365" width="16" height="16" fill="#2563eb"/><text x="275" y="379" font-family="Arial, sans-serif" font-size="14" fill="#172033">input tokens</text>',
-            '<rect x="470" y="365" width="16" height="16" fill="#93c5fd"/><text x="495" y="379" font-family="Arial, sans-serif" font-size="14" fill="#172033">output tokens</text>',
+            '<rect x="430" y="365" width="16" height="16" fill="#93c5fd"/><text x="455" y="379" font-family="Arial, sans-serif" font-size="14" fill="#172033">output tokens</text>',
+            '<rect x="610" y="365" width="16" height="16" fill="#7c3aed"/><text x="635" y="379" font-family="Arial, sans-serif" font-size="14" fill="#172033">reasoning tokens</text>',
         ]
     )
     return _svg_shell("Protocol-reported token use", "\n".join(parts))

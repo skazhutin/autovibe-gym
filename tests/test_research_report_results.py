@@ -70,7 +70,7 @@ def _result():
                 "fanu": 0.5 if arm != "B" else 0.0,
                 "input_tokens": 100,
                 "output_tokens": 20,
-                "reasoning_tokens": 0,
+                "reasoning_tokens": 5,
                 "logical_llm_calls": 2,
             }
         )
@@ -146,6 +146,9 @@ def test_publication_files_are_deterministic_and_complete():
     } == set(first)
     assert b"B \xe2\x88\x92 A = -0.500" in first["SUMMARY.md"]
     assert b"<svg" in first["primary-effects.svg"]
+    assert b"mean_protocol_tokens_per_outcome" in first["resource-usage.csv"]
+    assert b"125.00" in first["resource-usage.csv"]
+    assert b"reasoning tokens" in first["resource-usage.svg"]
 
 
 def test_publication_rejects_tampered_analysis_hash():
