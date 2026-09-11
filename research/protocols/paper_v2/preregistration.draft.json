@@ -1,0 +1,196 @@
+{
+  "schema_version": "paper-v2-preregistration-v1",
+  "study_id": "autovibe-paper-v2",
+  "status": "draft",
+  "confirmatory_outcomes_visible": false,
+  "research_questions": {
+    "primary": "Under matched global resources and symmetric terminal handling, is iterative feedback non-inferior in reliability and superior in failure-adjusted utility to repeated independent attempts?",
+    "secondary": "Does checklist feedback change failure-adjusted utility beyond the same iterative runtime, validation, and terminal feedback?"
+  },
+  "hypotheses": [
+    {
+      "id": "P1",
+      "role": "primary_confirmatory",
+      "contrast": "B-A",
+      "endpoint": "valid_terminal_outcome",
+      "estimand": "equal_stratum_mean_paired_risk_difference",
+      "alternative": "noninferiority",
+      "decision_rule": "lower_confidence_bound_above_negative_margin",
+      "gate": null
+    },
+    {
+      "id": "P2",
+      "role": "gated_confirmatory",
+      "contrast": "B-A",
+      "endpoint": "failure_adjusted_normalized_utility",
+      "estimand": "equal_stratum_mean_paired_difference",
+      "alternative": "greater",
+      "decision_rule": "adjusted_one_sided_superiority",
+      "gate": "P1"
+    },
+    {
+      "id": "S1",
+      "role": "key_secondary_confirmatory",
+      "contrast": "C-B",
+      "endpoint": "failure_adjusted_normalized_utility",
+      "estimand": "equal_stratum_mean_paired_difference",
+      "alternative": "two_sided",
+      "decision_rule": "multiplicity_adjusted_two_sided_difference",
+      "gate": null
+    }
+  ],
+  "analysis_plan": {
+    "analysis_population": "all_terminal_agent_outcomes",
+    "pairing_keys": [
+      "dataset_id",
+      "model_id",
+      "replicate_index"
+    ],
+    "stratum_keys": [
+      "dataset_id",
+      "model_id"
+    ],
+    "stratum_weighting": "equal",
+    "primary_sequence": [
+      "P1",
+      "P2"
+    ],
+    "secondary_family": [
+      "S1"
+    ],
+    "validity_interval": "paired_stratified_resampling",
+    "utility_test": "paired_stratified_randomization",
+    "utility_interval": "paired_stratified_resampling",
+    "successful_only_analysis": "descriptive_selection_biased",
+    "hidden_evaluations_max": 1,
+    "unconditional_utility_required": true
+  },
+  "failure_policy": {
+    "agent_invalid": "retain_as_invalid_and_assign_dummy_utility",
+    "infrastructure_failure": "censor_attempt_and_replace_same_condition",
+    "protocol_violation": "stop_series_without_outcome_deletion",
+    "complete_case_primary_analysis": false,
+    "retain_all_attempts": true,
+    "replacement_may_change_condition": false
+  },
+  "mechanistic_plan": {
+    "evidence_class": "separate_excluded_development_study",
+    "selection_scope": "excluded-development-only",
+    "pool_with_confirmatory_abc": false,
+    "design": "nested_incremental_ablation",
+    "claim_limit": "incremental_fixed_order_effects_only",
+    "arms": [
+      {
+        "id": "D0",
+        "adds": "legacy_iterative_reference",
+        "predecessor": null
+      },
+      {
+        "id": "D1",
+        "adds": "immutable_incumbent_preservation",
+        "predecessor": "D0"
+      },
+      {
+        "id": "D2",
+        "adds": "protected_finalization_reserve",
+        "predecessor": "D1"
+      },
+      {
+        "id": "D3",
+        "adds": "deterministic_context_compression",
+        "predecessor": "D2"
+      }
+    ]
+  },
+  "exploratory_plan": {
+    "confirmatory_reclassification_allowed": false,
+    "analyses": [
+      "dataset_and_model_stratified_effects",
+      "task_characteristic_interactions",
+      "trajectory_failure_taxonomy",
+      "validation_to_hidden_generalization_gap",
+      "resource_quality_pareto_frontiers"
+    ]
+  },
+  "claim_rules": {
+    "system_superiority_requires_confirmatory_abc": true,
+    "mechanism_claim_requires_separate_ablation": true,
+    "successful_only_score_is_primary": false,
+    "checklist_coverage_proves_quality": false,
+    "exploratory_results_may_rewrite_confirmatory_claims": false
+  },
+  "freeze_decisions": {
+    "noninferiority_margin": {
+      "status": "unresolved",
+      "value": null,
+      "rationale": null,
+      "evidence_hash": null
+    },
+    "familywise_alpha": {
+      "status": "unresolved",
+      "value": null,
+      "rationale": null,
+      "evidence_hash": null
+    },
+    "target_power": {
+      "status": "unresolved",
+      "value": null,
+      "rationale": null,
+      "evidence_hash": null
+    },
+    "replicates_per_stratum": {
+      "status": "unresolved",
+      "value": null,
+      "rationale": null,
+      "evidence_hash": null
+    },
+    "resampling_draws": {
+      "status": "unresolved",
+      "value": null,
+      "rationale": null,
+      "evidence_hash": null
+    },
+    "randomization_draws": {
+      "status": "unresolved",
+      "value": null,
+      "rationale": null,
+      "evidence_hash": null
+    },
+    "analysis_seed": {
+      "status": "unresolved",
+      "value": null,
+      "rationale": null,
+      "evidence_hash": null
+    },
+    "secondary_multiplicity_strategy": {
+      "status": "unresolved",
+      "value": null,
+      "rationale": null,
+      "evidence_hash": null
+    },
+    "dataset_model_scope": {
+      "status": "unresolved",
+      "value": null,
+      "rationale": null,
+      "evidence_hash": null
+    },
+    "fanu_references": {
+      "status": "unresolved",
+      "value": null,
+      "rationale": null,
+      "evidence_hash": null
+    },
+    "statistical_power_analysis": {
+      "status": "unresolved",
+      "value": null,
+      "rationale": null,
+      "evidence_hash": null
+    },
+    "independent_statistical_review": {
+      "status": "unresolved",
+      "value": null,
+      "rationale": null,
+      "evidence_hash": null
+    }
+  }
+}

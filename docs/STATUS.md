@@ -1,7 +1,7 @@
 # AutoVibe Gym - Live Status
 
-**Last updated:** 2026-08-16 (PR 6 working manuscript ready for review)
-**Phase:** Paper V1 manuscript and reproducibility package.
+**Last updated:** 2026-09-11 (Paper V2 M1a-M9 local stack prepared as a transfer checkpoint; no PR, freeze, or experiment activation)
+**Phase:** Paper V1 manuscript review; isolated Paper V2 reliability development.
 
 ---
 
@@ -10,6 +10,48 @@
 Review and merge the PR 6 working manuscript and its reproducibility package
 without overstating the negative H1 result, the inconclusive checklist increment,
 or the unvalidated checklist detector. External submission remains out of scope.
+
+## Paper V2 Reliability Work
+
+| Item | Status | Notes |
+|---|---|---|
+| M1a deterministic incumbent core | Implemented locally; uncommitted | Isolated branch `JD/paper-v2-m1a` is based on verified `origin/main` commit `1d94774`. Validated candidate records are immutable; the host registry uses the existing `higher`/`lower` metric-direction convention, deterministic earlier-incumbent tie handling, and separate current/incumbent pointers. Notebook mutation invalidates only current-clean-run eligibility while preserving historical records, model objects, and artifacts. Submission and hidden evaluation still accept only the current clean-run candidate. |
+| M1b durable candidate bundle | Implemented locally; uncommitted | Each validated candidate is atomically published to a no-overwrite private `candidate-bundle-v1` directory containing canonical metadata, the serialized model, an immutable notebook snapshot, and `SHA256SUMS`. Strict schema/JSON/path/file checks, checksum verification before model loading, deterministic registration-index reconstruction, ignored unpublished temp directories, and fail-closed corruption/write failures are covered. Restore recreates historical registry/incumbent state but deliberately leaves `current=None`, so it cannot bypass clean-run eligibility or trigger hidden evaluation. Public events expose only the schema, candidate ID, and hashes; bundle paths and detailed failures remain private. This is registry recovery, not full kernel/episode resume. |
+| M1a+M1b verification | Passing | Bundle/registry focused suite: `20 passed, 1 skipped`; direct notebook regression before the final write-failure case: `36 passed, 1 skipped`, followed by `2 passed` for the latest corruption/write-failure targets; adjacent experiment/protocol/submission/runner/artifact suite: `92 passed`; full offline suite: `416 passed, 1 skipped, 2 deselected`; one existing Jupyter path deprecation warning. Compileall and `git diff --check` pass apart from line-ending notices. No API, paid endpoint, Docker integration, hidden-test research run, staging, commit, push, or PR occurred. |
+| M2a protected budget partition | Implemented locally; uncommitted; not activated | `EpisodeBudget` now has an opt-in, one-way exploration-to-finalization partition backed by a separately versionable `FinalizationReservePolicy`. Exploration stops at `global - reserve` without marking the global budget exhausted; finalization is limited to its own token, LLM-call, code, tool, and wall-time pools and cannot borrow unused exploration capacity. With no reserve, the Paper V1 policy payload, snapshot shape, events, limits, and exception behavior remain unchanged. No reserve values, CLI flags, or stopping thresholds were chosen or enabled. |
+| M2a verification | Passing | Focused reserve suite: `19 passed`; adjacent budget/experiment/runner/freeze suite: `50 passed`; final offline suite: `427 passed, 1 skipped, 2 deselected`; one existing Jupyter path deprecation warning. No API, model endpoint, Docker integration, pilot, experiment, staging, commit, push, or PR occurred. |
+| M2b protected producing-revision finalization | Implemented locally; uncommitted; not activated | When and only when research mode receives an explicit reserve policy, `submit` and host finalization enter the same host-owned terminal controller. It selects the frozen incumbent regardless of the requested variable, verifies its complete M1b bundle, executes the immutable notebook snapshot in a restarted kernel under finalization code limits, repeats raw-row/serialization/validation checks, rejects metric drift, atomically stores and reloads a private `protected-finalization-v1` replay artifact, and only then spends the final tool unit on the one-shot hidden gate. Missing/corrupt incumbents, replay/preflight/drift/storage failures, reserve exhaustion, and hidden failure are terminal with no code repair, live-kernel/autofit fallback, new candidate, resource borrowing, or second hidden attempt. Public receipts expose IDs and hashes only. |
+| M2b verification | Passing | Dedicated artifact store: `4 passed, 2 skipped`; all ten M2b controller cases passed across focused and full runs (the two store skips are Windows symlink capabilities). Full offline suite: `441 passed, 3 skipped, 2 deselected` in 641.39s; one existing Jupyter path deprecation warning. Compileall and `git diff --check` pass apart from line-ending notices. Static search confirms that no runner/CLI constructs `FinalizationReservePolicy`; tests are the only callers selecting fixture reserve values. No API, model endpoint, Docker integration, pilot, experiment, staging, commit, push, or PR occurred. |
+| M3 deterministic context compression | Implemented locally; uncommitted; not activated | An explicit, versioned `ContextCompressionPolicy` can replace the accumulated transcript with canonical UTF-8 JSON containing the public task contract, tested public hypotheses, current incumbent, active public blockers, deterministic remaining-resource counters, allowed actions, notebook state, and finalization contract. Schema validation is strict and rejects unknown/private fields and non-finite values. Truncation is deterministic and bounded: it limits recent messages and state lists, drops lower-priority history in a fixed order, preserves required core fields, and fails closed if the core cannot fit. Public receipts contain policy, sizes, reduction, counts, and the pack hash; hashes of raw/source messages remain private. The existing default path and legacy environment-variable compactor are unchanged. No policy values, runner/CLI wiring, or experimental activation were chosen. |
+| M3 verification | Passing | Focused context-compression suite: `11 passed`; the M3 notebook public-pack target passed; the final full offline suite passed `453 passed, 3 skipped, 2 deselected` in 474.03s with one existing Jupyter path deprecation warning. Compileall and `git diff --check` pass apart from line-ending notices. Static search confirms that production runners/CLI do not construct or activate `ContextCompressionPolicy`. No API, model endpoint, Docker integration, pilot, experiment, staging, commit, push, or PR occurred. |
+| VQ1 adaptive-validation accounting and cap | Implemented locally; uncommitted; not activated | A versioned, explicitly injected `ValidationQueryPolicy` adds a separate pre-query cap, an optional non-borrowable protected-finalization query reserve, and one frozen numeric feedback precision. Repeated, failed, cached/reused, same-revision, `validate`, auto-validation/readiness, `check_candidate`, `quick_validate`, tuning-preflight/trials/final-check, Cleanlab, submit preflight, and protected replay accesses share one source-classified ledger. Under the policy, feedback-validation labels are removed from `val_df`, the workspace CSV, dataset cards, and public profiles; host validation owns labels and charges before each information access. Scores are normalized before both incumbent selection and public feedback. Summaries report realized queries and hidden-minus-feedback-validation gap; M3 exposes only aggregate remaining query resources, not the source ledger. No limits, precision, runner/CLI wiring, or arm configuration were chosen. |
+| VQ1 verification | Passing with deployment caveat | Budget suite: `29 passed`; strict context suite: `12 passed`; focused loophole/kernel suite: `16 passed`; combined budget/context/notebook suite: `93 passed, 1 skipped`; full offline suite before M5: `469 passed, 3 skipped, 2 deselected` in 545.96s with one existing Jupyter path deprecation warning. Compileall and `git diff --check` pass apart from line-ending notices. No production runner or CLI constructs `ValidationQueryPolicy`; the inactive M5 repeated arm now honors label isolation, query charging, and metric normalization if a policy is explicitly injected. Local Jupyter is not full OS isolation, so confirmatory enforcement still requires the same isolated Docker backend and frozen VQ1 policy in both arms. No API, Docker run, model endpoint, pilot, experiment, staging, commit, push, or PR occurred. |
+| M5 symmetric terminal selection | Implemented locally; uncommitted; not activated | `symmetric-terminal-v1` is now the single host-owned selector/finalizer used by protected `NotebookGymEnv` finalization and by the reserve-gated repeated-single-shot path. Both arms select through `CandidateRegistry`, verify the immutable M1b bundle, clean-replay the exact producing revision in a fresh execution state, run the same isolated submission validator, reject validation-metric drift under the same direction/tolerance contract, atomically store/reload the same protected artifact schema, and open the same one-shot `HiddenEvaluationGate`. The repeated adapter stores every admitted attempt as an immutable one-cell notebook bundle, so later failures cannot erase an earlier incumbent and a live `best_model` cannot bypass replay. VQ1 label isolation/query charging/precision are also honored when injected. Existing no-reserve behavior remains on the Paper V1 path. |
+| M5 verification | Passing with protocol gate | Common-controller and repeated-adapter suite: `8 passed`; reserve-gated runner/adjacent suite: `41 passed`; common-controller plus full `NotebookGymEnv` regression: `57 passed, 1 skipped`; final full offline suite: `479 passed, 5 skipped` in 586.27s with one existing Jupyter path deprecation warning. Compileall and `git diff --check` pass apart from line-ending notices. An injected reserve now requires explicit `--research-v2-metric-direction` and `--research-v2-score-tolerance`; neither has a default for the active V2 path. Static search confirms no production code constructs `FinalizationReservePolicy` or `ValidationQueryPolicy`, so no runner activates M2/VQ1/M5 automatically. Confirmatory arm symmetry still requires frozen reserve/query/tolerance values, the same Docker execution/prediction configuration, preregistration, and immutable protocol binding. No API, Docker run, model endpoint, pilot, experiment, staging, commit, push, or PR occurred. |
+| M4 frozen stopping controller | Implemented locally; uncommitted; not activated | `stopping-policy-v1` is a strict, externally supplied, hash-bound contract with no threshold defaults. A deterministic first-trigger-wins controller covers the preregisterable reasons: watched exploration resources reaching the reserve boundary, exploration-pool exhaustion, a frozen number of eligible non-improving validations, an agent finalization request with a valid incumbent, and an unrecoverable safety/contract failure. Both `NotebookGymEnv`/`GymAgent` and repeated-single-shot apply the same reason/state machine. Finalize decisions enter the common M5 protected replay; unrecoverable decisions terminate without hidden evaluation. Boundary inspection is read-only and occurs before a new LLM call, so exploration cannot borrow the reserve. |
+| M4 verification | Passing with protocol gate | Strict policy/controller/budget/runner suite: `15 passed`; Gym pre-call integration plus policy suite: `23 passed`; three end-to-end notebook stopping paths passed; repeated-arm observers and the existing reserve-gated M5 runner passed. Final full offline suite: `499 passed, 5 skipped` in 687.16s with one existing Jupyter path deprecation warning. Compileall, `git diff --check`, and static activation search pass apart from line-ending notices. Production code constructs no `FrozenStoppingPolicy`, `FinalizationReservePolicy`, or `ValidationQueryPolicy`. The JSON path is accepted only by the two M4-capable runners and fails closed unless a reserve was already explicitly injected. No patience value, watched-resource set, reserve/query limit, metric contract, or arm configuration was selected or activated. |
+| M6 result-blind protocol admission | Implemented locally; uncommitted; not frozen or activated | `paper-v2-protocol-bundle-v1` binds the exact M2/M3/VQ1/M4/M5 policies, terminal schema versions, one-hidden-gate rule, Docker execution/prediction isolation, immutable A/B/C runner/adapter mappings, execution commit, and hashes for selection evidence, protocol/hypotheses/analysis/failure documents, datasets/models/prompts/decoding, and matrix/randomization artifacts. Strict JSON and Python admission reject duplicate/unknown fields, non-standard numbers, post-outcome selection, malformed hashes, version/backend/arm drift, and terminal reserves that cannot execute the minimum M5 sequence. Canonicalization normalizes semantically equal integer/float spellings and stopping-resource order before hashing. The module emits only a public hash receipt; it neither writes a freeze artifact nor imports into any runner. |
+| M6 verification | Passing with external-artifact gate | Focused parser/schema/adversarial suite: `21 passed`; adjacent protocol/stopping/budget/runner/freeze/planner suite: `99 passed`; final full offline suite: `520 passed, 5 skipped` in 718.52s with one existing Jupyter path deprecation warning. Compileall, JSON Schema validation, `git diff --check`, and static non-wiring/non-construction searches pass apart from line-ending notices. The tests use synthetic values only. No real protocol document, policy selection, artifact manifest, independent review, preregistration, Docker digest verification, freeze record, runner activation, API, Docker run, experiment, commit, push, or PR occurred. |
+| M7 semantic preregistration contract | Implemented locally; uncommitted; draft only | `paper-v2-preregistration-v1` turns the Paper V2 questions into an exact result-blind hierarchy: P1 tests B-minus-A reliability non-inferiority; P2 is a P1-gated B-minus-A superiority test on unconditional FANU; S1 tests the C-minus-B checklist effect two-sided. The authoritative analysis population retains every terminal agent outcome, pairs by dataset/model/replicate, weights dataset-model strata equally, keeps successful-only scores descriptive, and preserves the one-hidden-evaluation rule. Failure semantics retain agent-invalid outcomes at dummy utility, censor and same-condition-replace infrastructure attempts, and stop rather than delete on protocol violations. System claims remain separate from a D0-D3 excluded-development nested ablation, whose checkpoint/reserve/compression contrasts support fixed-order incremental claims only and cannot be pooled with A/B/C. |
+| M7 verification | Passing with twelve explicit freeze blockers | The local artifact is `status=draft`, records `confirmatory_outcomes_visible=false`, and leaves margin, alpha, power, replicate count, resampling/randomization counts, seed, multiplicity, dataset/model scope, FANU references, power analysis, and independent statistical review explicitly unresolved with no values. Strict Python/JSON Schema admission rejects hypothesis/estimand/failure/claim drift, pseudo-resolution without rationale and evidence, duplicate/unknown fields, visible outcomes, invalid decision ranges, and `freeze_candidate` while any blocker remains. A future resolved object produces canonical preregistration/component hashes and must match the M6 selection/study references before admission. Focused suite: `20 passed`; adjacent M4-M7 research suite: `86 passed`; full offline suite: `540 passed, 5 skipped` in 813.13s with one existing Jupyter path deprecation warning. Tests use synthetic resolved fixtures only. No real decision value, artifact approval, runner activation, API, Docker run, pilot, experiment, freeze, stage, commit, push, or PR occurred. |
+| M8 result-blind planning power simulation | Implemented locally; uncommitted; no real scenario or result | `paper-v2-power-scenario-v1` requires explicit M7 hypothesis/analysis/failure hashes, alpha-split gatekeeping, family-wise/primary/secondary alpha, non-inferiority margin, target power, simulation draws/seed, per-stratum replicates, paired validity assumptions, and successful-FANU means/deviations/correlation. It simulates equal-weight paired strata, applies a one-sided P1 lower bound, gates the one-sided P2 FANU bound on P1, tests S1 with a two-sided bound, and reports P1, gated P2, S1, joint confirmatory power, Monte Carlo error/intervals, runtime versions, and immutable scenario/result hashes. Strict result validation reconciles counts, probabilities, uncertainty, targets, embedded assumptions, and hashes before atomic no-overwrite output. Every output states that this is planning-only normal-bound approximation, not confirmatory evidence or the final resampling/randomization analysis. |
+| M8 verification | Passing; M7 power decision remains unresolved | Focused scenario/simulation/result/schema/adversarial suite: `18 passed`; adjacent M6-M8/planner/analysis/freeze suite: `105 passed`; full offline suite: `558 passed, 5 skipped` in 648.85s with one existing Jupyter path deprecation warning. Extreme synthetic fixtures exercise full/zero P1 gate behavior, gated P2 and S1; tampered and internally inconsistent result objects fail closed even when rehashed. The module is absent from experiment runners and loads no MLflow, manifests, hidden scores, Paper V1 results, or Paper V2 outcomes. Only test fixtures contain numerical assumptions. No real scenario, sensitivity grid, power-result artifact, M7 decision resolution, API, Docker run, pilot, experiment, freeze, stage, commit, push, or PR occurred. |
+| M9 excluded-development and assumption provenance | Implemented locally; uncommitted; metadata gate only | `paper-v2-excluded-development-manifest-v1` and `paper-v2-confirmatory-dataset-scope-v1` reject overlap by immutable dataset identity, exact content, or source lineage. `paper-v2-assumption-evidence-v1` binds every M8 assumption separately per required scenario to the exact scenario hash, assumption pointer, value hash, declared use, admissible source artifact, and—only for pilot-derived nuisance parameters—the exact excluded-development manifest. Historical V1 and excluded pilots may inform nuisance parameters but cannot set the non-inferiority margin, alpha/power design, or provide evidence that corrected V2 works. The robust sample-size rule must pass all predeclared scenarios; favorable-row selection is forbidden. No real manifest, scope, evidence package, scenario grid, or receipt was created. |
+| M9 verification | Passing with one disclosed non-reproduced pre-existing VQ1 transient | Focused schema/parser/provenance/disjointness/adversarial suite: `28 passed`; adjacent M6-M9/planner/analysis/freeze suite: `211 passed`; final repeated full offline suite: `586 passed, 5 skipped` in 817.01s with one existing Jupyter path deprecation warning. The first full run completed `585 passed, 5 skipped, 1 failed`: the existing protected-finalization validation-query test observed one rather than two charges. It then passed alone, in its three-test VQ1 group, and in the complete rerun; cause remains unresolved and no unrelated VQ1 code was changed. JSON Schema tests, compile/format/diff checks, and static non-wiring/non-artifact searches pass apart from existing line-ending notices. M9 remains disconnected from runners and does not resolve any M7 freeze blocker. No API, Docker run, pilot, experiment, freeze, stage, commit, push, or PR occurred. |
+| Transfer checkpoint verification | Ready to commit and push; not PR-ready | On 2026-09-11 the branch remained exactly based on fresh `origin/main` commit `1d94774`, with 13 modified and 31 new source/test/document files, no staged or prior local commits, no forbidden dataset/output/cache paths, no file over 1 MiB, and no credential-shaped match in the bounded changed-file scan (`gitleaks` was unavailable). A fresh full offline run completed `585 passed, 5 skipped, 1 failed` in 1051.96s: existing `test_hidden_submit_failure_is_generic` did not make its third failure terminal. The unchanged target immediately passed three isolated reruns in 44.06s, 44.37s, and 42.27s. Cause is unresolved; no runtime code was altered to hide the non-reproduced failure. This is a resumable checkpoint only; the mixed M1-M9 stack must be split into reviewable claim boundaries before any PR. |
+
+This working tree stacks M1b, M2a, M2b, M3, VQ1, M4, M5, M6, M7, M8, and M9 locally on the still-uncommitted M1a
+branch. It must be split into reviewable claim boundaries after explicit commit
+authorization; it is not yet a published or PR-ready lineage. The M2 mechanism
+is implemented, but the scientific milestone is not protocol-ready: reserve
+values and stopping thresholds must be selected on excluded development tasks,
+reviewed, preregistered, and frozen before activation. M3 is likewise only a
+mechanism: its numeric limits and experimental comparison have not been selected
+or frozen. VQ1, M4, M5, M6, M7, M8, and M9 are likewise inactive mechanisms/contracts: query limits, feedback
+precision, reserve values, objective direction/tolerance, Docker enforcement,
+and arm configuration remain unfrozen. Full kernel/episode resume, broader
+task/model coverage, frozen M4 policy values, and later ablations remain separate
+Paper V2 claims and review gates.
 
 ## Paper V1 Research Protocol
 
@@ -41,12 +83,29 @@ or the unvalidated checklist detector. External submission remains out of scope.
 |------|--------|-------|
 | `notebook.py` | Done | nbformat v4 document editing, stable cell ids, revisions, outputs, Python export |
 | `jupyter_kernel.py` | Done | persistent local `ipykernel`; Docker kernel backend with loopback-only ZMQ ports and workspace path translation |
-| `notebook_env.py` | Done | real notebook action loop, clean restart-and-run-all, validate, submit, deterministic `type`/`stage`/`thoughts` contract, non-mutating `think`, public/private artifacts |
+| `notebook_env.py` | V1 done; V2 M1/M2/M3/VQ1/M4/M5 implemented locally | Real notebook action loop plus opt-in protected incumbent replay/finalization through the common M5 controller, strict public context packing, host-owned validation-query enforcement/label isolation, and an explicitly injected M4 stopping controller; default and no-policy behavior remain on the V1 path |
 | `feedback.py` | Done | runtime/contract/checklist/terminal feedback items and generic hidden checklist policy |
-| `candidates.py` | Done | candidate records and validation registry |
+| `candidates.py` | V1 done; V2 M1a+M1b implemented locally | Immutable validated records, explicit registration order, deterministic current/incumbent registry, and historical reconstruction contract are implemented on isolated uncommitted branch `JD/paper-v2-m1a` |
+| `candidate_store.py` | V2 M1b implemented locally | Atomic no-overwrite private bundles, canonical metadata, model/notebook snapshots, SHA-256 manifests, strict verified loading, and deterministic fail-closed reconstruction |
+| `finalization.py` | V2 M2b implemented locally | Atomic no-overwrite producing-revision artifacts, canonical receipts, source/replay hashes, strict verified loading, symlink/path rejection, and public hash-only receipts |
+| `terminal_contract.py` | V2 M5 implemented locally | Common host-owned incumbent selection, bundle verification, exact-revision replay boundary, isolated preflight, metric-drift rejection, protected artifact reload, and one-shot hidden gate shared by both arm adapters |
+| `context_compression.py` | V2 M3/VQ1 implemented locally | Explicit versioned policy, strict public schema, canonical byte-stable serialization, deterministic bounded truncation, required-state preservation, fail-closed fitting, public/private receipt separation, and aggregate-only validation-query resources |
+| `research/stopping.py` | V2 M4 implemented locally | Strict external policy loading, canonical policy hash, deterministic first-trigger-wins reasons, eligible-validation patience accounting, reserve-boundary matching, and public audit snapshots; no policy thresholds or watched resources are selected in production code |
+| `research/protocol_v2.py` | V2 M6 implemented locally; admission only | Strict result-blind bundle parsing, normalized canonical hash, component receipts, real policy-object validation, M5 minimum-resource checks, Docker/network/terminal gates, immutable A/B/C adapter mapping, and hashes binding the future study and experiment artifacts; no runner imports or activates it |
+| `research/schemas/paper_v2_protocol_bundle.schema.json` | V2 M6 implemented locally | Draft 2020-12 structural schema synchronized with the Python admission contract; Python remains authoritative for cross-field resource invariants |
+| `research/preregistration_v2.py` | V2 M7 implemented locally; draft admission only | Strict semantic validation for the P1/P2/S1 hierarchy, paired equal-stratum estimands, failure handling, D0-D3 non-pooled nested ablation, claim limits, twelve typed freeze decisions, canonical receipts, and M6 hash-reference reconciliation; no runner imports or activates it |
+| `research/protocols/paper_v2/preregistration.draft.json` | V2 M7 result-blind draft | Machine-readable preregistration source of truth with all numerical and review-dependent decisions explicitly unresolved; changing it to `freeze_candidate` currently fails closed |
+| `research/schemas/paper_v2_preregistration.schema.json` | V2 M7 implemented locally | Draft 2020-12 schema synchronized with the semantic Python admission, including conditional rejection of unresolved freeze candidates |
+| `research/power_v2.py` | V2 M8 implemented locally; planning only | Strict scenario/preregistration binding, paired A/B/C validity and FANU simulation, alpha-split P1→P2 gate plus S1, Monte Carlo uncertainty, semantic result reconciliation, runtime provenance, CLI, and atomic idempotent no-overwrite output; no runner imports or activates it |
+| `research/schemas/paper_v2_power_scenario.schema.json` | V2 M8 implemented locally | Draft 2020-12 structural schema for explicit result-blind planning scenarios; Python additionally enforces cross-field alpha allocation and unique strata |
+| `research/protocols/paper_v2/POWER_ANALYSIS.md` | V2 M8 method note | Declares required assumptions, normal-bound approximation, multiplicity boundary, no favorable-row selection, and restrictions on any later use of historical V1 evidence |
+| `research/evidence_v2.py` | V2 M9 implemented locally; metadata admission only | Strict result-blind excluded-development, confirmatory-scope, and per-scenario assumption-provenance admission; exact identity/content/lineage disjointness, value/source/manifest binding, complete-grid coverage, robust-all-scenarios selection, canonical receipts, and no runner wiring |
+| `research/schemas/paper_v2_*evidence*.schema.json` and dataset-scope schemas | V2 M9 implemented locally | Three Draft 2020-12 schemas synchronize the excluded-development manifest, confirmatory dataset scope, and assumption evidence structures; Python additionally enforces semantic disjointness, exact scenario/value coverage, and source/use admissibility |
+| `research/protocols/paper_v2/EVIDENCE_PROVENANCE.md` | V2 M9 method note | Defines dataset separation, per-value provenance, admissible source/use classes, the historical-V1 boundary, and the all-scenarios sample-size rule; explicitly records that no real M9 artifact exists |
+| `experiments/repeated_terminal.py` | V2 M5 implemented locally | Immutable one-cell attempt admission, common registry selection, fresh CodeExecutor replay, and adapter into `symmetric-terminal-v1`; activated only when an explicit finalization reserve is injected |
 | `modes.py` | Done | `gym_with_checklist` and `iterative_no_checklist` share the same backend |
 | `protocol.py` | Done | canonical action enum, required stage enum, canonical `thoughts`, and `think`; legacy `code` action remains compatible |
-| `agent.py` | Done | minimal prompt requires `type`/`stage`; thoughts mode requires `thoughts` and initial `think`/`planning` |
+| `agent.py` | V1 done; V2 M3/M4 implemented locally | Minimal prompt requires `type`/`stage`; thoughts mode requires `thoughts` and initial `think`/`planning`; deterministic compression is used only when an explicit policy is injected; M4 boundary/latched decisions are applied before another LLM call; default and legacy paths are unchanged |
 | `llm.py` | Done | OpenAI-compatible, Google/Gemini, and LiteLLM client selection |
 | `env.py` | Legacy maintained | old subprocess/Docker environment retained for compatibility tests; rejects `think`/`planning`/`thoughts` because thoughts mode is disabled |
 | `executor.py` | Legacy/baseline | Docker/subprocess executor retained for non-notebook baselines |
@@ -55,9 +114,9 @@ or the unvalidated checklist detector. External submission remains out of scope.
 
 | File | Status | Notes |
 |------|--------|-------|
-| `run_gym.py` | Done | uses `NotebookGymEnv`, logs notebook/process/private metrics, artifacts to MLflow |
+| `run_gym.py` | Done; inactive M4 wiring | Uses `NotebookGymEnv`, logs notebook/process/private metrics and artifacts to MLflow; accepts a strict external M4 JSON only when a protected reserve is already injected |
 | `run_baseline.py` | Done | single-shot control preserved; prompts require raw-DataFrame pipelines; missing score is not logged as zero |
-| `run_multishot.py` | Done | logged as `repeated_single_shot`; prompts require raw-DataFrame pipelines; not the fair checklist control |
+| `run_multishot.py` | Done; inactive M4/M5 wiring | Logged as `repeated_single_shot`; prompts require raw-DataFrame pipelines; an injected M4 policy uses the same incumbent/no-improvement/boundary reasons and common M5 terminal path; not the fair checklist control |
 | `run_fixed.py` | Done | fixed-transition control preserved; failed submit is not logged as real score 0.0 |
 | Paper V1 recorder integration | Done | all four `run_*` entrypoints accept opt-in research artifact flags and link MLflow to experiment/condition/run IDs without changing default execution |
 | `run.py` | Done | common single-dataset entrypoint; `--mode all` expands to five separate product runs with shared `batch_id`; `--modes ...` runs a selected batch of up to five modes |
@@ -71,8 +130,10 @@ or the unvalidated checklist detector. External submission remains out of scope.
 | Hidden score feedback | Done | submit response hides score; score only in private summary/MLflow |
 | Local Jupyter sandbox | Limited | real notebook functionality and sanitized env, but not full OS isolation |
 | Docker kernel backend | Done | CI builds `Dockerfile.sandbox` and runs Docker integration smoke when Docker is available |
-| Agent-visible artifacts | Done | public workspace artifacts exclude hidden score, private checklist coverage, submit failure type, and candidate pickle paths |
-| Private evaluator artifacts | Done | private summaries, trajectories, and candidate pickles are stored outside the kernel-visible workspace |
+| Agent-visible artifacts | Done | Public workspace artifacts exclude hidden score, private checklist coverage, submit failure type, candidate pickle paths, replayed model paths, and private failure details |
+| Private evaluator artifacts | Done | Private summaries, trajectories, versioned candidate bundles, and protected replay artifacts are stored outside the kernel-visible workspace; only ID/hash receipts without private paths enter public events |
+| M3 context receipts | Implemented locally | The agent-visible pack is assembled from an allow-listed public schema. Public receipts exclude raw/source-message hashes; those hashes are recorded only in the private receipt persisted outside the agent-visible workspace. |
+| VQ1 feedback-validation boundary | Implemented locally; inactive | With an explicit query policy, validation labels remain host-only and are absent from `val_df`, workspace files, dataset cards, public profiles, and aggregate M3 state. Query source counts remain in host summaries/ledgers. Local Jupyter is still not an OS security boundary; Docker isolation is required before scientific activation. |
 
 ### Tests
 
@@ -84,12 +145,388 @@ or the unvalidated checklist detector. External submission remains out of scope.
 | Clean run / validate / submit tests | Passing |
 | Checklist privacy/fairness tests | Passing |
 | Hidden-test privacy tests | Passing |
+| Candidate persistence / corruption / resume tests | Passing |
+| Protected replay / reserve / hidden-gate tests | Passing |
+| Deterministic context-pack / privacy / truncation tests | Passing |
+| Validation-query cap / bypass / precision / label-isolation tests | Passing |
 | Docker kernel integration | Runs in GitHub Actions after sandbox image build |
 | Step-budget semantics | Passing |
 
 ---
 
 ## Current Verification
+
+Paper V2 M9 excluded-development and assumption-provenance cycle (2026-09-01):
+
+- added strict metadata contracts for an excluded-development task manifest,
+  a result-blind confirmatory dataset scope, and a reviewed assumption-evidence
+  package; none of these contracts selects data, values, or policy;
+- development/confirmatory separation is checked independently by dataset
+  identity hash, exact content hash, and source-lineage hash, so renaming or
+  resplitting the same source cannot establish independence;
+- every assumption record is scoped to one scenario and binds the exact
+  scenario hash, canonical assumption pointer, exact value hash, use class,
+  source class, immutable source artifact, and conditional development-manifest
+  reference;
+- exact coverage is fail-closed across the complete supplied scenario set:
+  missing, extra, duplicate, moved, scenario-drifted, or value-drifted records
+  are rejected;
+- the non-inferiority margin accepts only an independent methodological
+  justification or external primary source; alpha/power choices have the same
+  independence boundary; V1 and excluded-development observations may source
+  only explicitly labelled nuisance assumptions;
+- pilot-derived nuisance records must bind the exact excluded-development
+  manifest, while non-pilot records are forbidden from claiming that manifest;
+- the scenario-grid plan and full-grid review are hash-bound, favorable-row
+  selection is false, and the only admitted sample-size decision rule is the
+  minimum replicate count meeting target in all required scenarios;
+- three Draft 2020-12 JSON Schemas mirror the structures; Python remains
+  authoritative for disjointness, exact coverage, and source/use constraints;
+- `python -m pytest tests/test_evidence_v2.py -q` -> `28 passed`;
+  adjacent M6-M9/planner/analysis/freeze suite -> `211 passed`;
+- the first full suite completed `585 passed, 5 skipped, 1 failed` in 765.02s:
+  one existing VQ1 protected-finalization test observed one rather than two
+  validation-query charges; it immediately passed alone (`1 passed`), with its
+  related VQ1 group (`3 passed, 54 deselected`), and in the complete repeated
+  suite; no VQ1 implementation was changed because the cause did not reproduce;
+- final repeated `python -m pytest -q` -> `586 passed, 5 skipped` in 817.01s
+  with one existing Jupyter path deprecation warning;
+- no real development manifest, confirmatory scope, scenario grid, assumption
+  package, receipt, decision resolution, API, model endpoint, Docker run, pilot,
+  experiment, freeze, stage, commit, push, PR, or external registration occurred.
+
+Paper V2 M8 result-blind power-planning cycle (2026-09-01):
+
+- added `paper-v2-power-scenario-v1`, which is rejected unless its hypothesis,
+  analysis-plan, and failure-policy hashes match the M7 preregistration;
+- every scenario must explicitly provide family-wise alpha, its allocation to
+  the P1/P2 sequence and S1, non-inferiority margin, target power, simulation
+  draws/seed, stratum replicate counts, paired validity assumptions, and
+  successful-FANU distribution/correlation assumptions; no scientific defaults
+  or real scenario file were added;
+- P1 uses the equal-stratum paired B-minus-A validity risk difference and passes
+  when its one-sided normal lower bound exceeds the negative margin;
+- P2 uses unconditional B-minus-A FANU, is tested one-sided, and counts only
+  when P1 passes; S1 uses a two-sided C-minus-B FANU bound;
+- the primary-sequence and S1 alpha allocations must both be positive and their
+  sum cannot exceed the family-wise alpha; this M8 version models the M7
+  `alpha_split_with_gatekeeping` candidate only, without selecting it for freeze;
+- results report P1, gated P2, S1, joint confirmatory power, descriptive P2
+  success conditional on P1, Monte Carlo standard errors and intervals, target
+  attainment, exact assumptions, runtime versions, and scenario/result hashes;
+- result admission first detects hash tampering, then reconstructs and verifies
+  the embedded scenario and reconciles success counts, draws, power, uncertainty,
+  intervals, targets, gates, claim limits, and runtime fields;
+- planning results use atomic no-overwrite publication and identical reruns are
+  idempotent; a different valid result cannot replace an existing artifact;
+- each result explicitly states that normal-bound simulation is planning-only,
+  assumption-dependent, and not the final paired resampling/randomization
+  analysis or evidence that an arm works;
+- the method note forbids selecting only a favorable sensitivity row and limits
+  any later Paper V1 use to labelled external planning evidence for nuisance
+  quantities, never the non-inferiority margin or evidence for corrected V2;
+- `python -m pytest tests/test_power_v2.py -q` -> `18 passed`;
+  adjacent M6-M8/planner/analysis/freeze suite -> `105 passed`;
+- `python -m pytest -q` -> `558 passed, 5 skipped` in 648.85s with one existing
+  Jupyter path deprecation warning;
+- no real scenario, sensitivity grid, result artifact, M7 decision resolution,
+  API, model endpoint, Docker run, pilot, experiment, freeze, stage, commit,
+  push, PR, or external preregistration occurred.
+
+Paper V2 M7 semantic-preregistration cycle (2026-09-01):
+
+- added `paper-v2-preregistration-v1` as a semantic layer above the M6 hash
+  contract; M6 can no longer be treated as sufficient evidence that hashed study
+  documents contain complete, admissible hypotheses and analysis rules;
+- froze the design shape, not its numerical values: P1 is B-minus-A reliability
+  non-inferiority, P2 is P1-gated B-minus-A unconditional-FANU superiority, and
+  S1 is a two-sided C-minus-B checklist comparison;
+- the estimand contract uses all terminal agent outcomes, paired
+  dataset/model/replicate blocks, equal dataset-model-stratum weighting, one
+  hidden evaluation, and explicitly selection-biased descriptive-only
+  successful-submission summaries;
+- agent-invalid outcomes remain invalid at dummy FANU, infrastructure attempts
+  are censored and replaced under the same condition, protocol violations stop
+  the series without deleting outcomes, and complete-case primary analysis is
+  forbidden;
+- causal mechanism claims require a separate excluded-development D0-D3 nested
+  ablation; its incremental checkpoint, protected-reserve, and compression
+  contrasts cannot be pooled with confirmatory A/B/C or described as
+  order-independent component effects;
+- twelve exact freeze decisions remain unresolved: non-inferiority margin,
+  family-wise alpha, target power, replicates, resampling/randomization counts,
+  analysis seed, secondary multiplicity, reviewed dataset/model scope, FANU
+  references, power analysis, and independent statistical review;
+- unresolved decisions must contain no value, rationale, or evidence hash;
+  resolved synthetic fixtures require typed values plus non-empty rationale and
+  SHA-256 evidence, while `freeze_candidate` fails if any decision remains open;
+- canonical receipts expose the preregistration and component hashes; a future
+  resolved candidate must match both the M6 preregistration reference and all
+  M6 study-contract hashes before it can be admitted;
+- `python -m pytest tests/test_preregistration_v2.py -q` -> `20 passed`;
+  adjacent M4-M7 research suite -> `86 passed`;
+- `python -m pytest -q` -> `540 passed, 5 skipped` in 813.13s with one existing
+  Jupyter path deprecation warning;
+- the local artifact remains a result-blind draft with no real values;
+  synthetic test values are not policy selections, and no runner imports M7;
+- no API, model endpoint, Docker run, pilot, experiment, freeze, stage, commit,
+  push, PR, or external preregistration occurred.
+
+Paper V2 M6 result-blind-protocol-admission cycle (2026-09-01):
+
+- added `paper-v2-protocol-bundle-v1` as a strict admission contract for a
+  future owner-approved Paper V2 freeze; it does not write or activate one;
+- the bundle binds execution commit plus SHA-256 references for result-blind
+  selection evidence, protocol/hypotheses/analysis/failure documents,
+  dataset/model/prompt/decoding manifests, and matrix/randomization artifacts;
+- all M2/M3/VQ1/M4 policies are parsed through their real validated policy
+  objects; M5 terminal/candidate/finalization versions, metric direction and
+  tolerance, one hidden gate, Docker image digest, network-none prediction, and
+  exact A/B/C runner/adapter/context mappings are admitted together;
+- cross-policy admission requires at least the known M5 minimum of one replay
+  code execution, three terminal tool calls, and one protected validation query,
+  while leaving positive exploration time/query capacity;
+- duplicate/unknown/non-string fields, non-standard JSON constants, booleans as
+  numbers, malformed hashes, visible confirmatory outcomes, non-excluded policy
+  selection, version/backend/network/arm drift, and incompatible reserves fail
+  closed before a receipt is produced;
+- canonical hashing is built from normalized policy objects, eliminating hash
+  drift from integer-versus-float spellings and stopping-resource input order;
+- a Draft 2020-12 JSON Schema mirrors the structural contract; Python admission
+  remains authoritative for cross-field/resource invariants;
+- the public receipt exposes only bundle/component hashes and immutable IDs;
+  no private paths, policy activation, freeze mutation, or outcome access occurs;
+- `python -m pytest tests/test_protocol_v2.py -q` -> `21 passed`; adjacent
+  protocol/stopping/budget/runner/freeze/planner suite -> `99 passed`;
+- `python -m pytest -q` -> `520 passed, 5 skipped` in 718.52s with one existing
+  Jupyter path deprecation warning; compileall, JSON Schema validation,
+  `git diff --check`, and static non-wiring checks pass apart from line-ending
+  notices;
+- no real policy values or artifact hashes were selected, no runner imports M6,
+  and no API, model endpoint, Docker run, pilot, experiment, stage, commit, push,
+  or PR occurred.
+
+Paper V2 M4 frozen-stopping-controller cycle (2026-09-01):
+
+- added strict `stopping-policy-v1` loading from a regular JSON file with exact
+  fields, duplicate/unknown/non-standard JSON rejection, canonical ordering,
+  stable SHA-256 policy identity, and no implementation-selected thresholds;
+- implemented a deterministic first-trigger-wins controller for reserve
+  boundary, exploration exhaustion, eligible-validation no-improvement,
+  incumbent-backed agent finalization, and unrecoverable contract failure;
+- added read-only `EpisodeBudget.exploration_boundary_resources()` so the
+  stopping layer can detect exact token/call/code/tool/time/query boundaries
+  without changing phase or consuming/borrowing resources;
+- `NotebookGymEnv` records candidate improvement against the deterministic M1
+  incumbent, exposes only public stopping receipts, and maps finalize decisions
+  to the shared M5 protected replay; terminate decisions produce no hidden
+  evaluation and do not enter the reserve;
+- `GymAgent` checks for a boundary before each new model call and after every
+  observation, and records step/call/budget exhaustion before its existing
+  fallback; a focused test proves a boundary can submit without any LLM call;
+- repeated-single-shot observes the same incumbent/tie semantics, resource
+  boundaries, exhaustion reasons, and bundle failures, then uses the same M5
+  terminal controller for finalize decisions;
+- runner binding accepts `--research-v2-stopping-policy` only for the two
+  M4-capable arms, requires an already-injected protected reserve, and includes
+  both canonical policy content and hash in the budget-policy manifest input;
+- `tests/test_stopping.py` -> `15 passed`; `tests/test_agent.py` plus policy
+  suite -> `23 passed`; three end-to-end notebook M4 paths passed; repeated M4
+  observers plus the existing reserve-gated M5 runner passed;
+- `python -m pytest -q` -> `499 passed, 5 skipped` in 687.16s with one existing
+  Jupyter path deprecation warning; compileall and `git diff --check` pass apart
+  from line-ending notices;
+- static search confirms no production construction of `FrozenStoppingPolicy`,
+  `FinalizationReservePolicy`, or `ValidationQueryPolicy`; policy thresholds,
+  reserve/query values, objective tolerance, and arm mapping remain excluded-
+  development and preregistration gates;
+- no API, model endpoint, Docker run, pilot, experiment, stage, commit, push, or
+  PR occurred.
+
+Paper V2 M5 symmetric-terminal-selection cycle (2026-08-30):
+
+- added versioned `symmetric-terminal-v1` as the only protected terminal
+  controller for both the iterative notebook adapter and the repeated-single-shot
+  adapter;
+- the common sequence is fixed as incumbent selection, immutable bundle
+  verification, exact producing-revision replay in a fresh state, isolated
+  raw-row/serialization preflight, normalized validation-score match, atomic
+  protected artifact write/reload, and one `HiddenEvaluationGate` attempt;
+- refactored the existing M2b `NotebookGymEnv` path onto that controller while
+  retaining reserve charging, replay-cell evidence, private diagnostics,
+  public redaction, terminal failure statuses, and no-repair/no-fallback behavior;
+- added `RepeatedSingleShotTerminalAdapter`: every validation-ready attempt is
+  stored through the same `CandidateRegistry` and `CandidateBundleStore` as an
+  immutable one-cell notebook revision; terminal replay uses a fresh executor
+  namespace and never falls back to the live host `best_model` object;
+- the real `run_multishot` integration is gated by an already-injected
+  `FinalizationReservePolicy`; without a reserve it retains the Paper V1 path;
+  production code still does not construct a reserve;
+- an active V2 reserve requires explicit metric direction and score tolerance;
+  the new CLI fields have no active-path defaults and a missing value fails
+  before the episode;
+- if a `ValidationQueryPolicy` is also injected, repeated-single-shot removes
+  labels from the agent dataset card, prompt, namespace, and replay namespace,
+  charges attempt and protected-finalization validation accesses, and uses the
+  same normalized score for feedback and selection;
+- common controller plus adapter -> `8 passed`; reserve-gated runner and adjacent
+  regressions -> `41 passed`; common controller plus full notebook regression ->
+  `57 passed, 1 skipped`;
+- `python -m pytest -q` -> `479 passed, 5 skipped` in 586.27s with one existing
+  Jupyter path deprecation warning; compileall and `git diff --check` pass apart
+  from line-ending notices;
+- static search confirms no production construction of
+  `FinalizationReservePolicy` or `ValidationQueryPolicy`; confirmatory use still
+  requires frozen policy values, the same Docker backend/prediction isolation,
+  preregistration, and immutable protocol binding;
+- no API, model endpoint, Docker run, pilot, experiment, stage, commit, push, or
+  PR occurred.
+
+Paper V2 VQ1 adaptive-validation-control cycle (2026-08-30):
+
+- added `validation-query-v1` as an explicitly injected policy with required
+  global query cap, protected-finalization query reserve, and public numeric
+  precision; no defaults, CLI arguments, runner construction, or experimental
+  values were added;
+- extended `EpisodeBudget` rather than adding an unrelated counter; failed,
+  repeated, cached/reused, and same-revision queries are independently charged,
+  source classified, event logged, capped before evaluation, and unable to
+  borrow across the exploration/finalization boundary;
+- centralized candidate readiness accounting covers explicit/auto validation,
+  automatic model feedback, candidate checks, quick validation, submit
+  preflight, and protected replay; tuning preflight, every tuning trial, final
+  tuned-model check, and enabled Cleanlab diagnostics are also charged;
+- when and only when the policy is active, `val_df` and the workspace validation
+  CSV contain features without the target; public cards/profiles use that same
+  label-free frame, while the host retains labels for charged evaluation;
+- feedback-derived metrics are normalized with the frozen precision before both
+  candidate selection and public display; Cleanlab confidence follows the same
+  precision contract;
+- host summaries expose the policy, realized count/source ledger, selected
+  feedback-validation metric, and `hidden_minus_feedback_validation_metric`;
+  the strict M3 pack exposes only aggregate query limits/use/remainders and
+  rejects an injected source ledger or inconsistent counters;
+- `python -m pytest tests/test_research_budget.py -q` -> `29 passed`;
+- focused cap/bypass/label-isolation/kernel set -> `16 passed, 78 deselected`;
+- `python -m pytest tests/test_context_compression.py -q` -> `12 passed`;
+- combined budget/context/notebook suite -> `93 passed, 1 skipped` in 444.53s
+  before the final aggregate-context test; that final context suite passed
+  separately and is included in the full result;
+- `python -m compileall -q gym research experiments tests`, `git diff --check`,
+  and `python -m pytest -m "not integration" -q` completed successfully; the
+  full suite result is `469 passed, 3 skipped, 2 deselected` in 545.96s with one
+  existing Jupyter path deprecation warning;
+- no production runner or CLI constructs the policy; the inactive, reserve-gated
+  M5 repeated runner now enforces it when explicitly injected;
+- confirmatory enforcement still requires the isolated Docker backend, frozen
+  limits/precision, symmetric M5 activation, external preregistration, and an
+  immutable protocol freeze;
+- no API, model endpoint, Docker run, pilot, experiment, stage, commit, push, or
+  PR occurred.
+
+Paper V2 M3 deterministic-context cycle (2026-08-30):
+
+- added a versioned, explicitly injected `ContextCompressionPolicy`; no default
+  limits, CLI flag, runner wiring, or automatic activation were added;
+- the new public pack retains the task contract, public tested hypotheses,
+  incumbent identity and validation state, active public blockers, deterministic
+  remaining-resource counters, allowed actions, notebook state, and the fixed
+  finalization contract;
+- strict schema validation rejects unknown/private fields, malformed state, and
+  non-finite numbers before serialization;
+- canonical UTF-8 JSON is byte-stable under mapping-order changes; bounded
+  history and state truncation use a fixed priority order, preserve the required
+  core, and fail closed when the core itself cannot fit;
+- raw errors, private diagnostics, hidden values, bundle paths, and private
+  checklist data are absent from the public pack; raw/source-message hashes are
+  written only to the private receipt;
+- later success for an action clears its active blocker, while failed or checked
+  public attempts remain represented as tested hypotheses;
+- `python -m pytest tests/test_context_compression.py -q` -> `11 passed`, one
+  existing Jupyter path deprecation warning;
+- the dedicated M3 `NotebookGymEnv` public-pack/privacy test passed after the
+  final hypothesis-history and blocker-clearing behavior was added;
+- `python -m compileall -q gym research experiments tests`, `git diff --check`,
+  and `python -m pytest -m "not integration" -q` completed successfully; the
+  full suite result is `453 passed, 3 skipped, 2 deselected` in 474.03s with one
+  existing Jupyter path deprecation warning;
+- no API, model endpoint, Docker integration, pilot, experiment, stage, commit,
+  push, or PR occurred.
+
+Paper V2 M2b protected-finalization cycle (2026-08-30):
+
+- added the opt-in terminal controller without adding CLI flags or default
+  reserve values; static search confirms only tests instantiate
+  `FinalizationReservePolicy`;
+- explicit agent submit and host-forced finalize use the same three finalization
+  tool units and the same producing-revision path, including after the
+  exploration cutoff has fired;
+- the host selects the historical incumbent, verifies its complete bundle, and
+  executes its exact snapshot in a restarted kernel without modifying either
+  the snapshot or the agent's later notebook revision;
+- replayed raw-row prediction, serialization, and validation metric are checked
+  before any artifact or hidden evaluation; validation drift fails closed;
+- the replayed model is atomically written, checksum-verified, and reloaded from
+  `protected-finalization-v1` before the one-shot hidden gate opens;
+- no-incumbent, bundle corruption, replay failure, preflight failure, metric
+  drift, storage failure, reserve exhaustion, and hidden failure are terminal;
+  none invokes code repair, live-kernel/autofit fallback, a new candidate,
+  exploration-resource borrowing, or a second hidden attempt;
+- `python -m pytest tests/test_finalization.py -q` -> `4 passed, 2 skipped`;
+  the two skips are unavailable Windows symlink capabilities;
+- all ten M2b controller cases passed across focused and full runs, including
+  the real exploration-cutoff-to-reserve transition;
+- `python -m pytest -m "not integration" -q` -> `441 passed, 3 skipped, 2
+  deselected` in 641.39s, with one existing Jupyter path deprecation warning;
+- `python -m compileall -q gym research experiments tests` and `git diff
+  --check` passed apart from line-ending notices;
+- no API, model endpoint, Docker integration, pilot, experiment, stage, commit,
+  push, or PR occurred.
+
+Paper V2 M2a protected-budget cycle (2026-08-30):
+
+- added an opt-in `FinalizationReservePolicy` without modifying the frozen
+  `EpisodeBudgetPolicy` fields or default serialization;
+- exploration limits are computed as global limits minus the protected reserve;
+  crossing that boundary raises a distinct non-terminal exploration stop while
+  preserving the finalization pool;
+- the explicit phase transition is one-way and idempotent, rejects pending LLM
+  reservations, records its trigger/start usage, and limits finalization to its
+  own realized token/call/execution/tool/time deltas;
+- no unused exploration capacity can be borrowed by finalization, including
+  when the phase begins early;
+- reserve-aware policy payloads are available for future manifests, but no CLI
+  activation or numeric reserve default exists;
+- `python -m pytest tests/test_research_budget.py -q` -> `19 passed`;
+- adjacent budget/experiment/runner/freeze suite -> `50 passed`, one existing
+  Jupyter path deprecation warning;
+- `python -m pytest -m "not integration" -q` -> `427 passed, 1 skipped, 2
+  deselected`, one existing Jupyter path deprecation warning;
+- no API, model endpoint, pilot, experiment, commit, push, or PR occurred.
+
+Paper V2 M1a+M1b isolated development cycle (2026-08-30):
+
+- fetched and verified `origin/main` at `1d94774`, then created a clean dedicated
+  worktree on `JD/paper-v2-m1a`; the dirty Paper V1 manuscript worktree was not
+  modified;
+- implemented M1b as a dependent local layer: atomic `candidate-bundle-v1`
+  storage, canonical private metadata, model/notebook snapshots, SHA-256
+  verification, deterministic historical registry restoration, public receipt
+  redaction, and pre-hidden-evaluation fail-closed corruption handling;
+- `python -m pytest tests/test_candidate_store.py tests/test_candidates.py -q`
+  -> `20 passed, 1 skipped`, one existing Jupyter path deprecation warning;
+- direct notebook regression before the final storage-write case -> `36 passed,
+  1 skipped`; the latest corruption/write-failure targets then passed `2 passed`,
+  and the final full offline suite covers both;
+- adjacent experiment, submission, runner, artifact, and protocol suite ->
+  `92 passed`, one existing Jupyter path deprecation warning;
+- `python -m pytest -m "not integration" -q` -> `416 passed, 1 skipped, 2
+  deselected`, one existing Jupyter path deprecation warning;
+- `python -m compileall -q gym tests/test_candidate_store.py
+  tests/test_candidates.py tests/test_notebook_env.py` -> passed;
+- `git diff --check` -> passed with line-ending notices only;
+- no API, paid endpoint, Docker integration, experiment, stage, commit, push, or
+  pull request was performed.
 
 Paper V1 protocol cycle (2026-08-12/13):
 
@@ -610,7 +1047,20 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 13. [ ] Keep the earlier H200 notebook-era matrix rerun and experiment-report
        refresh as product/pilot validation, clearly separated from Paper V1.
 14. [x] Existing product PRs were merged to `main`; TZ/PROTOCOL/EXPERIMENT_REPORT
-       were synchronized before this Paper V1 cycle.
+        were synchronized before this Paper V1 cycle.
+15. [ ] Review and split the isolated Paper V2 M1a, M1b, M2a, M2b, M3, VQ1, M4, M5, M6, M7, M8, and M9 local
+        stack into one-claim boundaries. Stage/commit/push/PR each require their
+        own authorization. Do not activate M2/M3/VQ1/M4 or mark them protocol-ready
+        until excluded-development policy selection, review, preregistration,
+        and freeze are complete. VQ1, M4, M5, M6, M7, M8, and M9 must remain separate claim boundaries;
+        do not make arm-symmetry claims until both arms use the frozen policies
+        and the same Docker-enforced validation and terminal configuration.
+16. [ ] Before any real M8/M9 artifact is admitted, independently review and
+        hash the excluded-development tasks, confirmatory dataset scope,
+        assumption sources, and full scenario-grid plan. Then execute every
+        predeclared planning scenario and select replicates by the all-scenarios
+        rule; keep all M7 decisions unresolved until substantive and statistical
+        reviewers approve the actual evidence.
 
 ---
 
@@ -618,6 +1068,17 @@ Local control panel, separate from `gym/`. Reuses the project `.venv`.
 
 | Date | Change |
 |------|--------|
+| 2026-09-11 | Prepared the complete inactive M1-M9 Paper V2 stack as a remote transfer checkpoint. Fresh `origin/main`, JapanDino Git/GitHub identity, the 44-file inventory, forbidden-path/size/credential-shaped scans, and diff cleanliness were checked before publication; `gitleaks` was unavailable. A fresh full offline suite completed `585 passed, 5 skipped, 1 failed` in 1051.96s because existing `test_hidden_submit_failure_is_generic` did not terminate on its third hidden-submit failure; the unchanged test then passed three isolated reruns. No research run, real M9 artifact, protocol freeze, PR, merge, or release was authorized; the checkpoint remains a mixed stack that must be split before review. |
+| 2026-09-01 | Implemented inactive Paper V2 M9 excluded-development and assumption-provenance admission. Development and confirmatory metadata now fail closed on identity, content, or source-lineage overlap. Every M8 value is independently bound per scenario to its scenario/value hashes, declared use, admissible source artifact, and exact excluded manifest when pilot-derived. V1/pilot evidence is limited to nuisance quantities; it cannot set the non-inferiority margin or establish corrected-V2 effects. The complete scenario set and review are hash-bound, favorable-row selection is forbidden, and sample size must meet target in all required scenarios. Three synchronized schemas, a method note, and synthetic adversarial tests were added. Verification: focused `28 passed`, adjacent `211 passed`, final repeated full suite `586 passed, 5 skipped` in 817.01s. The first full run had one non-reproduced existing VQ1 failure (`585 passed, 5 skipped, 1 failed`), which passed alone, in its group, and in the complete rerun; no unrelated VQ1 code changed. No real manifest, scope, scenario grid, evidence package, API, Docker run, pilot, experiment, freeze, stage, commit, push, or PR. |
+| 2026-09-01 | Implemented inactive Paper V2 M8 result-blind planning power simulation. Explicit scenarios bind M7 study hashes and declare alpha split/gatekeeping, margin, target, draws/seed, replicates, paired validity, and successful-FANU assumptions with no defaults. The simulator reports P1, gated P2, S1 and joint power plus Monte Carlo uncertainty. Strict result validation detects tampering and reconciles embedded assumptions/counts/power/intervals/targets before atomic no-overwrite output; runtime versions and planning-only claim limits are recorded. A synchronized Draft 2020-12 scenario schema and method note prohibit outcome access, favorable-row selection, and treating the normal-bound approximation as confirmatory evidence. Verification: focused `18 passed`, adjacent `105 passed`, full offline `558 passed, 5 skipped` in 648.85s. No real scenario, power result, decision resolution, API, Docker run, pilot, experiment, freeze, stage, commit, push, or PR. |
+| 2026-09-01 | Implemented inactive Paper V2 M7 semantic preregistration admission. `paper-v2-preregistration-v1` fixes the P1 reliability-noninferiority, gated P2 unconditional-FANU superiority, and two-sided S1 checklist hierarchy; all-outcome paired equal-stratum estimands; failure handling; claim limits; and a separate non-pooled D0-D3 nested mechanism ablation. Twelve typed scientific/review decisions remain explicitly unresolved in the result-blind draft, so `freeze_candidate` fails closed. Canonical preregistration/component receipts must match future M6 references. A synchronized Draft 2020-12 schema and adversarial tests reject design drift, pseudo-resolution, visible outcomes, invalid values, duplicate/unknown fields, and unresolved freeze attempts. Verification: focused `20 passed`, adjacent `86 passed`, full offline `540 passed, 5 skipped` in 813.13s; no real values, API, Docker run, pilot, experiment, freeze, stage, commit, push, or PR. |
+| 2026-09-01 | Implemented inactive Paper V2 M6 result-blind protocol admission. `paper-v2-protocol-bundle-v1` strictly binds the validated M2/M3/VQ1/M4 policies, M5 terminal/artifact versions and minimum reserve, one hidden gate, Docker/network isolation, exact A/B/C runner mappings, execution commit, and hashes for selection evidence, study documents, inputs, prompts, decoding, matrix, and randomization. Canonicalization removes integer/float and stopping-order hash drift. A synchronized Draft 2020-12 schema and adversarial tests reject post-outcome selection, malformed evidence, unknown/duplicate fields, backend/version/arm drift, and incompatible reserves. It remains disconnected from runners and cannot create a freeze. Verification: focused `21 passed`, adjacent `99 passed`, full offline `520 passed, 5 skipped` in 718.52s; compileall/schema/diff/static non-wiring checks pass. No real values, artifacts, API, Docker run, experiment, stage, commit, push, or PR. |
+| 2026-09-01 | Implemented inactive Paper V2 M4 frozen stopping controller. `stopping-policy-v1` has strict external JSON loading, canonical hashing, no threshold defaults, and deterministic first-trigger-wins handling for reserve boundary, exploration exhaustion, eligible no-improvement, incumbent-backed agent finalization, and unrecoverable failure. Gym checks the boundary before another LLM call; repeated-single-shot uses the same incumbent and boundary observers; finalize decisions enter common M5 replay while terminate decisions never open the hidden gate. The policy is manifest-bound and cannot load without an already-injected reserve. Verification: policy/runner `15 passed`, agent+policy `23 passed`, three notebook end-to-end paths passed, repeated observer/M5 regression passed, full offline `499 passed, 5 skipped` in 687.16s; compileall/diff/static activation checks pass. No policy values, API, Docker run, experiment, stage, commit, push, or PR. |
+| 2026-08-30 | Implemented inactive Paper V2 M5 symmetric terminal selection. `symmetric-terminal-v1` now owns incumbent selection, immutable bundle verification, exact producing-revision replay, the common isolated preflight, normalized score-drift check, protected artifact reload, and one hidden gate for both `NotebookGymEnv` and the reserve-gated repeated-single-shot adapter. Repeated attempts are persisted as immutable one-cell bundles and cannot fall back to live `best_model`; injected VQ1 removes labels and charges/normalizes validation consistently. Active V2 use requires explicit metric direction/tolerance, while production still constructs neither reserve nor query policy. Verification: common/adapter `8 passed`, adjacent `41 passed`, controller+notebook `57 passed, 1 skipped`, full offline `479 passed, 5 skipped` in 586.27s; compileall/diff/static activation checks pass. No policy values, API, Docker run, experiment, stage, commit, push, or PR. |
+| 2026-08-30 | Implemented inactive Paper V2 VQ1 adaptive-validation control as a separate local mechanism. `ValidationQueryPolicy` now provides a pre-query global cap, non-borrowable terminal reserve, source ledger, and frozen numeric feedback precision with no defaults. All current validation-information paths are charged, repeated/cached/revision reuse cannot bypass the cap, active-policy workspaces/kernels receive validation features without labels, selection uses the same normalized score disclosed to the agent, summaries report realized queries and hidden-minus-feedback gap, and M3 retains only aggregate query resources. Local Jupyter is not full OS isolation; frozen symmetric M5 activation and Docker enforcement remain gates. Verification: budget `29 passed`, context `12 passed`, focused loophole/kernel `16 passed`, full offline `469 passed, 3 skipped, 2 deselected` in 545.96s; compileall/diff/static activation checks pass. No policy values, runner/CLI activation, API, Docker run, experiment, stage, commit, push, or PR. |
+| 2026-08-30 | Implemented opt-in Paper V2 M3 deterministic context compression on the local M1/M2 stack. A strict versioned public context pack now preserves the task contract, tested public hypotheses, incumbent, active blockers, deterministic remaining resources, allowed actions, notebook state, and finalization contract. Canonical byte-stable JSON, fixed-priority bounded truncation, core-preserving fail-closed behavior, explicit public/private receipts, legacy/default compatibility, and private/hidden-field rejection are tested. No runner/CLI activates the policy and no numeric limits were selected. Verification: focused context suite `11 passed`, dedicated notebook pack/privacy target passed, and full offline `453 passed, 3 skipped, 2 deselected` in 474.03s; compileall and diff checks pass. No API, Docker, experiment, stage, commit, push, or PR. |
+| 2026-08-30 | Implemented opt-in Paper V2 M2b protected producing-revision finalization on top of local M1a/M1b/M2a. The host now selects and verifies the incumbent, clean-replays its frozen snapshot under the separate reserve, repeats raw-row/serialization/metric preflight, atomically stores and reloads a hash-bound replay artifact, and then permits one hidden evaluation. Every pre-hidden and hidden failure is terminal with no repair, fallback, replacement candidate, borrowing, or retry. No runner/CLI activates the reserve and no numeric policy was selected. Verification: dedicated artifact store `4 passed, 2 skipped`, all ten M2b controller cases passed, and full offline `441 passed, 3 skipped, 2 deselected`; compileall and diff checks pass. No API, Docker, experiment, stage, commit, push, or PR. |
+| 2026-08-30 | Started Paper V2 reliability implementation from verified `origin/main` commit `1d94774` in isolated branch `JD/paper-v2-m1a`. M1a makes validated records immutable, selects incumbents deterministically with the existing `higher`/`lower` convention, preserves historical candidates across notebook mutations, and keeps submission/hidden evaluation restricted to the current clean-run candidate. Added focused registry/lifecycle/boundary tests. Verification: `43 passed, 1 skipped` focused, `95 passed` adjacent, `402 passed, 2 deselected` full offline suite, and `git diff --check` with line-ending notices only. No API, experiment, staging, commit, push, or PR. M1b persistence/resume remains required. |
 | 2026-08-16 | Prepared PR 6 from merged PR #73 (`d1ec571`): added a TMLR-style manuscript, checked bibliography, limitations/disclosures, reproducibility guide, and SHA-256 manifest. Review hardening validates all outputs, binds renderer/hash code, clarifies runtimes/budget, and records omitted preregistered resource and descriptive reports. Windows/Linux drift was fixed with LF-normalized hashing, artifact/output assertions, and CRLF regressions; current Linux CI passed `392 passed, 2 deselected`, and focused tests pass `23 passed` before the final assertion/disclosure-only follow-up. No submission, public release, raw-run commit, private registry access, or paid API request. |
 | 2026-08-16 | Fast-forward merged deterministic Paper V1 results PR #73 at `d1ec571` after exact-identity commits, local `385 passed, 2 skipped`, successful GitHub tests, no unresolved threads, and a current-head review with no major issue. The package preserves the content-hashed analysis, deterministic CSV/SVG outputs, resource accounting including reasoning tokens, stable hidden-summary columns, provenance, and the documented PR #72 metadata deviation. |
 | 2026-08-16 | Merged reference-binding repair PR #72 after local `384 passed`, GitHub tests, and review resolution, then ran the unchanged preregistered analysis once to fresh `analysis-v2/primary-analysis.json`. All 120 outcomes passed completeness. Result hash is `22ff7ac1...c58a`: H1 `B-A=-0.731124`, 95% CI `[-0.848360,-0.608697]`, Holm p=`0.000020`; H2 `C-B=-0.048985`, 95% CI `[-0.211189,0.107149]`, Holm p=`0.570312`; valid rates A/B/C are `75.0%/15.0%/7.5%`. Added deterministic, hash-validating CSV/SVG/provenance generation for PR 5b; focused suite `21 passed`, full suite `385 passed, 2 skipped`, one existing Jupyter warning. GitHub rebase rewrote PR #72 committer display name to `J D` despite correct account/email and exact source-commit identity; owner instructed continuation without a force rewrite, and the deviation is retained in the audit. |

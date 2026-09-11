@@ -5,6 +5,11 @@ import os
 
 from research.budget import BudgetExhausted
 
+from .context_compression import (
+    ContextCompressionError,
+    ContextCompressionPolicy,
+    compress_context,
+)
 from .env import GymEnv
 from .llm import LLMClient, default_model_name, make_llm_client
 from .notebook_env import NotebookGymEnv
@@ -140,11 +145,14 @@ class GymAgent:
         model: str | None = None,
         max_tokens: int = 8192,
         client: LLMClient | None = None,
+        context_compression_policy: ContextCompressionPolicy | None = None,
     ):
         self.env = env
         self.model = model or default_model_name()
         self.max_tokens = max_tokens
         self.client = client or make_llm_client()
+        self.context_compression_policy = context_compression_policy
+        self.last_context_compression_receipt: dict | None = None
         self.messages: list[dict] = []
         self.total_input_tokens = 0
         self.total_output_tokens = 0
@@ -160,6 +168,15 @@ class GymAgent:
         )
 
         for turn in range(max_agent_turns):
+            stopping_observation = self._try_stopping_transition()
+            if stopping_observation is not None:
+                self.messages.append(
+                    {
+                        "role": "user",
+                        "content": self._build_feedback(stopping_observation),
+                    }
+                )
+                return self._build_stopping_summary()
             try:
                 response = self.client.complete(
                     model=self.model,
@@ -227,7 +244,27 @@ class GymAgent:
             if observation.submitted:
                 return self._build_summary()
 
+            stopping_observation = self._try_stopping_transition()
+            if stopping_observation is not None:
+                self.messages.append(
+                    {
+                        "role": "user",
+                        "content": self._build_feedback(stopping_observation),
+                    }
+                )
+                return self._build_stopping_summary()
+
             if observation.done:
+                self._record_exploration_exhaustion("step_budget_exhausted")
+                stopping_observation = self._try_stopping_transition()
+                if stopping_observation is not None:
+                    self.messages.append(
+                        {
+                            "role": "user",
+                            "content": self._build_feedback(stopping_observation),
+                        }
+                    )
+                    return self._build_stopping_summary()
                 forced_observation = self._try_forced_submit()
                 if forced_observation is not None:
                     self.messages.append(
@@ -240,6 +277,13 @@ class GymAgent:
                 summary["forced_submit"] = True
                 return summary
 
+        self._record_exploration_exhaustion("max_agent_turns")
+        stopping_observation = self._try_stopping_transition()
+        if stopping_observation is not None:
+            self.messages.append(
+                {"role": "user", "content": self._build_feedback(stopping_observation)}
+            )
+            return self._build_stopping_summary()
         summary = self._build_summary()
         summary["stopped_reason"] = "max_agent_turns"
         return summary
@@ -253,6 +297,15 @@ class GymAgent:
         return summary
 
     def _finish_budget_exhaustion(self, exc: BudgetExhausted) -> dict:
+        self._record_exploration_exhaustion(exc.reason)
+        stopping_observation = self._try_stopping_transition()
+        if stopping_observation is not None:
+            self.messages.append(
+                {"role": "user", "content": self._build_feedback(stopping_observation)}
+            )
+            summary = self._build_stopping_summary()
+            summary["budget_stop_reason"] = exc.reason
+            return summary
         forced_observation = self._try_forced_submit()
         if forced_observation is not None:
             self.messages.append(
@@ -262,6 +315,25 @@ class GymAgent:
         summary["forced_submit"] = True
         summary["stopped_reason"] = "budget_exhausted"
         summary["budget_stop_reason"] = exc.reason
+        return summary
+
+    def _record_exploration_exhaustion(self, detail_code: str) -> None:
+        record = getattr(self.env, "record_exploration_exhaustion", None)
+        if callable(record):
+            record(detail_code)
+
+    def _try_stopping_transition(self) -> Observation | None:
+        apply_policy = getattr(self.env, "apply_stopping_policy", None)
+        if callable(apply_policy):
+            return apply_policy()
+        return None
+
+    def _build_stopping_summary(self) -> dict:
+        summary = self._build_summary()
+        summary["stopping_policy_triggered"] = True
+        summary["stopped_reason"] = summary.get(
+            "stopping_reason", "stopping_policy"
+        )
         return summary
 
     def _build_feedback(self, observation: Observation) -> str:
@@ -284,6 +356,29 @@ class GymAgent:
         return feedback
 
     def _messages_for_llm(self) -> list[dict]:
+        if self.context_compression_policy is not None:
+            build_context_pack = getattr(self.env, "build_context_pack_v1", None)
+            if not callable(build_context_pack):
+                raise ContextCompressionError(
+                    "M3 context compression requires build_context_pack_v1"
+                )
+            compressed = compress_context(
+                state=build_context_pack(),
+                messages=self.messages,
+                policy=self.context_compression_policy,
+            )
+            receipt = compressed.public_receipt()
+            private_receipt = compressed.private_receipt()
+            self.last_context_compression_receipt = private_receipt
+            record_context_compression = getattr(
+                self.env, "record_context_compression", None
+            )
+            if callable(record_context_compression):
+                record_context_compression(
+                    receipt,
+                    private_receipt=private_receipt,
+                )
+            return compressed.as_messages()
         if os.getenv("AUTOVIBE_CONTEXT_COMPACTION", "off").lower() != "conservative":
             return self.messages
         try:

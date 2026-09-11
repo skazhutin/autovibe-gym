@@ -23,7 +23,10 @@ from gym.model_config import apply_model_reference
 from gym.llm import configured_temperature, make_llm_client
 from research.runner_integration import (
     add_research_artifact_args,
+    add_research_v2_stopping_arg,
+    budget_policy_payload,
     create_episode_budget,
+    create_stopping_policy,
     dataset_source_hash,
     finalize_research_run,
     research_mlflow_params,
@@ -113,6 +116,7 @@ def main():
     parser.add_argument("--run-name", default=None)
     add_mode_metadata_args(parser)
     add_research_artifact_args(parser)
+    add_research_v2_stopping_arg(parser)
     args = parser.parse_args()
 
     defaults = MODE_DEFAULTS[args.mode]
@@ -120,8 +124,23 @@ def main():
     max_tokens = args.max_tokens or defaults["max_tokens"]
     sandbox_timeout = args.sandbox_timeout or defaults["sandbox_timeout"]
     episode_budget = create_episode_budget(args)
+    stopping_policy = create_stopping_policy(args, episode_budget)
     if episode_budget is not None:
         max_tokens = min(max_tokens, episode_budget.policy.max_output_tokens_per_call)
+    metric_direction = "higher"
+    candidate_score_tolerance = 1e-12
+    if episode_budget is not None and episode_budget.has_finalization_reserve:
+        if (
+            args.research_v2_metric_direction is None
+            or args.research_v2_score_tolerance is None
+        ):
+            raise ValueError(
+                "An active V2 finalization reserve requires explicit "
+                "--research-v2-metric-direction and "
+                "--research-v2-score-tolerance values."
+            )
+        metric_direction = args.research_v2_metric_direction
+        candidate_score_tolerance = args.research_v2_score_tolerance
 
     splits = load_dataset_splits(
         dataset=args.dataset,
@@ -160,10 +179,13 @@ def main():
             "max_tokens": max_tokens,
             "temperature": configured_temperature(),
         },
-        budget_policy=(
-            episode_budget.policy.to_dict()
-            if episode_budget is not None
-            else {"max_agent_turns": max_steps, "max_tokens_per_call": max_tokens}
+        budget_policy=budget_policy_payload(
+            episode_budget,
+            fallback={
+                "max_agent_turns": max_steps,
+                "max_tokens_per_call": max_tokens,
+            },
+            stopping_policy=stopping_policy,
         ),
         execution_policy={
             "backend": _kernel_backend_label(),
@@ -237,6 +259,9 @@ def main():
             hint_cooldown=args.hint_cooldown,
             episode_budget=episode_budget,
             research_submission=episode_budget is not None,
+            metric_direction=metric_direction,
+            candidate_score_tolerance=candidate_score_tolerance,
+            stopping_policy=stopping_policy,
         )
 
         agent = GymAgent(env=env, model=model_name, max_tokens=max_tokens, client=client)

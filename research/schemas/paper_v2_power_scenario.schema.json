@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://autovibe-gym.local/schemas/paper_v2_power_scenario.schema.json",
+  "title": "AutoVibe Gym Paper V2 Planning Power Scenario",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "scenario_id",
+    "evidence_class",
+    "confirmatory_outcomes_visible",
+    "study_contract",
+    "testing",
+    "simulation",
+    "strata"
+  ],
+  "properties": {
+    "schema_version": { "const": "paper-v2-power-scenario-v1" },
+    "scenario_id": { "type": "string", "minLength": 1 },
+    "evidence_class": { "const": "planning_simulation_only" },
+    "confirmatory_outcomes_visible": { "const": false },
+    "study_contract": { "$ref": "#/$defs/studyContract" },
+    "testing": { "$ref": "#/$defs/testing" },
+    "simulation": { "$ref": "#/$defs/simulation" },
+    "strata": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1000,
+      "items": { "$ref": "#/$defs/stratum" }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "studyContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "hypotheses_hash",
+        "analysis_plan_hash",
+        "failure_policy_hash"
+      ],
+      "properties": {
+        "hypotheses_hash": { "$ref": "#/$defs/sha256" },
+        "analysis_plan_hash": { "$ref": "#/$defs/sha256" },
+        "failure_policy_hash": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "testing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "multiplicity_strategy",
+        "familywise_alpha",
+        "primary_sequence_alpha",
+        "secondary_alpha",
+        "noninferiority_margin",
+        "target_power"
+      ],
+      "properties": {
+        "multiplicity_strategy": {
+          "const": "alpha_split_with_gatekeeping"
+        },
+        "familywise_alpha": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 0.1
+        },
+        "primary_sequence_alpha": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 0.1
+        },
+        "secondary_alpha": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 0.1
+        },
+        "noninferiority_margin": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "exclusiveMaximum": 0.5
+        },
+        "target_power": {
+          "type": "number",
+          "minimum": 0.8,
+          "exclusiveMaximum": 1
+        }
+      }
+    },
+    "simulation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["draws", "seed", "rng_engine"],
+      "properties": {
+        "draws": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 1000000
+        },
+        "seed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        },
+        "rng_engine": { "const": "numpy-pcg64-v1" }
+      }
+    },
+    "probability": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "armNumbers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["A", "B", "C"],
+      "properties": {
+        "A": { "type": "number" },
+        "B": { "type": "number" },
+        "C": { "type": "number" }
+      }
+    },
+    "armPositiveNumbers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["A", "B", "C"],
+      "properties": {
+        "A": { "type": "number", "exclusiveMinimum": 0 },
+        "B": { "type": "number", "exclusiveMinimum": 0 },
+        "C": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "validity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "a_rate",
+        "b_given_a_valid",
+        "b_given_a_invalid",
+        "c_given_b_valid",
+        "c_given_b_invalid"
+      ],
+      "properties": {
+        "a_rate": { "$ref": "#/$defs/probability" },
+        "b_given_a_valid": { "$ref": "#/$defs/probability" },
+        "b_given_a_invalid": { "$ref": "#/$defs/probability" },
+        "c_given_b_valid": { "$ref": "#/$defs/probability" },
+        "c_given_b_invalid": { "$ref": "#/$defs/probability" }
+      }
+    },
+    "successfulFanu": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "means",
+        "standard_deviations",
+        "shared_correlation"
+      ],
+      "properties": {
+        "means": { "$ref": "#/$defs/armNumbers" },
+        "standard_deviations": { "$ref": "#/$defs/armPositiveNumbers" },
+        "shared_correlation": {
+          "type": "number",
+          "minimum": 0,
+          "exclusiveMaximum": 1
+        }
+      }
+    },
+    "stratum": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stratum_id",
+        "replicates",
+        "validity",
+        "successful_fanu"
+      ],
+      "properties": {
+        "stratum_id": { "type": "string", "minLength": 1 },
+        "replicates": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 100000
+        },
+        "validity": { "$ref": "#/$defs/validity" },
+        "successful_fanu": { "$ref": "#/$defs/successfulFanu" }
+      }
+    }
+  }
+}

@@ -10,7 +10,10 @@ import argparse
 import json
 import os
 import re
+import tempfile
 import time
+from pathlib import Path
+from typing import Any
 
 import mlflow
 import numpy as np
@@ -23,9 +26,13 @@ except ImportError:
 
 from experiments.mlflow_config import configure_mlflow_tracking
 from experiments.modes import add_mode_metadata_args, mode_metadata_params
+from experiments.repeated_terminal import RepeatedSingleShotTerminalAdapter
 from research.runner_integration import (
     add_research_artifact_args,
+    add_research_v2_stopping_arg,
+    budget_policy_payload,
     create_episode_budget,
+    create_stopping_policy,
     dataset_source_hash,
     finalize_research_run,
     research_mlflow_params,
@@ -34,18 +41,21 @@ from research.runner_integration import (
     wrap_llm,
 )
 from research.budget import BudgetExhausted
+from research.stopping import StoppingController
 from research.submission import (
     HiddenEvaluationGate,
     prediction_backend_for_execution,
     validate_submission_candidate,
 )
 from gym.data_profile import build_dataset_card
+from gym.candidate_store import CandidateBundleError
 from gym.datasets import load_dataset_splits, resolve_metric
 from gym.executor import CodeExecutor
 from gym.llm import configured_temperature, make_llm_client
 from gym.model_config import apply_model_reference
 from gym.protocol import Action
 from gym.scoring import score_with_coercion
+from gym.terminal_contract import TERMINAL_CONTRACT_VERSION
 
 if load_dotenv is not None:
     load_dotenv()
@@ -132,6 +142,96 @@ def _build_attempt_prompt(task_prompt: str, best_val: float | None, attempt: int
     return "\n".join(parts)
 
 
+def _system_prompt_for_validation_boundary(*, labels_host_only: bool) -> str:
+    if not labels_host_only:
+        return SYSTEM_PROMPT
+    return (
+        SYSTEM_PROMPT.replace(
+            "  val_df     - validation DataFrame",
+            "  val_df     - validation feature DataFrame; target labels are host-only",
+        )
+        .replace(
+            "- Train your best model on train_df and evaluate on val_df if useful.",
+            "- Train on train_df. Validation labels are host-only; the host evaluates submitted candidates.",
+        )
+        .replace(
+            "- As the LAST line, verify: `_ = model.predict(val_df.drop(columns=[target_col]).head())`.",
+            "- As the LAST line, verify: `_ = model.predict(val_df.head())`.",
+        )
+    )
+
+
+def _symmetric_terminal_null_reason(final_status: str) -> str:
+    return {
+        "no_incumbent_for_finalization": (
+            "No validated incumbent existed when protected finalization began."
+        ),
+        "invalid_candidate_artifact": (
+            "The incumbent bundle failed integrity verification before replay."
+        ),
+        "protected_replay_failed": (
+            "The immutable incumbent snapshot could not be replayed safely."
+        ),
+        "protected_replay_validation_failed": (
+            "The replayed incumbent failed the common submission preflight."
+        ),
+        "protected_replay_validation_mismatch": (
+            "The replayed validation metric did not match the frozen incumbent record."
+        ),
+        "protected_finalization_artifact_failed": (
+            "The replayed model could not be stored and verified atomically."
+        ),
+        "hidden_submit_failed": (
+            "The replayed artifact failed the single private hidden evaluation."
+        ),
+        "finalization_reserve_exhausted": (
+            "The protected finalization reserve was exhausted before completion."
+        ),
+    }.get(
+        final_status,
+        "Symmetric terminal finalization produced no hidden score.",
+    )
+
+
+def _observe_repeated_boundary(
+    controller: StoppingController,
+    budget: Any,
+    terminal: RepeatedSingleShotTerminalAdapter,
+) -> None:
+    incumbent = terminal.registry.incumbent()
+    controller.observe_reserve_boundary(
+        boundary_resources=budget.exploration_boundary_resources(),
+        incumbent_candidate_id=(
+            incumbent.candidate_id if incumbent is not None else None
+        ),
+    )
+
+
+def _observe_repeated_candidate(
+    controller: StoppingController,
+    *,
+    previous_incumbent: Any,
+    record: Any,
+    terminal: RepeatedSingleShotTerminalAdapter,
+) -> None:
+    incumbent = terminal.registry.incumbent()
+    controller.observe_validation_attempt(
+        eligible=True,
+        improved=bool(
+            incumbent is not None
+            and incumbent.candidate_id == record.candidate_id
+            and (
+                previous_incumbent is None
+                or previous_incumbent.candidate_id != record.candidate_id
+            )
+        ),
+        candidate_id=record.candidate_id,
+        incumbent_candidate_id=(
+            incumbent.candidate_id if incumbent is not None else None
+        ),
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Repeated single-shot: N independent attempts, only best val score shared."
@@ -153,6 +253,7 @@ def main():
     parser.add_argument("--run-name", default=None)
     add_mode_metadata_args(parser)
     add_research_artifact_args(parser)
+    add_research_v2_stopping_arg(parser)
     args = parser.parse_args()
 
     defaults = MODE_DEFAULTS[args.mode]
@@ -160,6 +261,7 @@ def main():
     max_tokens = args.max_tokens or defaults["max_tokens"]
     sandbox_timeout = args.sandbox_timeout or defaults["sandbox_timeout"]
     episode_budget = create_episode_budget(args)
+    stopping_policy = create_stopping_policy(args, episode_budget)
     if episode_budget is not None:
         max_attempts = episode_budget.policy.max_llm_calls
         max_tokens = min(max_tokens, episode_budget.policy.max_output_tokens_per_call)
@@ -178,6 +280,18 @@ def main():
     train = splits.train
     val = splits.val
     test = splits.test
+    validation_labels_host_only = bool(
+        episode_budget is not None
+        and episode_budget.has_validation_query_policy
+    )
+    agent_val = (
+        val.drop(columns=[target_col])
+        if validation_labels_host_only
+        else val
+    )
+    system_prompt = _system_prompt_for_validation_boundary(
+        labels_host_only=validation_labels_host_only
+    )
     dataset_source = args.dataset_dir or args.dataset or ""
     dataset_name = splits.metadata.name or os.path.splitext(
         os.path.basename(dataset_source.rstrip("/\\"))
@@ -186,12 +300,23 @@ def main():
     model_name = apply_model_reference(args.model)
     run_name = args.run_name or f"repeated_single_shot{max_attempts}_{dataset_name}_{model_name.split('/')[-1]}"
 
-    dataset_card = build_dataset_card(train, val, target_col, metric_name, max_chars=4500)
+    dataset_card = build_dataset_card(
+        train,
+        agent_val,
+        target_col,
+        metric_name,
+        max_chars=4500,
+    )
     task_prompt = TASK_PROMPT_TEMPLATE.format(
         target_col=target_col,
         metric_name=metric_name,
         dataset_card=dataset_card,
     )
+    if validation_labels_host_only:
+        task_prompt += (
+            "\nFeedback-validation labels are host-only and are not present in "
+            "val_df. Each host validation access is counted."
+        )
 
     execution_backend = args.executor_backend or os.getenv(
         "AUTOVIBE_EXECUTOR_BACKEND", "docker"
@@ -206,7 +331,7 @@ def main():
         default_split_id=splits.metadata.split_strategy or f"seed-{args.seed}",
         model_id=model_name,
         prompt_template={
-            "system": SYSTEM_PROMPT,
+            "system": system_prompt,
             "task": TASK_PROMPT_TEMPLATE,
             "attempt_feedback": ATTEMPT_FEEDBACK_TEMPLATE,
         },
@@ -214,13 +339,13 @@ def main():
             "max_tokens": max_tokens,
             "temperature": configured_temperature(),
         },
-        budget_policy=(
-            episode_budget.policy.to_dict()
-            if episode_budget is not None
-            else {
+        budget_policy=budget_policy_payload(
+            episode_budget,
+            fallback={
                 "logical_llm_calls": max_attempts,
                 "max_tokens_per_call": max_tokens,
-            }
+            },
+            stopping_policy=stopping_policy,
         ),
         execution_policy={
             "backend": execution_backend,
@@ -281,19 +406,75 @@ def main():
         attempt_records: list[dict] = []
         best_attempt_idx = -1
         budget_stop_reason = None
+        stopping_controller = (
+            StoppingController(stopping_policy)
+            if stopping_policy is not None
+            else None
+        )
         hidden_gate = HiddenEvaluationGate(prediction_backend=prediction_backend)
+        symmetric_terminal = None
+        if episode_budget is not None and episode_budget.has_finalization_reserve:
+            if (
+                args.research_v2_metric_direction is None
+                or args.research_v2_score_tolerance is None
+            ):
+                raise ValueError(
+                    "An active V2 finalization reserve requires explicit "
+                    "--research-v2-metric-direction and "
+                    "--research-v2-score-tolerance values."
+                )
+            terminal_root = (
+                recorder.run_dir / "private_terminal"
+                if recorder is not None
+                else Path(tempfile.mkdtemp(prefix="autovibe_rss_terminal_"))
+            )
+            metric_normalizer = (
+                episode_budget.normalize_feedback_metric
+                if episode_budget.has_validation_query_policy
+                else float
+            )
+            symmetric_terminal = RepeatedSingleShotTerminalAdapter(
+                private_dir=terminal_root,
+                validation_features=val.drop(columns=[target_col]),
+                validation_target=val[target_col],
+                hidden_features=test.drop(columns=[target_col]),
+                hidden_target=test[target_col],
+                metric_fn=metric_fn,
+                metric_name=metric_name,
+                metric_direction=args.research_v2_metric_direction,
+                score_tolerance=args.research_v2_score_tolerance,
+                prediction_backend=prediction_backend,
+                metric_normalizer=metric_normalizer,
+                hidden_gate=hidden_gate,
+            )
 
         for attempt in range(max_attempts):
+            if stopping_controller is not None:
+                _observe_repeated_boundary(
+                    stopping_controller,
+                    episode_budget,
+                    symmetric_terminal,
+                )
+                if stopping_controller.decision is not None:
+                    break
             prompt = _build_attempt_prompt(task_prompt, best_val, attempt)
             try:
                 response = client.complete(
                     model=model_name,
                     max_tokens=max_tokens,
-                    system=SYSTEM_PROMPT,
+                    system=system_prompt,
                     messages=[{"role": "user", "content": prompt}],
                 )
             except BudgetExhausted as exc:
                 budget_stop_reason = exc.reason
+                if stopping_controller is not None:
+                    incumbent = symmetric_terminal.registry.incumbent()
+                    stopping_controller.observe_exploration_exhausted(
+                        detail_code=exc.reason,
+                        incumbent_candidate_id=(
+                            incumbent.candidate_id if incumbent is not None else None
+                        ),
+                    )
                 break
             total_input_tokens += response.input_tokens
             total_output_tokens += response.output_tokens
@@ -311,7 +492,7 @@ def main():
 
             namespace = {
                 "train_df": train.copy(),
-                "val_df": val.copy(),
+                "val_df": agent_val.copy(),
                 "target_col": target_col,
                 "pd": pd,
                 "np": np,
@@ -320,6 +501,14 @@ def main():
                 stdout, stderr, namespace = executor.run(code, namespace)
             except BudgetExhausted as exc:
                 budget_stop_reason = exc.reason
+                if stopping_controller is not None:
+                    incumbent = symmetric_terminal.registry.incumbent()
+                    stopping_controller.observe_exploration_exhausted(
+                        detail_code=exc.reason,
+                        incumbent_candidate_id=(
+                            incumbent.candidate_id if incumbent is not None else None
+                        ),
+                    )
                 break
             attempt_error = stderr.strip() or None
             if attempt_error:
@@ -340,7 +529,43 @@ def main():
                 y_val = val[target_col]
                 validation = None
                 try:
-                    if episode_budget is not None:
+                    if symmetric_terminal is not None:
+                        previous_incumbent = symmetric_terminal.registry.incumbent()
+                        record = symmetric_terminal.validate_and_register(
+                            model=model_obj,
+                            source_code=code,
+                            attempt_index=attempt,
+                            before_validation=(
+                                lambda: episode_budget.consume_validation_query(
+                                    "repeated_single_shot_attempt"
+                                )
+                                if episode_budget.has_validation_query_policy
+                                else None
+                            ),
+                            resource_snapshot={
+                                "episode_budget": episode_budget.snapshot(),
+                            },
+                        )
+                        val_metric = record.validation_metric
+                        raw_validation_ready = True
+                        incumbent = symmetric_terminal.registry.incumbent()
+                        if stopping_controller is not None:
+                            _observe_repeated_candidate(
+                                stopping_controller,
+                                previous_incumbent=previous_incumbent,
+                                record=record,
+                                terminal=symmetric_terminal,
+                            )
+                        if (
+                            incumbent is not None
+                            and incumbent.candidate_id == record.candidate_id
+                        ):
+                            best_val = val_metric
+                            best_model = model_obj
+                            best_code = code
+                            best_stdout = stdout
+                            best_attempt_idx = attempt
+                    elif episode_budget is not None:
                         validation = validate_submission_candidate(
                             model_obj,
                             X_val,
@@ -358,16 +583,30 @@ def main():
                         except Exception:
                             # Preserve the product runner's existing autofit compatibility path.
                             model_obj.fit(train.drop(columns=[target_col]), train[target_col])
-                            val_preds = model_obj.predict(X_val)
-                    raw_validation_ready = True
-                    val_metric = score_with_coercion(metric_fn, y_val, val_preds)
-                    if best_val is None or val_metric > best_val:
-                        best_val = val_metric
-                        best_model = model_obj
-                        best_code = code
-                        best_stdout = stdout
-                        best_attempt_idx = attempt
+                        val_preds = model_obj.predict(X_val)
+                    if symmetric_terminal is None:
+                        raw_validation_ready = True
+                        val_metric = score_with_coercion(metric_fn, y_val, val_preds)
+                        if best_val is None or val_metric > best_val:
+                            best_val = val_metric
+                            best_model = model_obj
+                            best_code = code
+                            best_stdout = stdout
+                            best_attempt_idx = attempt
                 except Exception as exc:
+                    if (
+                        stopping_controller is not None
+                        and isinstance(exc, CandidateBundleError)
+                    ):
+                        incumbent = symmetric_terminal.registry.incumbent()
+                        stopping_controller.observe_unrecoverable_failure(
+                            detail_code="candidate_bundle_failure",
+                            incumbent_candidate_id=(
+                                incumbent.candidate_id
+                                if incumbent is not None
+                                else None
+                            ),
+                        )
                     preflight_error = f"{type(exc).__name__}: {exc}"
                     attempt_error = (attempt_error or "") + f" [val_eval: {preflight_error}]"
                     errors_count += 1
@@ -407,13 +646,114 @@ def main():
             mlflow.log_text(stderr, f"attempt_{attempt + 1:02d}_stderr.txt")
             if val_metric is not None:
                 mlflow.log_metric("val_metric", val_metric, step=attempt)
+            if stopping_controller is not None:
+                _observe_repeated_boundary(
+                    stopping_controller,
+                    episode_budget,
+                    symmetric_terminal,
+                )
+                if stopping_controller.decision is not None:
+                    break
+
+        if stopping_controller is not None and stopping_controller.decision is None:
+            incumbent = symmetric_terminal.registry.incumbent()
+            stopping_controller.observe_exploration_exhausted(
+                detail_code="max_attempts",
+                incumbent_candidate_id=(
+                    incumbent.candidate_id if incumbent is not None else None
+                ),
+            )
 
         test_metric = None
         final_status = "no_candidate_found"
         null_reason = "No raw-validation-ready model was produced."
         submit_failure_type = "no_candidate_found"
         finalize_path = "failed"
-        if best_model is not None:
+        stopping_terminated = bool(
+            stopping_controller is not None
+            and stopping_controller.decision is not None
+            and stopping_controller.decision.transition == "terminate"
+        )
+        if stopping_terminated:
+            final_status = "stopped_unrecoverable_contract_failure"
+            null_reason = (
+                "The frozen stopping policy terminated the episode after an "
+                "unrecoverable safety or contract failure."
+            )
+            submit_failure_type = stopping_controller.decision.detail_code
+            finalize_path = "stopping_policy_terminate"
+        elif symmetric_terminal is not None:
+            terminal_result = None
+            try:
+                episode_budget.begin_finalization(
+                    trigger=(
+                        f"stopping:{stopping_controller.decision.reason}"
+                        if stopping_controller is not None
+                        and stopping_controller.decision is not None
+                        else "repeated_single_shot_attempt_loop_complete"
+                    )
+                )
+
+                def terminal_preflight_budget() -> None:
+                    episode_budget.consume_tool_call("protected_replay_preflight")
+                    if episode_budget.has_validation_query_policy:
+                        episode_budget.consume_validation_query(
+                            "protected_finalization"
+                        )
+
+                terminal_result = symmetric_terminal.finalize(
+                    execute_code=executor.run,
+                    namespace_factory=lambda: {
+                        "train_df": train.copy(),
+                        "val_df": (
+                            val.drop(columns=[target_col]).copy()
+                            if episode_budget.has_validation_query_policy
+                            else val.copy()
+                        ),
+                        "target_col": target_col,
+                        "pd": pd,
+                        "np": np,
+                    },
+                    before_preflight=terminal_preflight_budget,
+                    before_artifact_write=lambda: episode_budget.consume_tool_call(
+                        "protected_artifact_write"
+                    ),
+                    before_hidden_evaluation=lambda: episode_budget.consume_tool_call(
+                        "protected_hidden_evaluation"
+                    ),
+                    resource_snapshot=lambda: {
+                        "terminal_contract_version": TERMINAL_CONTRACT_VERSION,
+                        "episode_budget": episode_budget.snapshot(),
+                    },
+                )
+            except BudgetExhausted as exc:
+                final_status = "finalization_reserve_exhausted"
+                null_reason = _symmetric_terminal_null_reason(final_status)
+                submit_failure_type = type(exc).__name__
+                finalize_path = "protected_incumbent_replay"
+                errors_count += 1
+            except Exception as exc:
+                final_status = "protected_finalization_start_failed"
+                null_reason = "The protected finalization phase could not start safely."
+                submit_failure_type = type(exc).__name__
+                finalize_path = "protected_incumbent_replay"
+                errors_count += 1
+            if terminal_result is not None:
+                final_status = terminal_result.final_status
+                finalize_path = "protected_incumbent_replay"
+                if terminal_result.succeeded:
+                    test_metric = terminal_result.hidden_metric
+                    null_reason = None
+                    submit_failure_type = None
+                else:
+                    null_reason = _symmetric_terminal_null_reason(
+                        terminal_result.final_status
+                    )
+                    submit_failure_type = (
+                        terminal_result.error_type or terminal_result.final_status
+                    )
+                    errors_count += 1
+        elif best_model is not None:
             try:
                 if episode_budget is not None:
                     validation = validate_submission_candidate(
@@ -548,6 +888,24 @@ def main():
         "budget_stop_reason": budget_stop_reason,
         "elapsed_seconds": elapsed,
     }
+    if stopping_controller is not None:
+        summary.update(
+            {
+                "stopping_policy": stopping_policy.to_dict(),
+                "stopping_policy_state": stopping_controller.snapshot(),
+                "stopping_events": list(stopping_controller.events),
+                "stopping_reason": (
+                    stopping_controller.decision.reason
+                    if stopping_controller.decision is not None
+                    else None
+                ),
+                "stopping_transition": (
+                    stopping_controller.decision.transition
+                    if stopping_controller.decision is not None
+                    else None
+                ),
+            }
+        )
     finalize_research_run(recorder, summary, episode_budget=episode_budget)
     print("\n=== Repeated Single-Shot Summary ===")
     print(json.dumps(summary, indent=2))

@@ -21,6 +21,7 @@ from research.run_artifacts import (
     canonical_hash,
     file_set_hash,
 )
+from research.stopping import FrozenStoppingPolicy, load_stopping_policy
 
 
 def add_research_artifact_args(parser: argparse.ArgumentParser) -> None:
@@ -40,6 +41,27 @@ def add_research_artifact_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--research-max-code-executions", type=int, default=20)
     parser.add_argument("--research-max-tool-calls", type=int, default=20)
     parser.add_argument("--research-wall-clock-limit", type=float, default=1_800.0)
+    parser.add_argument(
+        "--research-v2-metric-direction",
+        choices=["higher", "lower"],
+        default=None,
+    )
+    parser.add_argument(
+        "--research-v2-score-tolerance",
+        type=float,
+        default=None,
+    )
+
+
+def add_research_v2_stopping_arg(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--research-v2-stopping-policy",
+        default=None,
+        help=(
+            "Path to an externally frozen stopping-policy-v1 JSON file. "
+            "Requires an explicitly injected protected finalization reserve."
+        ),
+    )
 
 
 def create_episode_budget(args: argparse.Namespace) -> EpisodeBudget | None:
@@ -55,6 +77,38 @@ def create_episode_budget(args: argparse.Namespace) -> EpisodeBudget | None:
             wall_clock_limit_seconds=args.research_wall_clock_limit,
         )
     )
+
+
+def create_stopping_policy(
+    args: argparse.Namespace,
+    episode_budget: EpisodeBudget | None,
+) -> FrozenStoppingPolicy | None:
+    path = getattr(args, "research_v2_stopping_policy", None)
+    if path is None:
+        return None
+    if episode_budget is None or not episode_budget.has_finalization_reserve:
+        raise ValueError(
+            "An active V2 stopping policy requires an explicitly injected "
+            "protected finalization reserve."
+        )
+    return load_stopping_policy(path)
+
+
+def budget_policy_payload(
+    episode_budget: EpisodeBudget | None,
+    *,
+    fallback: Mapping[str, Any],
+    stopping_policy: FrozenStoppingPolicy | None = None,
+) -> dict[str, Any]:
+    payload = (
+        episode_budget.policy_payload()
+        if episode_budget is not None
+        else dict(fallback)
+    )
+    if stopping_policy is not None:
+        payload["stopping_policy"] = stopping_policy.to_dict()
+        payload["stopping_policy_hash"] = stopping_policy.policy_hash
+    return payload
 
 
 def dataset_source_hash(*, dataset: str | None, dataset_dir: str | None) -> str:

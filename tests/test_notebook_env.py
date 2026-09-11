@@ -8,10 +8,20 @@ import nbformat
 import pandas as pd
 import pytest
 
+from gym.candidate_store import CandidateBundleError
+from gym.finalization import ProtectedFinalizationError
 from gym.jupyter_kernel import ContainerJupyterKernelBackend
 from gym.notebook_env import NotebookGymEnv
 from gym.protocol import Action
-from research.budget import BudgetExhausted, EpisodeBudget, EpisodeBudgetPolicy
+from research.budget import (
+    BudgetExhausted,
+    EpisodeBudget,
+    EpisodeBudgetPolicy,
+    ExplorationBudgetExhausted,
+    FinalizationReservePolicy,
+    ValidationQueryPolicy,
+)
+from research.stopping import FrozenStoppingPolicy
 
 
 def _accuracy(y_true, y_pred):
@@ -26,6 +36,9 @@ def _make_env(
     enable_thoughts=False,
     episode_budget=None,
     research_submission=False,
+    private_dir=None,
+    reset=True,
+    stopping_policy=None,
 ):
     train = pd.DataFrame(
         {
@@ -58,13 +71,72 @@ def _make_env(
         metric_name="accuracy",
         max_steps=20,
         workspace_dir=tmp_path,
+        private_dir=private_dir,
         mode=mode,
         enable_thoughts=enable_thoughts,
         episode_budget=episode_budget,
         research_submission=research_submission,
+        stopping_policy=stopping_policy,
     )
-    env.reset()
+    if reset:
+        env.reset()
     return env
+
+
+def _protected_budget(*, code_reserve=2, tool_reserve=3):
+    return EpisodeBudget(
+        EpisodeBudgetPolicy(
+            max_code_executions=12,
+            max_tool_calls=12,
+            wall_clock_limit_seconds=120,
+        ),
+        finalization_reserve=FinalizationReservePolicy(
+            max_code_executions=code_reserve,
+            max_tool_calls=tool_reserve,
+            wall_clock_limit_seconds=60,
+        ),
+    )
+
+
+def _stopping_policy(**overrides):
+    values = {
+        "reserve_boundary_resources": ("tool_calls",),
+        "no_improvement_patience": None,
+        "stop_on_exploration_exhausted": True,
+        "stop_on_agent_finalize_request": True,
+        "stop_on_unrecoverable_failure": True,
+    }
+    values.update(overrides)
+    return FrozenStoppingPolicy(**values)
+
+
+def _validation_query_budget(
+    *,
+    max_queries=8,
+    finalization_reserve_queries=0,
+    feedback_numeric_decimals=3,
+    protected=False,
+):
+    reserve = None
+    if protected:
+        reserve = FinalizationReservePolicy(
+            max_code_executions=2,
+            max_tool_calls=3,
+            wall_clock_limit_seconds=60,
+        )
+    return EpisodeBudget(
+        EpisodeBudgetPolicy(
+            max_code_executions=20,
+            max_tool_calls=20,
+            wall_clock_limit_seconds=120,
+        ),
+        finalization_reserve=reserve,
+        validation_query_policy=ValidationQueryPolicy(
+            max_queries=max_queries,
+            finalization_reserve_queries=finalization_reserve_queries,
+            feedback_numeric_decimals=feedback_numeric_decimals,
+        ),
+    )
 
 
 def test_workspace_contains_train_and_val_but_no_hidden_test(tmp_path):
@@ -312,6 +384,11 @@ def test_validate_and_submit_require_clean_run(tmp_path):
 
         validated = env.step({"type": "validate", "stage": "validation_analysis", "model_var": "model"})
         assert validated.validation_metric == 0.5
+        original = env.candidates.latest()
+        assert original is not None
+        artifact_path = Path(original.artifact_path)
+        notebook_snapshot = artifact_path.parent / "solution.ipynb"
+        snapshot_before_mutation = notebook_snapshot.read_bytes()
 
         env.step(
             {
@@ -321,6 +398,44 @@ def test_validate_and_submit_require_clean_run(tmp_path):
                 "source": "changed after validation",
             }
         )
+        assert env.candidates.latest() is None
+        assert env.candidates.latest_registered() == original
+        assert env.candidates.incumbent() == original
+        assert env.candidates.all() == [original]
+        assert original.candidate_id in env._candidate_objects
+        assert artifact_path.exists()
+        assert notebook_snapshot.read_bytes() == snapshot_before_mutation
+        assert env.candidate_store.verify_record(original).record == original
+        assert env.get_summary()["best_validation_metric"] == 0.5
+        assert env.get_summary()["validated_candidates_total"] == 1
+        assert any(
+            event.get("action") == "candidate_current_invalidated"
+            and event.get("candidate_id") == original.candidate_id
+            for event in env.events
+        )
+        registered_event = next(
+            event
+            for event in env.events
+            if event.get("action") == "candidate_registered"
+        )
+        public_registered_event = env._public_event(registered_event)
+        assert "artifact_path" not in public_registered_event["candidate"]
+        assert str(artifact_path) not in json.dumps(public_registered_event)
+        bundle_event = next(
+            event
+            for event in env.events
+            if event.get("action") == "candidate_bundle_written"
+        )
+        public_bundle_event = env._public_event(bundle_event)
+        assert public_bundle_event["schema_version"] == "candidate-bundle-v1"
+        assert set(public_bundle_event["hashes"]) == {
+            "candidate.json",
+            "model.pkl",
+            "solution.ipynb",
+        }
+        assert "private" not in public_bundle_event
+        assert str(artifact_path.parent) not in json.dumps(public_bundle_event)
+        assert str(artifact_path) not in json.dumps(env.build_context_pack())
         dirty_submit = env.step({"type": "submit", "stage": "submission", "model_var": "model"})
         assert "restart_and_run_all" in dirty_submit.stderr
     finally:
@@ -478,6 +593,554 @@ def test_research_finalize_never_repairs_or_replays_dirty_candidate(tmp_path):
         env.close()
 
 
+def test_m1a_research_finalize_does_not_submit_historical_incumbent(tmp_path):
+    budget = EpisodeBudget(EpisodeBudgetPolicy())
+    env = _make_env(
+        tmp_path,
+        episode_budget=budget,
+        research_submission=True,
+    )
+    try:
+        env.step(
+            {
+                "type": "add_cell",
+                "stage": "feature_pipeline_building",
+                "cell_type": "code",
+                "source": _constant_model_source(),
+                "execute": False,
+            }
+        )
+        env.step({"type": "restart_and_run_all", "stage": "reproducibility_check"})
+        env.step({"type": "validate", "stage": "validation_analysis", "model_var": "model"})
+        incumbent = env.candidates.incumbent()
+        assert incumbent is not None
+
+        env.step(
+            {
+                "type": "add_cell",
+                "stage": "feature_pipeline_building",
+                "cell_type": "markdown",
+                "source": "later exploratory revision",
+            }
+        )
+        executions_before = budget.code_executions
+        finalized = env.finalize()
+
+        assert finalized.done
+        assert finalized.final_status == "invalid_submission"
+        assert env.candidates.latest() is None
+        assert env.candidates.incumbent() == incumbent
+        assert budget.code_executions == executions_before
+        assert env.get_summary()["hidden_evaluations"] == 0
+        assert env.get_summary()["finalize_path"] == "research_no_repair"
+    finally:
+        env.close()
+
+
+def test_validation_query_control_keeps_feedback_labels_out_of_workspace_and_kernel(
+    tmp_path,
+):
+    budget = _validation_query_budget()
+    env = _make_env(tmp_path / "controlled", episode_budget=budget)
+    legacy = _make_env(tmp_path / "legacy")
+    try:
+        controlled_val = pd.read_csv(tmp_path / "controlled" / "data" / "val.csv")
+        legacy_val = pd.read_csv(tmp_path / "legacy" / "data" / "val.csv")
+
+        assert "target" not in controlled_val.columns
+        assert "target" in legacy_val.columns
+        assert "target" in env.state.val.columns
+        probe = env.step(
+            Action.code_action("print(target_col in val_df.columns)")
+        )
+        assert "False" in probe.stdout
+        assert budget.validation_queries == 0
+        prompt = env._build_context_prompt()["task"]
+        assert "Feedback-validation labels are host-only" in prompt
+        assert "target column not present" in prompt
+        inspection = env.step(
+            {"type": "inspect_data", "stage": "data_schema_inspection"}
+        )
+        assert "target column not present" in inspection.stdout
+        assert budget.validation_queries == 0
+    finally:
+        env.close()
+        legacy.close()
+
+
+@pytest.mark.parametrize("via_agent_submit", [False, True])
+def test_m2b_protected_finalization_replays_host_incumbent_without_mutating_snapshot(
+    tmp_path, via_agent_submit
+):
+    budget = _protected_budget(code_reserve=1, tool_reserve=3)
+    private_dir = tmp_path / "private"
+    env = _make_env(
+        tmp_path / "workspace",
+        private_dir=private_dir,
+        episode_budget=budget,
+        research_submission=True,
+    )
+    try:
+        env.step(
+            {
+                "type": "add_cell",
+                "stage": "feature_pipeline_building",
+                "cell_type": "code",
+                "source": _constant_model_source(),
+                "execute": False,
+            }
+        )
+        env.step({"type": "restart_and_run_all", "stage": "reproducibility_check"})
+        env.step(
+            {"type": "validate", "stage": "validation_analysis", "model_var": "model"}
+        )
+        incumbent = env.candidates.incumbent()
+        assert incumbent is not None
+        snapshot_path = env.candidate_store.notebook_snapshot_path(incumbent)
+        snapshot_before = snapshot_path.read_bytes()
+
+        env.step(
+            {
+                "type": "add_cell",
+                "stage": "feature_pipeline_building",
+                "cell_type": "markdown",
+                "source": "later exploratory revision that must not be replayed",
+            }
+        )
+        assert env.candidates.latest() is None
+        mutable_revision = env.notebook.revision
+
+        if via_agent_submit:
+            finalized = env.step(
+                {"type": "submit", "stage": "submission", "model_var": "not_the_incumbent"}
+            )
+        else:
+            finalized = env.finalize("not_the_incumbent")
+
+        assert finalized is not None
+        assert finalized.done and finalized.submitted
+        assert finalized.final_status == "submitted_protected_replay"
+        assert finalized.model_var == "model"
+        assert env.notebook.revision == mutable_revision
+        assert "later exploratory revision" in env.notebook.notebook.cells[-1].source
+        assert snapshot_path.read_bytes() == snapshot_before
+        assert env.candidates.all() == [incumbent]
+        assert env.candidates.incumbent() == incumbent
+        assert env.candidates.latest() is None
+        assert env.candidates.is_submitted(incumbent.candidate_id)
+
+        summary = env.get_summary()
+        assert summary["valid_submit"] is True
+        assert summary["hidden_evaluations"] == 1
+        assert summary["final_status"] == "submitted_protected_replay"
+        assert summary["finalize_path"] == "protected_incumbent_replay"
+        assert summary["reproducibility_level"] == "protected_producing_revision_replay"
+        assert summary["finalization_candidate_id"] == incumbent.candidate_id
+        assert budget.phase == "finalization"
+        assert budget.snapshot()["finalization_usage"]["code_executions"] == 1
+        assert budget.snapshot()["finalization_usage"]["tool_calls"] == 3
+
+        final_artifact = env.finalization_store.verify_artifact(incumbent.candidate_id)
+        assert final_artifact.source_candidate_hashes
+        public_text = (env.workspace_dir / "notebook_events.json").read_text(
+            encoding="utf-8"
+        )
+        assert str(private_dir) not in public_text
+        assert str(final_artifact.artifact_dir) not in public_text
+        assert "final_test_metric" not in public_text
+    finally:
+        env.close()
+
+
+def test_m2b_protected_finalization_fails_terminal_without_incumbent(tmp_path):
+    budget = _protected_budget()
+    env = _make_env(
+        tmp_path,
+        episode_budget=budget,
+        research_submission=True,
+    )
+    try:
+        finalized = env.finalize()
+
+        assert finalized is not None
+        assert finalized.done and finalized.submitted
+        assert finalized.final_status == "no_incumbent_for_finalization"
+        assert env.get_summary()["hidden_evaluations"] == 0
+        assert budget.phase == "finalization"
+        assert budget.snapshot()["finalization_usage"]["code_executions"] == 0
+        assert budget.snapshot()["finalization_usage"]["tool_calls"] == 0
+        assert not (env.private_dir / "finalization").exists()
+    finally:
+        env.close()
+
+
+def test_m2b_protected_finalization_rejects_corrupt_incumbent_before_replay(
+    tmp_path,
+):
+    budget = _protected_budget(code_reserve=1)
+    env = _make_env(tmp_path, episode_budget=budget, research_submission=True)
+    try:
+        env.step(
+            Action.add_cell_action(
+                _constant_model_source(), cell_type="code", execute=False
+            )
+        )
+        env.step({"type": "restart_and_run_all", "stage": "reproducibility_check"})
+        env.step(
+            {"type": "validate", "stage": "validation_analysis", "model_var": "model"}
+        )
+        incumbent = env.candidates.incumbent()
+        assert incumbent is not None
+        with Path(incumbent.artifact_path).open("ab") as handle:
+            handle.write(b"corruption")
+        restarts_before = env.kernel_restarts_total
+
+        finalized = env.finalize()
+
+        assert finalized is not None
+        assert finalized.final_status == "invalid_candidate_artifact"
+        assert env.kernel_restarts_total == restarts_before
+        assert env.get_summary()["hidden_evaluations"] == 0
+        assert budget.snapshot()["finalization_usage"]["code_executions"] == 0
+        assert not (env.private_dir / "finalization").exists()
+        public_text = (env.workspace_dir / "notebook_events.json").read_text(
+            encoding="utf-8"
+        )
+        assert "checksum mismatch" not in public_text
+        assert str(Path(incumbent.artifact_path).parent) not in public_text
+    finally:
+        env.close()
+
+
+def test_m2b_protected_finalization_has_no_live_kernel_fallback_on_replay_failure(
+    tmp_path,
+):
+    budget = _protected_budget(code_reserve=1)
+    env = _make_env(tmp_path, episode_budget=budget, research_submission=True)
+    source = """
+from pathlib import Path
+from sklearn.dummy import DummyClassifier
+
+marker = Path('protected-replay-once.marker')
+if marker.exists():
+    raise RuntimeError('snapshot may run only once')
+marker.write_text('first clean run', encoding='utf-8')
+X_train = train_df.drop(columns=[target_col])
+y_train = train_df[target_col]
+model = DummyClassifier(strategy='constant', constant=0)
+model.fit(X_train, y_train)
+""".strip()
+    try:
+        env.step(Action.add_cell_action(source, cell_type="code", execute=False))
+        clean = env.step(
+            {"type": "restart_and_run_all", "stage": "reproducibility_check"}
+        )
+        assert "successfully" in clean.stdout
+        env.step(
+            {"type": "validate", "stage": "validation_analysis", "model_var": "model"}
+        )
+        incumbent = env.candidates.incumbent()
+        assert incumbent is not None
+
+        finalized = env.finalize()
+
+        assert finalized is not None
+        assert finalized.final_status == "protected_replay_failed"
+        assert env.get_summary()["hidden_evaluations"] == 0
+        assert env.candidates.all() == [incumbent]
+        assert not env.candidates.is_submitted(incumbent.candidate_id)
+        assert not (env.private_dir / "finalization").exists()
+        assert budget.snapshot()["finalization_usage"]["code_executions"] == 1
+        assert budget.snapshot()["finalization_usage"]["tool_calls"] == 0
+    finally:
+        env.close()
+
+
+def test_m2b_protected_finalization_stops_before_overshooting_code_reserve(
+    tmp_path,
+):
+    budget = _protected_budget(code_reserve=1)
+    env = _make_env(tmp_path, episode_budget=budget, research_submission=True)
+    try:
+        env.step(
+            Action.add_cell_action("helper_value = 1", cell_type="code", execute=False)
+        )
+        env.step(
+            Action.add_cell_action(
+                _constant_model_source(), cell_type="code", execute=False
+            )
+        )
+        env.step({"type": "restart_and_run_all", "stage": "reproducibility_check"})
+        env.step(
+            {"type": "validate", "stage": "validation_analysis", "model_var": "model"}
+        )
+
+        finalized = env.finalize()
+
+        assert finalized is not None
+        assert finalized.final_status == "finalization_reserve_exhausted"
+        assert env.get_summary()["hidden_evaluations"] == 0
+        snapshot = budget.snapshot()
+        assert snapshot["finalization_usage"]["code_executions"] == 1
+        assert snapshot["finalization_usage"]["tool_calls"] == 0
+        assert budget.exhausted_reason == "finalization_max_code_executions"
+        assert not (env.private_dir / "finalization").exists()
+    finally:
+        env.close()
+
+
+def test_m2b_protected_finalization_rejects_validation_metric_drift(tmp_path):
+    budget = _protected_budget(code_reserve=1)
+    env = _make_env(tmp_path, episode_budget=budget, research_submission=True)
+    try:
+        env.step(
+            Action.add_cell_action(
+                _constant_model_source(), cell_type="code", execute=False
+            )
+        )
+        env.step({"type": "restart_and_run_all", "stage": "reproducibility_check"})
+        env.step(
+            {"type": "validate", "stage": "validation_analysis", "model_var": "model"}
+        )
+        env.metric_fn = lambda y_true, y_pred: 0.25
+
+        finalized = env.finalize()
+
+        assert finalized is not None
+        assert finalized.final_status == "protected_replay_validation_mismatch"
+        assert env.get_summary()["hidden_evaluations"] == 0
+        assert budget.snapshot()["finalization_usage"]["code_executions"] == 1
+        assert budget.snapshot()["finalization_usage"]["tool_calls"] == 1
+        assert not (env.private_dir / "finalization").exists()
+    finally:
+        env.close()
+
+
+def test_m2b_protected_finalization_stores_artifact_before_hidden_gate(
+    tmp_path, monkeypatch
+):
+    budget = _protected_budget(code_reserve=1)
+    env = _make_env(tmp_path, episode_budget=budget, research_submission=True)
+    try:
+        env.step(
+            Action.add_cell_action(
+                _constant_model_source(), cell_type="code", execute=False
+            )
+        )
+        env.step({"type": "restart_and_run_all", "stage": "reproducibility_check"})
+        env.step(
+            {"type": "validate", "stage": "validation_analysis", "model_var": "model"}
+        )
+
+        def fail_write(*args, **kwargs):
+            raise ProtectedFinalizationError("private artifact detail")
+
+        monkeypatch.setattr(env.finalization_store, "write_artifact", fail_write)
+        finalized = env.finalize()
+
+        assert finalized is not None
+        assert finalized.final_status == "protected_finalization_artifact_failed"
+        assert "private artifact detail" not in finalized.stderr
+        assert env.get_summary()["hidden_evaluations"] == 0
+        assert budget.snapshot()["finalization_usage"]["code_executions"] == 1
+        assert budget.snapshot()["finalization_usage"]["tool_calls"] == 2
+    finally:
+        env.close()
+
+
+def test_m2b_protected_hidden_failure_is_terminal_and_one_shot(tmp_path):
+    budget = _protected_budget(code_reserve=1)
+    env = _make_env(
+        tmp_path,
+        hidden_green=True,
+        episode_budget=budget,
+        research_submission=True,
+    )
+    try:
+        env.step(
+            Action.add_cell_action(
+                _strict_one_hot_source(), cell_type="code", execute=False
+            )
+        )
+        env.step({"type": "restart_and_run_all", "stage": "reproducibility_check"})
+        env.step(
+            {"type": "validate", "stage": "validation_analysis", "model_var": "model"}
+        )
+        incumbent = env.candidates.incumbent()
+        assert incumbent is not None
+
+        finalized = env.finalize()
+
+        assert finalized is not None
+        assert finalized.done and finalized.submitted
+        assert finalized.final_status == "hidden_submit_failed"
+        assert env.get_summary()["hidden_evaluations"] == 1
+        assert env.hidden_submit_fail_count == 1
+        assert not env.candidates.is_submitted(incumbent.candidate_id)
+        assert budget.snapshot()["finalization_usage"]["tool_calls"] == 3
+        with pytest.raises(RuntimeError, match="already finalized"):
+            env.step(
+                {"type": "submit", "stage": "submission", "model_var": "model"}
+            )
+    finally:
+        env.close()
+
+
+def test_m2b_exploration_cutoff_transitions_into_untouched_reserve(tmp_path):
+    budget = _protected_budget(code_reserve=1, tool_reserve=3)
+    env = _make_env(tmp_path, episode_budget=budget, research_submission=True)
+    try:
+        env.step(
+            Action.add_cell_action(
+                _constant_model_source(), cell_type="code", execute=False
+            )
+        )
+        env.step({"type": "restart_and_run_all", "stage": "reproducibility_check"})
+        env.step(
+            {"type": "validate", "stage": "validation_analysis", "model_var": "model"}
+        )
+        exploration_tool_limit = (
+            budget.policy.max_tool_calls
+            - budget.finalization_reserve.max_tool_calls
+        )
+        while budget.tool_calls < exploration_tool_limit:
+            budget.consume_tool_call("test_exploration")
+        with pytest.raises(ExplorationBudgetExhausted):
+            budget.consume_tool_call("test_exploration_overshoot")
+        assert budget.exhausted_reason is None
+
+        finalized = env.finalize()
+
+        assert finalized is not None
+        assert finalized.final_status == "submitted_protected_replay"
+        snapshot = budget.snapshot()
+        assert snapshot["budget_phase"] == "finalization"
+        assert snapshot["exploration_exhausted"] is True
+        assert snapshot["finalization_usage"]["code_executions"] == 1
+        assert snapshot["finalization_usage"]["tool_calls"] == 3
+        assert budget.tool_calls == budget.policy.max_tool_calls
+    finally:
+        env.close()
+
+
+def test_m4_no_improvement_stops_via_protected_incumbent_replay(tmp_path):
+    budget = _protected_budget(code_reserve=1, tool_reserve=3)
+    policy = _stopping_policy(
+        reserve_boundary_resources=(),
+        no_improvement_patience=1,
+    )
+    env = _make_env(
+        tmp_path,
+        episode_budget=budget,
+        research_submission=True,
+        stopping_policy=policy,
+    )
+    try:
+        env.step(
+            Action.add_cell_action(
+                _constant_model_source(), cell_type="code", execute=False
+            )
+        )
+        env.step({"type": "restart_and_run_all", "stage": "reproducibility_check"})
+        first = env.step(
+            {"type": "validate", "stage": "validation_analysis", "model_var": "model"}
+        )
+        assert first.validation_metric == 0.5
+        assert env.stopping_controller.decision is None
+
+        second = env.step(
+            {"type": "validate", "stage": "validation_analysis", "model_var": "model"}
+        )
+        assert second.validation_metric == 0.5
+        assert env.stopping_controller.decision.reason == "no_validation_improvement"
+
+        stopped = env.apply_stopping_policy()
+
+        assert stopped is not None and stopped.submitted
+        assert stopped.final_status == "submitted_protected_replay"
+        summary = env.get_summary()
+        assert summary["stopping_reason"] == "no_validation_improvement"
+        assert summary["stopping_transition"] == "finalize"
+        assert summary["hidden_evaluations"] == 1
+        assert budget.phase == "finalization"
+    finally:
+        env.close()
+
+
+def test_m4_reserve_boundary_stops_before_exploration_can_borrow(tmp_path):
+    budget = _protected_budget(code_reserve=1, tool_reserve=3)
+    env = _make_env(
+        tmp_path,
+        episode_budget=budget,
+        research_submission=True,
+        stopping_policy=_stopping_policy(),
+    )
+    try:
+        env.step(
+            Action.add_cell_action(
+                _constant_model_source(), cell_type="code", execute=False
+            )
+        )
+        env.step({"type": "restart_and_run_all", "stage": "reproducibility_check"})
+        env.step(
+            {"type": "validate", "stage": "validation_analysis", "model_var": "model"}
+        )
+        exploration_limit = (
+            budget.policy.max_tool_calls
+            - budget.finalization_reserve.max_tool_calls
+        )
+        while budget.tool_calls < exploration_limit:
+            budget.consume_tool_call("test_exploration")
+
+        stopped = env.apply_stopping_policy()
+
+        assert stopped is not None and stopped.submitted
+        assert stopped.final_status == "submitted_protected_replay"
+        assert env.get_summary()["stopping_reason"] == "reserve_boundary_reached"
+        assert budget.snapshot()["finalization_usage"]["tool_calls"] == 3
+        assert budget.tool_calls == budget.policy.max_tool_calls
+    finally:
+        env.close()
+
+
+def test_m4_unrecoverable_bundle_failure_terminates_without_hidden_gate(
+    tmp_path,
+    monkeypatch,
+):
+    budget = _protected_budget(code_reserve=1, tool_reserve=3)
+    env = _make_env(
+        tmp_path,
+        episode_budget=budget,
+        research_submission=True,
+        stopping_policy=_stopping_policy(),
+    )
+    try:
+        env.step(
+            Action.add_cell_action(
+                _constant_model_source(), cell_type="code", execute=False
+            )
+        )
+        env.step({"type": "restart_and_run_all", "stage": "reproducibility_check"})
+
+        def fail_write(*_args, **_kwargs):
+            raise CandidateBundleError("private storage detail")
+
+        monkeypatch.setattr(env.candidate_store, "write_bundle", fail_write)
+        stopped = env.step(
+            {"type": "validate", "stage": "validation_analysis", "model_var": "model"}
+        )
+
+        assert stopped.done and stopped.submitted
+        assert stopped.final_status == "stopped_unrecoverable_contract_failure"
+        summary = env.get_summary()
+        assert summary["stopping_reason"] == "unrecoverable_contract_failure"
+        assert summary["hidden_evaluations"] == 0
+        assert budget.phase == "exploration"
+        assert "private storage detail" not in stopped.stderr
+    finally:
+        env.close()
+
+
 def test_research_tool_budget_is_enforced_before_overshoot(tmp_path):
     budget = EpisodeBudget(EpisodeBudgetPolicy(max_tool_calls=1))
     env = _make_env(tmp_path, episode_budget=budget, research_submission=True)
@@ -486,6 +1149,140 @@ def test_research_tool_budget_is_enforced_before_overshoot(tmp_path):
         with pytest.raises(BudgetExhausted, match="max_tool_calls"):
             env.step({"type": "profile_data", "stage": "data_schema_inspection"})
         assert budget.tool_calls == 1
+    finally:
+        env.close()
+
+
+def test_verified_candidate_registry_restores_as_historical_only(tmp_path):
+    private_dir = tmp_path / "private"
+    first = _make_env(tmp_path / "first", private_dir=private_dir)
+    second = None
+    try:
+        first.step(
+            {
+                "type": "add_cell",
+                "stage": "feature_pipeline_building",
+                "cell_type": "code",
+                "source": _constant_model_source(),
+                "execute": True,
+            }
+        )
+        first.step({"type": "restart_and_run_all", "stage": "reproducibility_check"})
+        first.step(
+            {"type": "validate", "stage": "validation_analysis", "model_var": "model"}
+        )
+        original = first.candidates.incumbent()
+        assert original is not None
+
+        first.close()
+        second = _make_env(
+            tmp_path / "second",
+            private_dir=private_dir,
+            reset=False,
+            research_submission=True,
+        )
+        restored = second.restore_candidate_registry()
+
+        assert restored == [original]
+        assert second.candidates.all() == [original]
+        assert second.candidates.incumbent() == original
+        assert second.candidates.latest_registered() == original
+        assert second.candidates.latest() is None
+        assert second._candidate_objects == {}
+        assert second.hidden_evaluation_gate.attempted == 0
+        blocked = second.submit_by_name("model")
+        assert "restart_and_run_all" in blocked.stderr
+        assert second.hidden_evaluation_gate.attempted == 0
+        assert any(
+            event.get("action") == "candidate_registry_restored"
+            and event.get("current_candidate_id") is None
+            for event in second.events
+        )
+    finally:
+        first.close()
+        if second is not None:
+            second.close()
+
+
+def test_research_submit_fails_closed_before_hidden_evaluation_on_bundle_corruption(
+    tmp_path,
+):
+    env = _make_env(tmp_path, research_submission=True)
+    try:
+        env.step(
+            {
+                "type": "add_cell",
+                "stage": "feature_pipeline_building",
+                "cell_type": "code",
+                "source": _constant_model_source(),
+                "execute": True,
+            }
+        )
+        env.step({"type": "restart_and_run_all", "stage": "reproducibility_check"})
+        env.step(
+            {"type": "validate", "stage": "validation_analysis", "model_var": "model"}
+        )
+        candidate = env.candidates.latest()
+        assert candidate is not None
+        artifact_path = Path(candidate.artifact_path)
+        with artifact_path.open("ab") as handle:
+            handle.write(b"corruption")
+
+        observation = env.step(
+            {"type": "submit", "stage": "submission", "model_var": "model"}
+        )
+
+        assert observation.done
+        assert observation.submitted
+        assert observation.final_status == "invalid_candidate_artifact"
+        assert "integrity verification" in observation.stderr
+        assert str(artifact_path.parent) not in observation.stderr
+        assert env.candidates.latest() is None
+        summary = env.get_summary()
+        assert summary["hidden_evaluations"] == 0
+        assert summary["final_status"] == "invalid_candidate_artifact"
+        assert summary["valid_submit"] is False
+        public_events = (tmp_path / "notebook_events.json").read_text(encoding="utf-8")
+        assert str(artifact_path.parent) not in public_events
+        assert "checksum mismatch" not in public_events
+    finally:
+        env.close()
+
+
+def test_candidate_bundle_write_failure_is_a_blocker_not_a_partial_registration(
+    tmp_path,
+    monkeypatch,
+):
+    env = _make_env(tmp_path, research_submission=True)
+    try:
+        env.step(
+            {
+                "type": "add_cell",
+                "stage": "feature_pipeline_building",
+                "cell_type": "code",
+                "source": _constant_model_source(),
+                "execute": True,
+            }
+        )
+        env.step({"type": "restart_and_run_all", "stage": "reproducibility_check"})
+
+        def fail_write(*args, **kwargs):
+            raise CandidateBundleError("private storage detail")
+
+        monkeypatch.setattr(env.candidate_store, "write_bundle", fail_write)
+        observation = env.step(
+            {"type": "validate", "stage": "validation_analysis", "model_var": "model"}
+        )
+
+        assert "could not be saved safely" in observation.stderr
+        assert "private storage detail" not in observation.stderr
+        assert env.candidates.all() == []
+        assert env._candidate_objects == {}
+        assert env.hidden_evaluation_gate.attempted == 0
+        assert any(
+            event.get("action") == "candidate_bundle_write_failed"
+            for event in env.events
+        )
     finally:
         env.close()
 
@@ -1196,5 +1993,311 @@ best_model = LogisticRegression(max_iter=200).fit(X, y)
         assert "best_model" in pack["candidate_vars_seen"]
         assert pack["model_check_failures"]
         assert "finalize" in pack["finalization_requirements"]
+    finally:
+        env.close()
+
+
+def test_m3_context_pack_v1_is_public_deterministic_and_incumbent_complete(
+    tmp_path,
+):
+    budget = _protected_budget(code_reserve=1, tool_reserve=3)
+    env = _make_env(
+        tmp_path,
+        hidden_green=True,
+        episode_budget=budget,
+        research_submission=True,
+    )
+    try:
+        env.step(
+            Action.add_cell_action(
+                _constant_model_source(), cell_type="code", execute=False
+            )
+        )
+        env.step({"type": "restart_and_run_all", "stage": "reproducibility_check"})
+        env.step(
+            {"type": "validate", "stage": "validation_analysis", "model_var": "model"}
+        )
+        incumbent = env.candidates.incumbent()
+        assert incumbent is not None
+        env.step(
+            {
+                "type": "run_cell",
+                "stage": "validation_analysis",
+                "cell_id": "missing-cell",
+            }
+        )
+        env.candidate_diagnostics.append(
+            {"error_message": "PRIVATE_DIAGNOSTIC_SENTINEL"}
+        )
+        env.private_summary["final_test_metric"] = "PRIVATE_SCORE_SENTINEL"
+
+        first = env.build_context_pack_v1()
+        second = env.build_context_pack_v1()
+        text = json.dumps(first, ensure_ascii=False, sort_keys=True)
+
+        assert first == second
+        assert first["schema_version"] == "context-pack-v1"
+        assert first["task_contract"]["target_column"] == "target"
+        assert first["task_contract"]["metric_direction"] == "higher"
+        assert first["incumbent_state"]["candidate_id"] == incumbent.candidate_id
+        assert len(first["tested_hypotheses"]) == 1
+        assert first["tested_hypotheses"][0]["outcome"] == "validated"
+        assert first["tested_hypotheses"][0]["candidate_id"] == incumbent.candidate_id
+        assert first["remaining_resources"]["episode_budget"]["phase"] == "exploration"
+        assert first["remaining_resources"]["episode_budget"][
+            "finalization_remaining"
+        ]["tool_calls"] == 3
+        assert "unknown_cell_id" in first["unresolved_errors"][-1]["feedback_keys"]
+        assert "think" not in first["allowed_actions"]
+        assert "artifact_path" not in text
+        assert str(env.private_dir) not in text
+        assert "PRIVATE_DIAGNOSTIC_SENTINEL" not in text
+        assert "PRIVATE_SCORE_SENTINEL" not in text
+        assert "green" not in text
+
+        resolved = env.step(
+            {
+                "type": "run_cell",
+                "stage": "validation_analysis",
+                "cell_id": "cell_01",
+            }
+        )
+        assert "unknown_cell_id" not in resolved.stderr
+        after_resolution = env.build_context_pack_v1()
+        assert all(
+            error["action"] != "run_cell"
+            for error in after_resolution["unresolved_errors"]
+        )
+    finally:
+        env.close()
+
+
+def test_validation_query_cap_is_pre_query_and_public_score_precision_is_frozen(
+    tmp_path,
+):
+    budget = _validation_query_budget(
+        max_queries=2,
+        feedback_numeric_decimals=2,
+    )
+    env = _make_env(tmp_path, episode_budget=budget)
+    env.metric_fn = lambda _y_true, _y_pred: 0.12345
+    try:
+        env.step(
+            Action.add_cell_action(
+                _constant_model_source(), cell_type="code", execute=False
+            )
+        )
+        env.step(
+            {"type": "restart_and_run_all", "stage": "reproducibility_check"}
+        )
+
+        first = env.step(
+            {"type": "validate", "stage": "validation_analysis", "model_var": "model"}
+        )
+        second = env.step(
+            {
+                "type": "quick_validate",
+                "stage": "validation_analysis",
+                "model_var": "model",
+            }
+        )
+
+        assert first.validation_metric == 0.12
+        assert second.validation_metric == 0.12
+        assert "validation_accuracy=0.12" in first.stdout
+        assert "validation_accuracy=0.12" in second.stdout
+        assert env.candidates.incumbent().validation_metric == 0.12
+        assert second.notebook_status["validation_queries_used"] == 2
+        assert second.notebook_status["validation_queries_remaining"] == 0
+
+        with pytest.raises(BudgetExhausted, match="max_validation_queries"):
+            env.step(
+                {
+                    "type": "check_candidate",
+                    "stage": "validation_analysis",
+                    "model_var": "model",
+                }
+            )
+        assert budget.validation_queries == 2
+        assert budget.validation_queries_by_source == {
+            "quick_validate": 1,
+            "validate": 1,
+        }
+    finally:
+        env.close()
+
+
+def test_repeated_and_revision_reuse_validation_queries_are_all_charged(tmp_path):
+    budget = _validation_query_budget(max_queries=3)
+    env = _make_env(tmp_path, episode_budget=budget)
+    try:
+        env.step(
+            Action.add_cell_action(
+                _constant_model_source(), cell_type="code", execute=False
+            )
+        )
+        env.step(
+            {"type": "restart_and_run_all", "stage": "reproducibility_check"}
+        )
+        env.step(
+            {"type": "validate", "stage": "validation_analysis", "model_var": "model"}
+        )
+        env.step(
+            {"type": "validate", "stage": "validation_analysis", "model_var": "model"}
+        )
+        env.step(
+            Action.add_cell_action("revision_marker = 1", cell_type="code", execute=False)
+        )
+        env.step(
+            {"type": "restart_and_run_all", "stage": "reproducibility_check"}
+        )
+        env.step(
+            {"type": "validate", "stage": "validation_analysis", "model_var": "model"}
+        )
+
+        assert budget.validation_queries == 3
+        assert budget.validation_queries_by_source == {"validate": 3}
+        assert len(env.candidates.all()) == 3
+    finally:
+        env.close()
+
+
+def test_validation_like_tools_share_one_query_ledger(tmp_path, monkeypatch):
+    monkeypatch.setenv("AUTOVIBE_ENABLE_CLEANLAB", "1")
+    cleanlab_pkg = types.ModuleType("cleanlab")
+    cleanlab_filter = types.ModuleType("cleanlab.filter")
+    cleanlab_filter.find_label_issues = lambda **kwargs: [0]
+    cleanlab_pkg.filter = cleanlab_filter
+    monkeypatch.setitem(sys.modules, "cleanlab", cleanlab_pkg)
+    monkeypatch.setitem(sys.modules, "cleanlab.filter", cleanlab_filter)
+
+    budget = _validation_query_budget(max_queries=12)
+    env = _make_env(tmp_path, episode_budget=budget)
+    source = """
+from sklearn.compose import ColumnTransformer
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder
+X = train_df.drop(columns=[target_col])
+y = train_df[target_col]
+model = Pipeline([
+    ('prep', ColumnTransformer([
+        ('cat', OneHotEncoder(handle_unknown='ignore'), ['color']),
+        ('num', 'passthrough', ['x']),
+    ])),
+    ('clf', LogisticRegression(max_iter=200)),
+])
+model.fit(X, y)
+""".strip()
+    try:
+        env.step(Action.add_cell_action(source, cell_type="code", execute=False))
+        env.step(
+            {"type": "restart_and_run_all", "stage": "reproducibility_check"}
+        )
+        env.step(
+            {
+                "type": "check_candidate",
+                "stage": "validation_analysis",
+                "model_var": "model",
+            }
+        )
+        env.step(
+            {
+                "type": "quick_validate",
+                "stage": "validation_analysis",
+                "model_var": "model",
+            }
+        )
+        env.step(
+            {
+                "type": "tune_hyperparameters",
+                "stage": "model_improvement",
+                "model_var": "model",
+                "search_space": {
+                    "clf__C": {"type": "float", "low": 0.5, "high": 1.5}
+                },
+                "n_trials": 2,
+                "timeout_sec": 10,
+            }
+        )
+        cleanlab = env.step(
+            {
+                "type": "cleanlab_diagnose",
+                "stage": "validation_analysis",
+                "model_var": "model",
+            }
+        )
+
+        confidence_line = next(
+            line for line in cleanlab.stdout.splitlines() if "confidence=" in line
+        )
+        confidence_text = confidence_line.split("confidence=", 1)[1]
+        assert len(confidence_text.split(".", 1)[1]) == 3
+        assert budget.validation_queries == 7
+        assert budget.validation_queries_by_source == {
+            "check_candidate": 1,
+            "cleanlab_diagnose": 1,
+            "quick_validate": 1,
+            "tune_hyperparameters": 1,
+            "tune_hyperparameters_preflight": 1,
+            "tune_hyperparameters_trial": 2,
+        }
+    finally:
+        env.close()
+
+
+def test_protected_finalization_uses_only_reserved_validation_query(tmp_path):
+    budget = _validation_query_budget(
+        max_queries=2,
+        finalization_reserve_queries=1,
+        protected=True,
+    )
+    env = _make_env(
+        tmp_path,
+        episode_budget=budget,
+        research_submission=True,
+    )
+    try:
+        env.step(
+            Action.add_cell_action(
+                _constant_model_source(), cell_type="code", execute=False
+            )
+        )
+        env.step(
+            {"type": "restart_and_run_all", "stage": "reproducibility_check"}
+        )
+        env.step(
+            {"type": "validate", "stage": "validation_analysis", "model_var": "model"}
+        )
+        with pytest.raises(
+            ExplorationBudgetExhausted,
+            match="exploration_max_validation_queries",
+        ):
+            env.step(
+                {
+                    "type": "quick_validate",
+                    "stage": "validation_analysis",
+                    "model_var": "model",
+                }
+            )
+
+        finalized = env.finalize()
+
+        assert finalized is not None
+        assert finalized.submitted
+        assert budget.validation_queries == 2
+        assert budget.validation_queries_by_source == {
+            "protected_finalization": 1,
+            "validate": 1,
+        }
+        summary = env.get_summary()
+        assert summary["validation_queries_total"] == 2
+        assert summary["feedback_validation_metric"] == 0.5
+        assert summary["hidden_minus_feedback_validation_metric"] == 0.5
+        query_context = env.build_context_pack_v1()["remaining_resources"][
+            "episode_budget"
+        ]["validation_query_budget"]
+        assert query_context["queries_used"] == 2
+        assert query_context["global_remaining_queries"] == 0
     finally:
         env.close()

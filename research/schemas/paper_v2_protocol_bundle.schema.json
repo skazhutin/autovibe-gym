@@ -1,0 +1,317 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://autovibe-gym.local/schemas/paper_v2_protocol_bundle.schema.json",
+  "title": "AutoVibe Gym Paper V2 Result-Blind Protocol Bundle",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "experiment_id",
+    "execution_git_commit",
+    "selection_evidence",
+    "study_contract",
+    "experiment_contract",
+    "policies",
+    "terminal_contract",
+    "execution_contract",
+    "arms"
+  ],
+  "properties": {
+    "schema_version": { "const": "paper-v2-protocol-bundle-v1" },
+    "experiment_id": { "type": "string", "minLength": 1 },
+    "execution_git_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "selection_evidence": { "$ref": "#/$defs/selectionEvidence" },
+    "study_contract": { "$ref": "#/$defs/studyContract" },
+    "experiment_contract": { "$ref": "#/$defs/experimentContract" },
+    "policies": { "$ref": "#/$defs/policies" },
+    "terminal_contract": { "$ref": "#/$defs/terminalContract" },
+    "execution_contract": { "$ref": "#/$defs/executionContract" },
+    "arms": { "$ref": "#/$defs/arms" }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "selectionEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "selection_scope",
+        "confirmatory_outcomes_visible",
+        "excluded_task_manifest_hash",
+        "policy_selection_plan_hash",
+        "preregistration_hash",
+        "independent_review_hash"
+      ],
+      "properties": {
+        "selection_scope": { "const": "excluded-development-only" },
+        "confirmatory_outcomes_visible": { "const": false },
+        "excluded_task_manifest_hash": { "$ref": "#/$defs/sha256" },
+        "policy_selection_plan_hash": { "$ref": "#/$defs/sha256" },
+        "preregistration_hash": { "$ref": "#/$defs/sha256" },
+        "independent_review_hash": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "studyContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_document_hash",
+        "hypotheses_hash",
+        "analysis_plan_hash",
+        "failure_policy_hash"
+      ],
+      "properties": {
+        "protocol_document_hash": { "$ref": "#/$defs/sha256" },
+        "hypotheses_hash": { "$ref": "#/$defs/sha256" },
+        "analysis_plan_hash": { "$ref": "#/$defs/sha256" },
+        "failure_policy_hash": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "experimentContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dataset_manifest_hash",
+        "model_manifest_hash",
+        "prompt_manifest_hash",
+        "decoding_config_hash",
+        "matrix_specification_hash",
+        "randomization_plan_hash"
+      ],
+      "properties": {
+        "dataset_manifest_hash": { "$ref": "#/$defs/sha256" },
+        "model_manifest_hash": { "$ref": "#/$defs/sha256" },
+        "prompt_manifest_hash": { "$ref": "#/$defs/sha256" },
+        "decoding_config_hash": { "$ref": "#/$defs/sha256" },
+        "matrix_specification_hash": { "$ref": "#/$defs/sha256" },
+        "randomization_plan_hash": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "policies": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "episode_budget",
+        "finalization_reserve",
+        "validation_query",
+        "context_compression",
+        "stopping"
+      ],
+      "properties": {
+        "episode_budget": { "$ref": "#/$defs/episodeBudget" },
+        "finalization_reserve": { "$ref": "#/$defs/finalizationReserve" },
+        "validation_query": { "$ref": "#/$defs/validationQuery" },
+        "context_compression": { "$ref": "#/$defs/contextCompression" },
+        "stopping": { "$ref": "#/$defs/stopping" }
+      }
+    },
+    "episodeBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "total_token_limit",
+        "max_output_tokens_per_call",
+        "max_llm_calls",
+        "max_code_executions",
+        "max_tool_calls",
+        "wall_clock_limit_seconds"
+      ],
+      "properties": {
+        "total_token_limit": { "type": "integer", "minimum": 1 },
+        "max_output_tokens_per_call": { "type": "integer", "minimum": 1 },
+        "max_llm_calls": { "type": "integer", "minimum": 1 },
+        "max_code_executions": { "type": "integer", "minimum": 1 },
+        "max_tool_calls": { "type": "integer", "minimum": 1 },
+        "wall_clock_limit_seconds": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "finalizationReserve": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "total_token_limit",
+        "max_llm_calls",
+        "max_code_executions",
+        "max_tool_calls",
+        "wall_clock_limit_seconds"
+      ],
+      "properties": {
+        "total_token_limit": { "type": "integer", "minimum": 0 },
+        "max_llm_calls": { "type": "integer", "minimum": 0 },
+        "max_code_executions": { "type": "integer", "minimum": 1 },
+        "max_tool_calls": { "type": "integer", "minimum": 3 },
+        "wall_clock_limit_seconds": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "validationQuery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_version",
+        "max_queries",
+        "finalization_reserve_queries",
+        "feedback_numeric_decimals"
+      ],
+      "properties": {
+        "policy_version": { "const": "validation-query-v1" },
+        "max_queries": { "type": "integer", "minimum": 2 },
+        "finalization_reserve_queries": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "feedback_numeric_decimals": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 15
+        }
+      }
+    },
+    "contextCompression": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_version",
+        "max_context_bytes",
+        "max_recent_messages",
+        "max_recent_message_bytes",
+        "max_feature_columns",
+        "max_tested_hypotheses",
+        "max_unresolved_errors"
+      ],
+      "properties": {
+        "policy_version": { "const": "deterministic-context-v1" },
+        "max_context_bytes": { "type": "integer", "minimum": 1 },
+        "max_recent_messages": { "type": "integer", "minimum": 0 },
+        "max_recent_message_bytes": { "type": "integer", "minimum": 1 },
+        "max_feature_columns": { "type": "integer", "minimum": 0 },
+        "max_tested_hypotheses": { "type": "integer", "minimum": 0 },
+        "max_unresolved_errors": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "stopping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "reserve_boundary_resources",
+        "no_improvement_patience",
+        "stop_on_exploration_exhausted",
+        "stop_on_agent_finalize_request",
+        "stop_on_unrecoverable_failure"
+      ],
+      "properties": {
+        "schema_version": { "const": "stopping-policy-v1" },
+        "reserve_boundary_resources": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "total_tokens",
+              "llm_calls",
+              "code_executions",
+              "tool_calls",
+              "wall_clock_seconds",
+              "validation_queries"
+            ]
+          }
+        },
+        "no_improvement_patience": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "integer", "minimum": 1 }
+          ]
+        },
+        "stop_on_exploration_exhausted": { "type": "boolean" },
+        "stop_on_agent_finalize_request": { "type": "boolean" },
+        "stop_on_unrecoverable_failure": { "type": "boolean" }
+      }
+    },
+    "terminalContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "terminal_contract_version",
+        "candidate_bundle_version",
+        "protected_finalization_version",
+        "metric_direction",
+        "score_tolerance",
+        "hidden_evaluations_max"
+      ],
+      "properties": {
+        "terminal_contract_version": { "const": "symmetric-terminal-v1" },
+        "candidate_bundle_version": { "const": "candidate-bundle-v1" },
+        "protected_finalization_version": {
+          "const": "protected-finalization-v1"
+        },
+        "metric_direction": { "enum": ["higher", "lower"] },
+        "score_tolerance": { "type": "number", "minimum": 0 },
+        "hidden_evaluations_max": { "const": 1 }
+      }
+    },
+    "executionContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repeated_executor_backend",
+        "iterative_kernel_backend",
+        "candidate_prediction_backend",
+        "candidate_prediction_network",
+        "docker_image_digest",
+        "sandbox_timeout_seconds"
+      ],
+      "properties": {
+        "repeated_executor_backend": { "const": "docker" },
+        "iterative_kernel_backend": { "const": "docker" },
+        "candidate_prediction_backend": { "const": "docker" },
+        "candidate_prediction_network": { "const": "none" },
+        "docker_image_digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "sandbox_timeout_seconds": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "arms": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["A", "B", "C"],
+      "properties": {
+        "A": {
+          "const": {
+            "product_mode": "repeated_single_shot",
+            "runner": "experiments.run_multishot",
+            "terminal_adapter": "RepeatedSingleShotTerminalAdapter",
+            "context_policy": "not_applicable"
+          }
+        },
+        "B": {
+          "const": {
+            "product_mode": "iterative_no_checklist",
+            "runner": "experiments.run_gym",
+            "terminal_adapter": "NotebookGymEnv",
+            "context_policy": "deterministic-context-v1"
+          }
+        },
+        "C": {
+          "const": {
+            "product_mode": "gym_with_checklist",
+            "runner": "experiments.run_gym",
+            "terminal_adapter": "NotebookGymEnv",
+            "context_policy": "deterministic-context-v1"
+          }
+        }
+      }
+    }
+  }
+}

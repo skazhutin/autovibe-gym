@@ -159,7 +159,7 @@ def main():
             "temperature": configured_temperature(),
         },
         budget_policy=(
-            episode_budget.policy.to_dict()
+            episode_budget.policy_payload()
             if episode_budget is not None
             else {"logical_llm_calls": 1, "max_tokens_per_call": max_tokens}
         ),
