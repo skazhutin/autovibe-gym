@@ -31,6 +31,7 @@ def _register(
     score,
     value=1,
     registration_index=0,
+    protocol_version="fixture-v1",
 ):
     notebook = NotebookDocument.create(root / f"{candidate_id}.ipynb")
     notebook.add_code_cell(f"model = ConstantModel({value})")
@@ -49,7 +50,7 @@ def _register(
         record,
         _ConstantModel(value),
         notebook_path=notebook.path,
-        protocol_version="fixture-v1",
+        protocol_version=protocol_version,
     )
     registry.add(bundle.record)
     return bundle.record
@@ -167,6 +168,33 @@ def test_common_terminal_contract_rejects_bundle_drift_before_replay(tmp_path):
     assert result.failed_stage == "bundle_verification"
     assert replayed == []
     assert controller.hidden_gate.attempted is False
+
+
+def test_common_terminal_contract_rejects_foreign_protocol_before_replay(tmp_path):
+    registry = CandidateRegistry(metric_name="accuracy")
+    store = CandidateBundleStore(tmp_path / "candidates")
+    incumbent = _register(
+        tmp_path,
+        registry,
+        store,
+        candidate_id="incumbent",
+        score=1.0,
+        protocol_version="foreign-protocol-v1",
+    )
+    replayed = []
+    controller = _controller(tmp_path, registry, store)
+
+    result = controller.finalize(
+        replay_candidate=lambda _record, _path: replayed.append(True)
+    )
+
+    assert result.final_status == "invalid_candidate_artifact"
+    assert result.failed_stage == "bundle_verification"
+    assert result.error_type == "CandidateProtocolMismatch"
+    assert result.candidate == incumbent
+    assert replayed == []
+    assert controller.hidden_gate.attempted is False
+    assert not (tmp_path / "finalization").exists()
 
 
 def test_common_terminal_contract_has_identical_sequence_for_two_arm_replayers(tmp_path):

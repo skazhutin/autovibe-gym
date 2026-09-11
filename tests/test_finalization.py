@@ -1,4 +1,7 @@
 import json
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from threading import Barrier
 
 import pytest
 
@@ -57,6 +60,24 @@ def test_protected_artifact_round_trip_is_atomic_private_and_hash_verified(tmp_p
     assert store.verify_artifact("candidate-1") == artifact
 
 
+def test_direct_verification_rejects_linked_finalization_root(tmp_path, monkeypatch):
+    store = ProtectedFinalizationStore(tmp_path / "finalization")
+    _write(store)
+    original_is_symlink = Path.is_symlink
+
+    def report_store_root_as_symlink(path):
+        if path == store.root:
+            return True
+        return original_is_symlink(path)
+
+    monkeypatch.setattr(Path, "is_symlink", report_store_root_as_symlink)
+    with pytest.raises(
+        ProtectedFinalizationError,
+        match="root is not a regular directory",
+    ):
+        store.verify_artifact("candidate-1")
+
+
 @pytest.mark.parametrize("filename", ["receipt.json", "replayed_model.pkl"])
 def test_protected_artifact_rejects_checksum_drift(tmp_path, filename):
     store = ProtectedFinalizationStore(tmp_path / "finalization")
@@ -85,6 +106,65 @@ def test_protected_artifact_never_overwrites_and_cleans_failed_publish(
     with pytest.raises(ProtectedFinalizationError, match="atomically store"):
         _write(failing_store)
     assert list(failing_store.root.iterdir()) == []
+
+
+def test_only_one_concurrent_writer_can_publish_protected_artifact(tmp_path):
+    store = ProtectedFinalizationStore(tmp_path / "finalization")
+    workers = 8
+    start = Barrier(workers)
+
+    def publish():
+        start.wait()
+        try:
+            return _write(store)
+        except ProtectedFinalizationError as exc:
+            return exc
+
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        outcomes = list(executor.map(lambda _index: publish(), range(workers)))
+
+    artifacts = [
+        outcome for outcome in outcomes if not isinstance(outcome, Exception)
+    ]
+    failures = [outcome for outcome in outcomes if isinstance(outcome, Exception)]
+    assert len(artifacts) == 1
+    assert len(failures) == workers - 1
+    assert all("already exists" in str(failure) for failure in failures)
+    assert store.verify_artifact("candidate-1") == artifacts[0]
+
+
+def test_failed_protected_publish_lock_leaves_no_stale_lock(tmp_path, monkeypatch):
+    store = ProtectedFinalizationStore(tmp_path / "finalization")
+
+    def fail_fsync(_descriptor):
+        raise OSError("simulated lock durability failure")
+
+    monkeypatch.setattr("gym.finalization.os.fsync", fail_fsync)
+    with pytest.raises(ProtectedFinalizationError, match="publication lock"):
+        _write(store)
+
+    assert list(store.root.iterdir()) == []
+
+
+def test_successful_protected_publish_survives_lock_cleanup_failure(
+    tmp_path,
+    monkeypatch,
+):
+    store = ProtectedFinalizationStore(tmp_path / "finalization")
+    lock_path = store.root / ".tmp-lock-candidate-1"
+    original_unlink = Path.unlink
+
+    def fail_lock_cleanup(path, *args, **kwargs):
+        if path == lock_path:
+            raise OSError("simulated post-publish lock cleanup failure")
+        return original_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", fail_lock_cleanup)
+    artifact = _write(store)
+
+    assert artifact.artifact_dir.is_dir()
+    assert lock_path.is_file()
+    assert store.verify_artifact("candidate-1") == artifact
 
 
 def test_protected_artifact_rejects_unsafe_ids_partial_and_symlinked_entries(

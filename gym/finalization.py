@@ -122,8 +122,37 @@ class ProtectedFinalizationStore:
         checksum_bytes = "".join(
             f"{hashes[name]}  {name}\n" for name in sorted(hashes)
         ).encode("ascii")
-        temp_dir = self.root / f".tmp-{candidate_id}-{uuid.uuid4().hex}"
+
+        lock_path = self.root / f".tmp-lock-{candidate_id}"
+        lock_acquired = False
         try:
+            with lock_path.open("xb") as lock_handle:
+                lock_acquired = True
+                lock_handle.write(f"{os.getpid()}\n".encode("ascii"))
+                lock_handle.flush()
+                os.fsync(lock_handle.fileno())
+        except FileExistsError as exc:
+            raise ProtectedFinalizationError(
+                "Protected finalization artifact already exists or is being "
+                f"published: {candidate_id}"
+            ) from exc
+        except OSError as exc:
+            if lock_acquired:
+                try:
+                    lock_path.unlink()
+                except OSError:
+                    pass
+            raise ProtectedFinalizationError(
+                "Could not acquire protected finalization publication lock"
+            ) from exc
+
+        temp_dir = self.root / f".tmp-{candidate_id}-{uuid.uuid4().hex}"
+        published = False
+        try:
+            if os.path.lexists(final_dir):
+                raise ProtectedFinalizationError(
+                    f"Protected finalization artifact already exists: {candidate_id}"
+                )
             temp_dir.mkdir()
             for name, payload in payloads.items():
                 _write_bytes_durable(temp_dir / name, payload)
@@ -134,6 +163,7 @@ class ProtectedFinalizationStore:
                     f"Protected finalization artifact already exists: {candidate_id}"
                 )
             os.replace(temp_dir, final_dir)
+            published = True
             _fsync_directory_best_effort(self.root)
         except Exception as exc:
             shutil.rmtree(temp_dir, ignore_errors=True)
@@ -142,6 +172,16 @@ class ProtectedFinalizationStore:
             raise ProtectedFinalizationError(
                 "Could not atomically store protected finalization artifact"
             ) from exc
+        finally:
+            try:
+                lock_path.unlink()
+            except FileNotFoundError:
+                pass
+            except OSError as exc:
+                if not published:
+                    raise ProtectedFinalizationError(
+                        "Could not release protected finalization publication lock"
+                    ) from exc
         return ProtectedFinalizationArtifact(
             candidate_id=candidate_id,
             artifact_dir=final_dir,
@@ -154,6 +194,7 @@ class ProtectedFinalizationStore:
 
     def verify_artifact(self, candidate_id: str) -> ProtectedFinalizationArtifact:
         self._validate_candidate_id(candidate_id)
+        self._require_existing_root()
         artifact_dir = self.root / candidate_id
         if artifact_dir.is_symlink() or not artifact_dir.is_dir():
             raise ProtectedFinalizationError(
@@ -254,6 +295,16 @@ class ProtectedFinalizationStore:
             raise ProtectedFinalizationError(
                 "Could not create protected finalization store"
             ) from exc
+
+    def _require_existing_root(self) -> None:
+        if (
+            not os.path.lexists(self.root)
+            or self.root.is_symlink()
+            or not self.root.is_dir()
+        ):
+            raise ProtectedFinalizationError(
+                "Protected finalization root is not a regular directory"
+            )
 
     @staticmethod
     def _validate_candidate_id(candidate_id: str) -> None:

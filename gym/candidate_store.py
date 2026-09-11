@@ -134,8 +134,36 @@ class CandidateBundleStore:
             f"{hashes[name]}  {name}\n" for name in sorted(hashes)
         ).encode("ascii")
 
-        temp_dir = self.root / f".tmp-{record.candidate_id}-{uuid.uuid4().hex}"
+        lock_path = self.root / f".tmp-lock-{record.candidate_id}"
+        lock_acquired = False
         try:
+            with lock_path.open("xb") as lock_handle:
+                lock_acquired = True
+                lock_handle.write(f"{os.getpid()}\n".encode("ascii"))
+                lock_handle.flush()
+                os.fsync(lock_handle.fileno())
+        except FileExistsError as exc:
+            raise CandidateBundleError(
+                f"Candidate bundle already exists or is being published: "
+                f"{record.candidate_id}"
+            ) from exc
+        except OSError as exc:
+            if lock_acquired:
+                try:
+                    lock_path.unlink()
+                except OSError:
+                    pass
+            raise CandidateBundleError(
+                "Could not acquire candidate bundle publication lock"
+            ) from exc
+
+        temp_dir = self.root / f".tmp-{record.candidate_id}-{uuid.uuid4().hex}"
+        published = False
+        try:
+            if os.path.lexists(final_dir):
+                raise CandidateBundleError(
+                    f"Candidate bundle already exists: {record.candidate_id}"
+                )
             temp_dir.mkdir()
             for name, payload in payloads.items():
                 _write_bytes_durable(temp_dir / name, payload)
@@ -146,12 +174,23 @@ class CandidateBundleStore:
                     f"Candidate bundle already exists: {record.candidate_id}"
                 )
             os.replace(temp_dir, final_dir)
+            published = True
             _fsync_directory_best_effort(self.root)
         except Exception as exc:
             shutil.rmtree(temp_dir, ignore_errors=True)
             if isinstance(exc, CandidateBundleError):
                 raise
             raise CandidateBundleError("Could not atomically store candidate bundle") from exc
+        finally:
+            try:
+                lock_path.unlink()
+            except FileNotFoundError:
+                pass
+            except OSError as exc:
+                if not published:
+                    raise CandidateBundleError(
+                        "Could not release candidate bundle publication lock"
+                    ) from exc
 
         stored_record = replace(record, artifact_path=str(final_dir / "model.pkl"))
         return CandidateBundle(
@@ -162,7 +201,16 @@ class CandidateBundleStore:
             resource_snapshot=snapshot,
         )
 
-    def load_records(self) -> list[CandidateRecord]:
+    def load_records(
+        self,
+        *,
+        expected_protocol_version: str | None = None,
+    ) -> list[CandidateRecord]:
+        if expected_protocol_version is not None and (
+            not isinstance(expected_protocol_version, str)
+            or not expected_protocol_version
+        ):
+            raise CandidateBundleError("Expected candidate protocol_version is invalid")
         if not os.path.lexists(self.root):
             return []
         self._ensure_root()
@@ -180,6 +228,13 @@ class CandidateBundleStore:
                 )
             bundles.append(self._load_bundle(entry.name))
 
+        if expected_protocol_version is not None and any(
+            bundle.protocol_version != expected_protocol_version
+            for bundle in bundles
+        ):
+            raise CandidateBundleError(
+                "Candidate bundle protocol does not match the active protocol"
+            )
         indices = [bundle.record.registration_index for bundle in bundles]
         if len(indices) != len(set(indices)):
             raise CandidateBundleError("Duplicate candidate registration_index")
@@ -194,6 +249,7 @@ class CandidateBundleStore:
         return [bundle.record for bundle in bundles]
 
     def verify_record(self, record: CandidateRecord) -> CandidateBundle:
+        self._require_existing_root()
         bundle = self._load_bundle(record.candidate_id)
         if _record_payload(bundle.record) != _record_payload(record):
             raise CandidateBundleError("Candidate record does not match stored metadata")
@@ -290,6 +346,16 @@ class CandidateBundleStore:
                 )
         except OSError as exc:
             raise CandidateBundleError("Could not create candidate store") from exc
+
+    def _require_existing_root(self) -> None:
+        if (
+            not os.path.lexists(self.root)
+            or self.root.is_symlink()
+            or not self.root.is_dir()
+        ):
+            raise CandidateBundleError(
+                "Candidate store root is not a regular directory"
+            )
 
     @staticmethod
     def _validate_candidate_id(candidate_id: str) -> None:

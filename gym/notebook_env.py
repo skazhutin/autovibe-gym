@@ -2351,7 +2351,9 @@ class NotebookGymEnv:
 
         if self.candidates.all():
             raise CandidateBundleError("Candidate registry must be empty before restore")
-        records = self.candidate_store.load_records()
+        records = self.candidate_store.load_records(
+            expected_protocol_version=self.protocol_version
+        )
         try:
             for record in records:
                 self.candidates.add(record)

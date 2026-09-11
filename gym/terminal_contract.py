@@ -121,6 +121,17 @@ class SymmetricTerminalController:
                 candidate,
                 exc,
             )
+        if source_bundle.protocol_version != self.protocol_version:
+            return TerminalContractResult(
+                final_status="invalid_candidate_artifact",
+                candidate=candidate,
+                failed_stage="bundle_verification",
+                error_type="CandidateProtocolMismatch",
+                error_message=(
+                    "Candidate bundle protocol does not match the active terminal "
+                    "protocol."
+                ),
+            )
 
         try:
             model = replay_candidate(
