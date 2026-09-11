@@ -28,6 +28,11 @@ class _NullModel:
         return np.full(len(features), np.nan)
 
 
+class _MatrixModel:
+    def predict(self, features):
+        return np.zeros((len(features), 2))
+
+
 class _CrashModel:
     def predict(self, features):
         os._exit(23)
@@ -74,6 +79,16 @@ def test_common_validator_rejects_null_predictions():
 
     assert not result.valid
     assert result.prediction_nan_free is False
+
+
+def test_common_validator_rejects_multioutput_prediction_matrix():
+    features, _ = _data()
+
+    result = validate_submission_candidate(_MatrixModel(), features)
+
+    assert not result.valid
+    assert result.raw_prediction_ok is True
+    assert result.prediction_length_ok is False
 
 
 def test_common_validator_contains_prediction_process_crash():
@@ -192,3 +207,27 @@ def test_hidden_evaluation_gate_returns_metric_without_exposing_feedback():
 
     assert score == 1.0
     assert gate.attempted
+
+
+def test_hidden_evaluation_gate_rejects_multioutput_prediction_matrix():
+    features, target = _data()
+    gate = HiddenEvaluationGate()
+
+    with pytest.raises(ValueError, match="one-dimensional"):
+        gate.evaluate(_MatrixModel(), features, target, lambda _y, _p: 1.0)
+
+    assert gate.attempted
+
+
+@pytest.mark.parametrize("score", [float("nan"), float("inf"), float("-inf")])
+def test_hidden_evaluation_gate_rejects_non_finite_metric(score):
+    features, target = _data()
+    model = LogisticRegression().fit(features, target)
+    gate = HiddenEvaluationGate()
+
+    with pytest.raises(ValueError, match="metric is not finite"):
+        gate.evaluate(model, features, target, lambda _y, _p: score)
+
+    assert gate.attempted
+    with pytest.raises(HiddenEvaluationAlreadyAttempted):
+        gate.evaluate(model, features, target, lambda _y, _p: 1.0)
