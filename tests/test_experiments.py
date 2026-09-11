@@ -15,6 +15,10 @@ from experiments import run_matrix
 from experiments.modes import expand_requested_mode
 from gym.llm import LLMResponse
 from gym.notebook_env import NotebookGymEnv
+from gym.candidates import CandidateRecord
+from gym.terminal_contract import TerminalContractResult
+from research.budget import EpisodeBudget, EpisodeBudgetPolicy, FinalizationReservePolicy
+from research.stopping import FrozenStoppingPolicy, StoppingController
 
 
 def test_run_gym_load_dataset_returns_splits_and_metadata(tmp_path):
@@ -160,6 +164,214 @@ def test_run_multishot_feedback_omits_empty_output_sections():
     assert "[OUTPUT]" not in feedback
     assert "[ERROR]" not in feedback
     assert "0 shots remaining" in feedback
+
+
+def test_run_multishot_validation_boundary_prompt_is_explicit_and_opt_in():
+    assert (
+        run_multishot._system_prompt_for_validation_boundary(
+            labels_host_only=False
+        )
+        == run_multishot.SYSTEM_PROMPT
+    )
+
+    controlled = run_multishot._system_prompt_for_validation_boundary(
+        labels_host_only=True
+    )
+
+    assert "target labels are host-only" in controlled
+    assert "model.predict(val_df.head())" in controlled
+    assert "val_df.drop(columns=[target_col])" not in controlled
+
+
+def test_run_multishot_m4_observers_share_frozen_candidate_and_boundary_rules():
+    policy = FrozenStoppingPolicy(
+        reserve_boundary_resources=("llm_calls",),
+        no_improvement_patience=1,
+        stop_on_exploration_exhausted=True,
+        stop_on_agent_finalize_request=False,
+        stop_on_unrecoverable_failure=True,
+    )
+    incumbent = types.SimpleNamespace(candidate_id="first")
+
+    class Registry:
+        def incumbent(self):
+            return incumbent
+
+    terminal = types.SimpleNamespace(registry=Registry())
+    controller = StoppingController(policy)
+    run_multishot._observe_repeated_candidate(
+        controller,
+        previous_incumbent=incumbent,
+        record=types.SimpleNamespace(candidate_id="second"),
+        terminal=terminal,
+    )
+
+    assert controller.decision.reason == "no_validation_improvement"
+    assert controller.decision.incumbent_candidate_id == "first"
+
+    boundary_controller = StoppingController(policy)
+    budget = types.SimpleNamespace(
+        exploration_boundary_resources=lambda: ("llm_calls",)
+    )
+    run_multishot._observe_repeated_boundary(
+        boundary_controller,
+        budget,
+        terminal,
+    )
+    assert boundary_controller.decision.reason == "reserve_boundary_reached"
+
+
+def test_run_multishot_uses_inactive_m5_path_when_reserve_is_injected(
+    monkeypatch,
+):
+    frame = pd.DataFrame({"x": range(12), "target": [1] * 12})
+    metadata = types.SimpleNamespace(
+        name="fixture",
+        seed=42,
+        split_strategy="fixture-split",
+        role="test",
+        sampled=False,
+    )
+    splits = types.SimpleNamespace(
+        train=frame.copy(),
+        val=frame.copy(),
+        test=frame.copy(),
+        target_col="target",
+        metadata=metadata,
+    )
+    budget = EpisodeBudget(
+        EpisodeBudgetPolicy(
+            total_token_limit=100_000,
+            max_output_tokens_per_call=100,
+            max_llm_calls=1,
+            max_code_executions=2,
+            max_tool_calls=3,
+            wall_clock_limit_seconds=120,
+        ),
+        finalization_reserve=FinalizationReservePolicy(
+            max_code_executions=1,
+            max_tool_calls=3,
+            wall_clock_limit_seconds=60,
+        ),
+    )
+    candidate = CandidateRecord(
+        candidate_id="fixture-candidate",
+        model_var="model",
+        notebook_revision=1,
+        clean_run_id="attempt-0",
+        metric_name="accuracy",
+        validation_metric=1.0,
+        validation_success=True,
+        raw_inference_ready=True,
+    )
+    calls = []
+
+    class FakeClient:
+        def complete(self, **_kwargs):
+            return LLMResponse(
+                text="model = object()",
+                input_tokens=1,
+                output_tokens=1,
+            )
+
+    class FakeExecutor:
+        def __init__(self, **_kwargs):
+            pass
+
+        def run(self, code, namespace):
+            exec(code, namespace)
+            return "", "", namespace
+
+    class FakeRegistry:
+        def incumbent(self):
+            return candidate
+
+    class FakeAdapter:
+        def __init__(self, **kwargs):
+            calls.append("adapter_created")
+            self.registry = FakeRegistry()
+            self.hidden_gate = kwargs["hidden_gate"]
+
+        def validate_and_register(self, **kwargs):
+            calls.append("candidate_registered")
+            if kwargs.get("before_validation"):
+                kwargs["before_validation"]()
+            return candidate
+
+        def finalize(self, **kwargs):
+            calls.append("terminal_finalize")
+            kwargs["execute_code"]("terminal_replay = True", kwargs["namespace_factory"]())
+            kwargs["before_preflight"]()
+            kwargs["before_artifact_write"]()
+            kwargs["before_hidden_evaluation"]()
+            self.hidden_gate.attempted = True
+            return TerminalContractResult(
+                final_status="submitted_protected_replay",
+                candidate=candidate,
+                validation_metric=1.0,
+                hidden_metric=1.0,
+            )
+
+    summaries = []
+    fake_mlflow = types.SimpleNamespace(
+        set_experiment=lambda *_args, **_kwargs: None,
+        start_run=lambda **_kwargs: nullcontext(),
+        log_params=lambda *_args, **_kwargs: None,
+        set_tags=lambda *_args, **_kwargs: None,
+        log_metrics=lambda *_args, **_kwargs: None,
+        log_text=lambda *_args, **_kwargs: None,
+        log_metric=lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(run_multishot, "mlflow", fake_mlflow)
+    monkeypatch.setattr(run_multishot, "configure_mlflow_tracking", lambda *_a: None)
+    monkeypatch.setattr(run_multishot, "load_dataset_splits", lambda **_kwargs: splits)
+    monkeypatch.setattr(
+        run_multishot,
+        "resolve_metric",
+        lambda *_args: (lambda *_a: 1.0, "accuracy"),
+    )
+    monkeypatch.setattr(run_multishot, "build_dataset_card", lambda *_a, **_k: "card")
+    monkeypatch.setattr(run_multishot, "dataset_source_hash", lambda **_kwargs: "hash")
+    monkeypatch.setattr(run_multishot, "apply_model_reference", lambda model: model)
+    monkeypatch.setattr(run_multishot, "make_llm_client", FakeClient)
+    monkeypatch.setattr(run_multishot, "CodeExecutor", FakeExecutor)
+    monkeypatch.setattr(run_multishot, "create_episode_budget", lambda _args: budget)
+    monkeypatch.setattr(run_multishot, "start_research_run", lambda *_a, **_k: None)
+    monkeypatch.setattr(run_multishot, "RepeatedSingleShotTerminalAdapter", FakeAdapter)
+    monkeypatch.setattr(
+        run_multishot,
+        "finalize_research_run",
+        lambda _recorder, summary, **_kwargs: summaries.append(dict(summary)),
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_multishot",
+            "--dataset",
+            "fixture.csv",
+            "--target",
+            "target",
+            "--model",
+            "fixture-model",
+            "--research-v2-metric-direction",
+            "higher",
+            "--research-v2-score-tolerance",
+            "0.000001",
+        ],
+    )
+
+    run_multishot.main()
+
+    assert calls == ["adapter_created", "candidate_registered", "terminal_finalize"]
+    assert summaries[0]["final_status"] == "submitted_protected_replay"
+    assert summaries[0]["finalize_path"] == "protected_incumbent_replay"
+    assert summaries[0]["test_metric"] == 1.0
+    assert summaries[0]["hidden_evaluations"] == 1
+    snapshot = budget.snapshot()
+    assert snapshot["budget_phase"] == "finalization"
+    assert snapshot["finalization_usage"]["code_executions"] == 1
+    assert snapshot["finalization_usage"]["tool_calls"] == 3
 
 
 def test_run_fixed_summary_metrics_do_not_log_missing_test_metric_as_zero():

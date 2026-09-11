@@ -1,9 +1,10 @@
 import pandas as pd
+import types
 
 from gym.agent import GymAgent, SYSTEM_PROMPT, THOUGHTS_DISABLED_PROMPT, THOUGHTS_ENABLED_PROMPT
 from gym.env import GymEnv
 from gym.llm import LLMResponse
-from gym.protocol import Action
+from gym.protocol import Action, Observation
 
 
 class ScriptedClient:
@@ -150,3 +151,43 @@ def test_forced_submit_prefers_best_model_over_model():
 
     assert observation.model_var == "best_model"
     assert observation.test_metric == 1.0
+
+
+def test_m4_boundary_is_applied_before_any_new_llm_call():
+    class BoundaryEnv:
+        enable_thoughts = False
+
+        def __init__(self):
+            self.state = types.SimpleNamespace(max_steps=3, cell_history=None)
+            self.applied = False
+
+        def reset(self):
+            return {"task": "fixture"}
+
+        def apply_stopping_policy(self):
+            if self.applied:
+                return None
+            self.applied = True
+            return Observation(
+                action="finalize",
+                step=0,
+                budget_remaining=3,
+                done=True,
+                submitted=True,
+                final_status="submitted_protected_replay",
+            )
+
+        def get_summary(self):
+            return {
+                "submitted": True,
+                "stopping_reason": "reserve_boundary_reached",
+            }
+
+    client = ScriptedClient([])
+    agent = GymAgent(env=BoundaryEnv(), client=client)
+
+    summary = agent.run()
+
+    assert client.calls == []
+    assert summary["stopping_policy_triggered"] is True
+    assert summary["stopped_reason"] == "reserve_boundary_reached"

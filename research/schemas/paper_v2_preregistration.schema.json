@@ -1,0 +1,328 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://autovibe-gym.local/schemas/paper_v2_preregistration.schema.json",
+  "title": "AutoVibe Gym Paper V2 Preregistration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "study_id",
+    "status",
+    "confirmatory_outcomes_visible",
+    "research_questions",
+    "hypotheses",
+    "analysis_plan",
+    "failure_policy",
+    "mechanistic_plan",
+    "exploratory_plan",
+    "claim_rules",
+    "freeze_decisions"
+  ],
+  "properties": {
+    "schema_version": { "const": "paper-v2-preregistration-v1" },
+    "study_id": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["draft", "freeze_candidate"] },
+    "confirmatory_outcomes_visible": { "const": false },
+    "research_questions": {
+      "const": {
+        "primary": "Under matched global resources and symmetric terminal handling, is iterative feedback non-inferior in reliability and superior in failure-adjusted utility to repeated independent attempts?",
+        "secondary": "Does checklist feedback change failure-adjusted utility beyond the same iterative runtime, validation, and terminal feedback?"
+      }
+    },
+    "hypotheses": {
+      "const": [
+        {
+          "id": "P1",
+          "role": "primary_confirmatory",
+          "contrast": "B-A",
+          "endpoint": "valid_terminal_outcome",
+          "estimand": "equal_stratum_mean_paired_risk_difference",
+          "alternative": "noninferiority",
+          "decision_rule": "lower_confidence_bound_above_negative_margin",
+          "gate": null
+        },
+        {
+          "id": "P2",
+          "role": "gated_confirmatory",
+          "contrast": "B-A",
+          "endpoint": "failure_adjusted_normalized_utility",
+          "estimand": "equal_stratum_mean_paired_difference",
+          "alternative": "greater",
+          "decision_rule": "adjusted_one_sided_superiority",
+          "gate": "P1"
+        },
+        {
+          "id": "S1",
+          "role": "key_secondary_confirmatory",
+          "contrast": "C-B",
+          "endpoint": "failure_adjusted_normalized_utility",
+          "estimand": "equal_stratum_mean_paired_difference",
+          "alternative": "two_sided",
+          "decision_rule": "multiplicity_adjusted_two_sided_difference",
+          "gate": null
+        }
+      ]
+    },
+    "analysis_plan": {
+      "const": {
+        "analysis_population": "all_terminal_agent_outcomes",
+        "pairing_keys": ["dataset_id", "model_id", "replicate_index"],
+        "stratum_keys": ["dataset_id", "model_id"],
+        "stratum_weighting": "equal",
+        "primary_sequence": ["P1", "P2"],
+        "secondary_family": ["S1"],
+        "validity_interval": "paired_stratified_resampling",
+        "utility_test": "paired_stratified_randomization",
+        "utility_interval": "paired_stratified_resampling",
+        "successful_only_analysis": "descriptive_selection_biased",
+        "hidden_evaluations_max": 1,
+        "unconditional_utility_required": true
+      }
+    },
+    "failure_policy": {
+      "const": {
+        "agent_invalid": "retain_as_invalid_and_assign_dummy_utility",
+        "infrastructure_failure": "censor_attempt_and_replace_same_condition",
+        "protocol_violation": "stop_series_without_outcome_deletion",
+        "complete_case_primary_analysis": false,
+        "retain_all_attempts": true,
+        "replacement_may_change_condition": false
+      }
+    },
+    "mechanistic_plan": {
+      "const": {
+        "evidence_class": "separate_excluded_development_study",
+        "selection_scope": "excluded-development-only",
+        "pool_with_confirmatory_abc": false,
+        "design": "nested_incremental_ablation",
+        "claim_limit": "incremental_fixed_order_effects_only",
+        "arms": [
+          {
+            "id": "D0",
+            "adds": "legacy_iterative_reference",
+            "predecessor": null
+          },
+          {
+            "id": "D1",
+            "adds": "immutable_incumbent_preservation",
+            "predecessor": "D0"
+          },
+          {
+            "id": "D2",
+            "adds": "protected_finalization_reserve",
+            "predecessor": "D1"
+          },
+          {
+            "id": "D3",
+            "adds": "deterministic_context_compression",
+            "predecessor": "D2"
+          }
+        ]
+      }
+    },
+    "exploratory_plan": {
+      "const": {
+        "confirmatory_reclassification_allowed": false,
+        "analyses": [
+          "dataset_and_model_stratified_effects",
+          "task_characteristic_interactions",
+          "trajectory_failure_taxonomy",
+          "validation_to_hidden_generalization_gap",
+          "resource_quality_pareto_frontiers"
+        ]
+      }
+    },
+    "claim_rules": {
+      "const": {
+        "system_superiority_requires_confirmatory_abc": true,
+        "mechanism_claim_requires_separate_ablation": true,
+        "successful_only_score_is_primary": false,
+        "checklist_coverage_proves_quality": false,
+        "exploratory_results_may_rewrite_confirmatory_claims": false
+      }
+    },
+    "freeze_decisions": { "$ref": "#/$defs/freezeDecisions" }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "status": { "const": "freeze_candidate" } },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "freeze_decisions": {
+            "properties": {
+              "noninferiority_margin": { "$ref": "#/$defs/resolvedNoninferiorityMargin" },
+              "familywise_alpha": { "$ref": "#/$defs/resolvedFamilywiseAlpha" },
+              "target_power": { "$ref": "#/$defs/resolvedTargetPower" },
+              "replicates_per_stratum": { "$ref": "#/$defs/resolvedPositiveInteger" },
+              "resampling_draws": { "$ref": "#/$defs/resolvedPositiveInteger" },
+              "randomization_draws": { "$ref": "#/$defs/resolvedPositiveInteger" },
+              "analysis_seed": { "$ref": "#/$defs/resolvedNonnegativeInteger" },
+              "secondary_multiplicity_strategy": { "$ref": "#/$defs/resolvedMultiplicity" },
+              "dataset_model_scope": { "$ref": "#/$defs/resolvedHash" },
+              "fanu_references": { "$ref": "#/$defs/resolvedHash" },
+              "statistical_power_analysis": { "$ref": "#/$defs/resolvedHash" },
+              "independent_statistical_review": { "$ref": "#/$defs/resolvedHash" }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "unresolvedDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "value", "rationale", "evidence_hash"],
+      "properties": {
+        "status": { "const": "unresolved" },
+        "value": { "type": "null" },
+        "rationale": { "type": "null" },
+        "evidence_hash": { "type": "null" }
+      }
+    },
+    "resolvedBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "value", "rationale", "evidence_hash"],
+      "properties": {
+        "status": { "const": "resolved" },
+        "value": {},
+        "rationale": { "type": "string", "minLength": 1 },
+        "evidence_hash": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "noninferiorityMarginDecision": {
+      "oneOf": [
+        { "$ref": "#/$defs/unresolvedDecision" },
+        { "$ref": "#/$defs/resolvedNoninferiorityMargin" }
+      ]
+    },
+    "familywiseAlphaDecision": {
+      "oneOf": [
+        { "$ref": "#/$defs/unresolvedDecision" },
+        { "$ref": "#/$defs/resolvedFamilywiseAlpha" }
+      ]
+    },
+    "targetPowerDecision": {
+      "oneOf": [
+        { "$ref": "#/$defs/unresolvedDecision" },
+        { "$ref": "#/$defs/resolvedTargetPower" }
+      ]
+    },
+    "positiveIntegerDecision": {
+      "oneOf": [
+        { "$ref": "#/$defs/unresolvedDecision" },
+        { "$ref": "#/$defs/resolvedPositiveInteger" }
+      ]
+    },
+    "nonnegativeIntegerDecision": {
+      "oneOf": [
+        { "$ref": "#/$defs/unresolvedDecision" },
+        { "$ref": "#/$defs/resolvedNonnegativeInteger" }
+      ]
+    },
+    "multiplicityDecision": {
+      "oneOf": [
+        { "$ref": "#/$defs/unresolvedDecision" },
+        { "$ref": "#/$defs/resolvedMultiplicity" }
+      ]
+    },
+    "hashDecision": {
+      "oneOf": [
+        { "$ref": "#/$defs/unresolvedDecision" },
+        { "$ref": "#/$defs/resolvedHash" }
+      ]
+    },
+    "resolvedNoninferiorityMargin": {
+      "allOf": [
+        { "$ref": "#/$defs/resolvedBase" },
+        { "properties": { "value": { "type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 0.5 } } }
+      ]
+    },
+    "resolvedFamilywiseAlpha": {
+      "allOf": [
+        { "$ref": "#/$defs/resolvedBase" },
+        { "properties": { "value": { "type": "number", "exclusiveMinimum": 0, "maximum": 0.1 } } }
+      ]
+    },
+    "resolvedTargetPower": {
+      "allOf": [
+        { "$ref": "#/$defs/resolvedBase" },
+        { "properties": { "value": { "type": "number", "minimum": 0.8, "exclusiveMaximum": 1 } } }
+      ]
+    },
+    "resolvedPositiveInteger": {
+      "allOf": [
+        { "$ref": "#/$defs/resolvedBase" },
+        { "properties": { "value": { "type": "integer", "minimum": 1 } } }
+      ]
+    },
+    "resolvedNonnegativeInteger": {
+      "allOf": [
+        { "$ref": "#/$defs/resolvedBase" },
+        { "properties": { "value": { "type": "integer", "minimum": 0 } } }
+      ]
+    },
+    "resolvedMultiplicity": {
+      "allOf": [
+        { "$ref": "#/$defs/resolvedBase" },
+        {
+          "properties": {
+            "value": {
+              "enum": [
+                "hierarchical_gatekeeping_with_secondary_holm",
+                "closed_testing",
+                "alpha_split_with_gatekeeping"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "resolvedHash": {
+      "allOf": [
+        { "$ref": "#/$defs/resolvedBase" },
+        { "properties": { "value": { "$ref": "#/$defs/sha256" } } }
+      ]
+    },
+    "freezeDecisions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "noninferiority_margin",
+        "familywise_alpha",
+        "target_power",
+        "replicates_per_stratum",
+        "resampling_draws",
+        "randomization_draws",
+        "analysis_seed",
+        "secondary_multiplicity_strategy",
+        "dataset_model_scope",
+        "fanu_references",
+        "statistical_power_analysis",
+        "independent_statistical_review"
+      ],
+      "properties": {
+        "noninferiority_margin": { "$ref": "#/$defs/noninferiorityMarginDecision" },
+        "familywise_alpha": { "$ref": "#/$defs/familywiseAlphaDecision" },
+        "target_power": { "$ref": "#/$defs/targetPowerDecision" },
+        "replicates_per_stratum": { "$ref": "#/$defs/positiveIntegerDecision" },
+        "resampling_draws": { "$ref": "#/$defs/positiveIntegerDecision" },
+        "randomization_draws": { "$ref": "#/$defs/positiveIntegerDecision" },
+        "analysis_seed": { "$ref": "#/$defs/nonnegativeIntegerDecision" },
+        "secondary_multiplicity_strategy": { "$ref": "#/$defs/multiplicityDecision" },
+        "dataset_model_scope": { "$ref": "#/$defs/hashDecision" },
+        "fanu_references": { "$ref": "#/$defs/hashDecision" },
+        "statistical_power_analysis": { "$ref": "#/$defs/hashDecision" },
+        "independent_statistical_review": { "$ref": "#/$defs/hashDecision" }
+      }
+    }
+  }
+}

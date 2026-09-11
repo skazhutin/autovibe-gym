@@ -128,7 +128,10 @@ def validate_submission_candidate(
             error_message=prediction["error_message"],
         )
     predictions = prediction["predictions"]
-    length_ok = _prediction_length(predictions) == len(raw_features)
+    length_ok = (
+        _prediction_length(predictions) == len(raw_features)
+        and _predictions_one_dimensional(predictions)
+    )
     nan_free = _predictions_nan_free(predictions)
     return SubmissionValidation(
         valid=bool(length_ok and nan_free),
@@ -191,9 +194,14 @@ class HiddenEvaluationGate:
         predictions = prediction["predictions"]
         if _prediction_length(predictions) != len(raw_features):
             raise ValueError("Hidden predictions have the wrong length.")
+        if not _predictions_one_dimensional(predictions):
+            raise ValueError("Hidden predictions must be one-dimensional.")
         if not _predictions_nan_free(predictions):
             raise ValueError("Hidden predictions contain null values.")
-        return score_with_coercion(metric_fn, target, predictions)
+        score = score_with_coercion(metric_fn, target, predictions)
+        if not np.isfinite(score):
+            raise ValueError("Hidden evaluation metric is not finite.")
+        return score
 
 
 def _prediction_length(predictions: Any) -> int:
@@ -201,6 +209,13 @@ def _prediction_length(predictions: Any) -> int:
         return len(predictions)
     except TypeError:
         return -1
+
+
+def _predictions_one_dimensional(predictions: Any) -> bool:
+    try:
+        return np.asarray(predictions).ndim == 1
+    except Exception:
+        return False
 
 
 def _predictions_nan_free(predictions: Any) -> bool:

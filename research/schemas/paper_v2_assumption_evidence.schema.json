@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://autovibe-gym.local/schemas/paper_v2_assumption_evidence.schema.json",
+  "title": "AutoVibe Gym Paper V2 Assumption Evidence Package",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "package_id",
+    "evidence_class",
+    "confirmatory_outcomes_visible",
+    "development_manifest_hash",
+    "scenario_policy",
+    "assumptions",
+    "independent_review_hash"
+  ],
+  "properties": {
+    "schema_version": { "const": "paper-v2-assumption-evidence-v1" },
+    "package_id": { "$ref": "#/$defs/identifier" },
+    "evidence_class": { "const": "result-blind-planning-evidence" },
+    "confirmatory_outcomes_visible": { "const": false },
+    "development_manifest_hash": { "$ref": "#/$defs/sha256" },
+    "scenario_policy": { "$ref": "#/$defs/scenarioPolicy" },
+    "assumptions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1000000,
+      "items": { "$ref": "#/$defs/assumption" }
+    },
+    "independent_review_hash": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "scenarioReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scenario_id", "scenario_hash"],
+      "properties": {
+        "scenario_id": { "$ref": "#/$defs/identifier" },
+        "scenario_hash": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "scenarioPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "selection_rule",
+        "favorable_row_selection_allowed",
+        "scenario_grid_plan_hash",
+        "complete_grid_review_hash",
+        "required_scenarios"
+      ],
+      "properties": {
+        "selection_rule": {
+          "const": "minimum_replicates_meeting_target_in_all_required_scenarios"
+        },
+        "favorable_row_selection_allowed": { "const": false },
+        "scenario_grid_plan_hash": { "$ref": "#/$defs/sha256" },
+        "complete_grid_review_hash": { "$ref": "#/$defs/sha256" },
+        "required_scenarios": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10000,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/scenarioReference" }
+        }
+      }
+    },
+    "assumption": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scenario_id",
+        "scenario_hash",
+        "assumption_key",
+        "assumption_value_hash",
+        "use_class",
+        "source_class",
+        "source_artifact_hash",
+        "development_manifest_hash"
+      ],
+      "properties": {
+        "scenario_id": { "$ref": "#/$defs/identifier" },
+        "scenario_hash": { "$ref": "#/$defs/sha256" },
+        "assumption_key": {
+          "type": "string",
+          "pattern": "^/(?!.*//).+$"
+        },
+        "assumption_value_hash": { "$ref": "#/$defs/sha256" },
+        "use_class": {
+          "enum": [
+            "scientific_acceptability_threshold",
+            "statistical_design_choice",
+            "reproducibility_choice",
+            "candidate_sample_size",
+            "nuisance_parameter"
+          ]
+        },
+        "source_class": {
+          "enum": [
+            "independent_methodological_justification",
+            "excluded_development_pilot",
+            "historical_paper_v1",
+            "external_primary_source",
+            "deterministic_design_choice",
+            "power_grid_design"
+          ]
+        },
+        "source_artifact_hash": { "$ref": "#/$defs/sha256" },
+        "development_manifest_hash": {
+          "oneOf": [
+            { "$ref": "#/$defs/sha256" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "source_class": { "const": "excluded_development_pilot" }
+            },
+            "required": ["source_class"]
+          },
+          "then": {
+            "properties": {
+              "development_manifest_hash": { "$ref": "#/$defs/sha256" }
+            }
+          },
+          "else": {
+            "properties": {
+              "development_manifest_hash": { "type": "null" }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://autovibe-gym.local/schemas/paper_v2_excluded_development_manifest.schema.json",
+  "title": "AutoVibe Gym Paper V2 Excluded Development Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "manifest_id",
+    "selection_scope",
+    "confirmatory_outcomes_visible",
+    "tasks",
+    "independent_review_hash"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "paper-v2-excluded-development-manifest-v1"
+    },
+    "manifest_id": { "$ref": "#/$defs/identifier" },
+    "selection_scope": { "const": "excluded-development-only" },
+    "confirmatory_outcomes_visible": { "const": false },
+    "tasks": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1000,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/task" }
+    },
+    "independent_review_hash": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "task_id",
+        "dataset_identity_hash",
+        "dataset_content_hash",
+        "source_lineage_hash",
+        "split_definition_hash",
+        "target_definition_hash",
+        "metric_definition_hash",
+        "dataset_card_hash"
+      ],
+      "properties": {
+        "task_id": { "$ref": "#/$defs/identifier" },
+        "dataset_identity_hash": { "$ref": "#/$defs/sha256" },
+        "dataset_content_hash": { "$ref": "#/$defs/sha256" },
+        "source_lineage_hash": { "$ref": "#/$defs/sha256" },
+        "split_definition_hash": { "$ref": "#/$defs/sha256" },
+        "target_definition_hash": { "$ref": "#/$defs/sha256" },
+        "metric_definition_hash": { "$ref": "#/$defs/sha256" },
+        "dataset_card_hash": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  }
+}

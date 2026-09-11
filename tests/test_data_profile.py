@@ -24,6 +24,24 @@ def test_compact_profile_respects_max_chars_and_uses_train_val_only():
     assert len(text) <= 820
 
 
+def test_compact_profile_treats_pandas_string_dtype_as_categorical():
+    train = pd.DataFrame(
+        {"cat": pd.Series(["a", "b", "a"], dtype="string"), "target": [0, 1, 0]}
+    )
+    val = pd.DataFrame(
+        {"cat": pd.Series(["c"], dtype="string"), "target": [1]}
+    )
+
+    profile = build_compact_profile(train, val, "target", "accuracy")
+
+    assert profile["object_or_categorical_columns"] == [
+        {"column": "cat", "nunique": 2}
+    ]
+    assert profile["unseen_categories_in_val"] == [
+        {"column": "cat", "unseen_count": 1, "examples": ["c"]}
+    ]
+
+
 def test_ydata_summary_extraction_handles_mock_json():
     summary = extract_ydata_summary(
         {

@@ -18,10 +18,18 @@ from typing import Any, Callable
 import cloudpickle
 import numpy as np
 import pandas as pd
-from research.budget import EpisodeBudget
+from research.budget import BudgetExhausted, EpisodeBudget
+from research.stopping import (
+    FrozenStoppingPolicy,
+    StoppingController,
+    StoppingDecision,
+)
 from research.submission import HiddenEvaluationGate, validate_submission_candidate
 
-from .candidates import CandidateRecord, CandidateRegistry
+from .candidate_store import CandidateBundleError, CandidateBundleStore
+from .candidates import CandidateRecord, CandidateRegistry, MetricDirection
+from .context_compression import CONTEXT_PACK_SCHEMA_VERSION
+from .finalization import ProtectedFinalizationStore
 from .data_profile import (
     build_compact_profile,
     build_dataset_card,
@@ -38,7 +46,19 @@ from .jupyter_kernel import (
 )
 from .modes import EpisodeMode, resolve_episode_mode
 from .notebook import NotebookDocument
-from .protocol import AGENT_STAGE_VALUES, Action, ActionParseError, Observation, coerce_action
+from .protocol import (
+    AGENT_ACTION_TYPE_VALUES,
+    AGENT_STAGE_VALUES,
+    Action,
+    ActionParseError,
+    Observation,
+    coerce_action,
+)
+from .terminal_contract import (
+    TERMINAL_CONTRACT_VERSION,
+    SymmetricTerminalController,
+    TerminalContractResult,
+)
 
 
 def _default_kernel_backend() -> KernelExecutionBackend:
@@ -181,6 +201,9 @@ class NotebookGymEnv:
         hint_cooldown: int = 2,
         episode_budget: EpisodeBudget | None = None,
         research_submission: bool = False,
+        metric_direction: MetricDirection = "higher",
+        candidate_score_tolerance: float = 1e-12,
+        stopping_policy: FrozenStoppingPolicy | None = None,
     ):
         self.enable_thoughts = enable_thoughts
         # Steps to wait between consecutive checklist hints (gym mode).
@@ -196,6 +219,8 @@ class NotebookGymEnv:
             max_steps=max_steps,
         )
         self.metric_fn = metric_fn
+        self.metric_direction = metric_direction
+        self.candidate_score_tolerance = candidate_score_tolerance
         self.mode = resolve_episode_mode(mode)
         self.workspace_dir = Path(workspace_dir).resolve() if workspace_dir else Path(
             tempfile.mkdtemp(prefix="autovibe_episode_")
@@ -203,12 +228,20 @@ class NotebookGymEnv:
         self.private_dir = Path(private_dir).resolve() if private_dir else Path(
             tempfile.mkdtemp(prefix="autovibe_private_")
         ).resolve()
+        self.candidate_store = CandidateBundleStore(self.private_dir / "candidates")
+        self.finalization_store = ProtectedFinalizationStore(
+            self.private_dir / "finalization"
+        )
         self.backend = backend or _default_kernel_backend()
         self.kernel_timeout = kernel_timeout
         self.kernel = self.backend.create_session(self.workspace_dir)
         self.notebook = NotebookDocument.create(self.workspace_dir / "solution.ipynb")
         self.checklist = NotebookChecklist(target_col=target_col, policy=self._feedback_policy)
-        self.candidates = CandidateRegistry()
+        self.candidates = CandidateRegistry(
+            metric_name=metric_name,
+            metric_direction=metric_direction,
+            score_tolerance=candidate_score_tolerance,
+        )
         self._candidate_objects: dict[str, Any] = {}
         self.events: list[dict[str, Any]] = []
         self.feedback_trace: list[dict[str, Any]] = []
@@ -235,6 +268,19 @@ class NotebookGymEnv:
         self._active_action: Action | None = None
         self.episode_budget = episode_budget
         self.research_submission = research_submission
+        if stopping_policy is not None and not research_submission:
+            raise ValueError("Stopping policy is restricted to research submission mode")
+        if stopping_policy is not None and (
+            episode_budget is None or not episode_budget.has_finalization_reserve
+        ):
+            raise ValueError("Stopping policy requires a protected finalization reserve")
+        self.stopping_policy = stopping_policy
+        self.stopping_controller = (
+            StoppingController(stopping_policy)
+            if stopping_policy is not None
+            else None
+        )
+        self._stopping_decision_applied = False
         self.hidden_evaluation_gate = HiddenEvaluationGate()
 
     def reset(self) -> dict:
@@ -245,7 +291,7 @@ class NotebookGymEnv:
         data_dir = self.workspace_dir / "data"
         data_dir.mkdir(parents=True, exist_ok=True)
         self.state.train.to_csv(data_dir / "train.csv", index=False)
-        self.state.val.to_csv(data_dir / "val.csv", index=False)
+        self._agent_validation_frame().to_csv(data_dir / "val.csv", index=False)
 
         self.notebook = NotebookDocument.create(self.workspace_dir / "solution.ipynb")
         self.kernel = self.backend.create_session(self.workspace_dir)
@@ -260,7 +306,11 @@ class NotebookGymEnv:
         self.state.submitted = False
         self.state.history = []
         self.checklist = NotebookChecklist(target_col=self.state.target_col, policy=self._feedback_policy)
-        self.candidates = CandidateRegistry()
+        self.candidates = CandidateRegistry(
+            metric_name=self.state.metric_name,
+            metric_direction=self.metric_direction,
+            score_tolerance=self.candidate_score_tolerance,
+        )
         self._candidate_objects = {}
         self.events = []
         self.feedback_trace = []
@@ -288,6 +338,12 @@ class NotebookGymEnv:
         self.current_stage = None
         self._accepted_agent_actions = 0
         self._active_action = None
+        self.stopping_controller = (
+            StoppingController(self.stopping_policy)
+            if self.stopping_policy is not None
+            else None
+        )
+        self._stopping_decision_applied = False
         self.hidden_evaluation_gate = HiddenEvaluationGate()
         self._save_artifacts()
         return self._build_context_prompt()
@@ -328,7 +384,11 @@ class NotebookGymEnv:
                 cell_id=parsed.cell_id,
             )
 
-        if self.episode_budget is not None:
+        protected_terminal = (
+            parsed.type in {"submit", "finalize"}
+            and self._protected_finalization_enabled()
+        )
+        if self.episode_budget is not None and not protected_terminal:
             self.episode_budget.ensure_active()
             if parsed.type in {
                 "inspect_data",
@@ -345,6 +405,7 @@ class NotebookGymEnv:
 
         self._accept_action(parsed)
         if self.state.step >= self.state.max_steps and parsed.type not in {"submit", "finalize"}:
+            self.record_exploration_exhaustion("step_budget_exhausted")
             observation = self._observation(
                 action=parsed.type,
                 feedback_items=[
@@ -361,6 +422,15 @@ class NotebookGymEnv:
             self._record_event(action=parsed.type, blocked="step_budget_exhausted")
             return self._record_observation(observation)
         self._consume_step(parsed)
+        if protected_terminal:
+            decision = self.record_agent_finalization_request()
+            if decision is not None:
+                applied = self.apply_stopping_policy(
+                    model_var=parsed.model_var,
+                    observation_action=parsed.type,
+                )
+                if applied is not None:
+                    return applied
 
         if parsed.type == "code":
             parsed = Action.add_cell_action(
@@ -389,6 +459,12 @@ class NotebookGymEnv:
         if parsed.type == "validate":
             return self.validate_candidate(parsed.model_var)
         if parsed.type == "submit":
+            if protected_terminal:
+                return self._finalize_with_protected_reserve(
+                    parsed.model_var,
+                    trigger="agent_submit",
+                    observation_action="submit",
+                )
             return self.submit_by_name(parsed.model_var)
         if parsed.type == "inspect_data":
             return self.inspect_data()
@@ -428,6 +504,44 @@ class NotebookGymEnv:
 
     def budget_remaining(self) -> int:
         return max(self.state.max_steps - self.state.step, 0)
+
+    def _validation_query_control_enabled(self) -> bool:
+        return bool(
+            self.episode_budget is not None
+            and self.episode_budget.has_validation_query_policy
+        )
+
+    def _agent_validation_frame(self) -> pd.DataFrame:
+        """Validation data exposed to code; labels are host-only under V2 control."""
+
+        if not self._validation_query_control_enabled():
+            return self.state.val
+        return self.state.val.drop(
+            columns=[self.state.target_col],
+            errors="ignore",
+        )
+
+    def _consume_validation_query(self, source: str) -> None:
+        if self._validation_query_control_enabled():
+            assert self.episode_budget is not None
+            self.episode_budget.consume_validation_query(source)
+
+    def _normalize_feedback_validation_metric(self, value: Any) -> float:
+        numeric = float(value)
+        if not self._validation_query_control_enabled():
+            return numeric
+        assert self.episode_budget is not None
+        return self.episode_budget.normalize_feedback_metric(numeric)
+
+    def _format_feedback_validation_metric(self, value: Any) -> str:
+        numeric = self._normalize_feedback_validation_metric(value)
+        decimals = 6
+        if self._validation_query_control_enabled():
+            assert self.episode_budget is not None
+            policy = self.episode_budget.validation_query_policy
+            assert policy is not None
+            decimals = policy.feedback_numeric_decimals
+        return f"{numeric:.{decimals}f}"
 
     def _consume_step(self, action: Action) -> None:
         tool_actions = {
@@ -593,7 +707,7 @@ class NotebookGymEnv:
             self.dirty_since_clean_run = True
             self.last_clean_run_id = None
             self.notebook_revision_at_clean_run = None
-            self.last_validated_candidate_id = None
+            self._invalidate_current_candidate(reason="clean_run_failed")
             feedback = [
                 self._contract_feedback(
                     "clean_run_failed",
@@ -613,7 +727,7 @@ class NotebookGymEnv:
         self.dirty_since_clean_run = False
         self.last_clean_run_id = clean_run_id
         self.notebook_revision_at_clean_run = self.notebook.revision
-        self.last_validated_candidate_id = None
+        self._invalidate_current_candidate(reason="clean_run_restarted")
         self.checklist.record_structural(
             "reproducible_solution",
             reason="successful restart_and_run_all",
@@ -746,12 +860,21 @@ class NotebookGymEnv:
             )
             return self._record_observation(observation)
 
-        record = self._register_validated_candidate(diagnostic, model_var)
+        try:
+            record = self._register_validated_candidate(diagnostic, model_var)
+        except CandidateBundleError as exc:
+            return self._candidate_bundle_write_failure_observation(
+                model_var=model_var,
+                failure=exc,
+            )
         self._record_event(action="validate", model_var=model_var, candidate=record.to_dict())
         progress = self._validation_progress_feedback(diagnostic.validation_metric)
         observation = self._observation(
             action="validate",
-            stdout=f"validation_{self.state.metric_name}={diagnostic.validation_metric:.6f}",
+            stdout=(
+                f"validation_{self.state.metric_name}="
+                f"{self._format_feedback_validation_metric(diagnostic.validation_metric)}"
+            ),
             feedback_items=progress,
             hints=[item.message for item in progress],
             model_var=model_var,
@@ -799,10 +922,16 @@ class NotebookGymEnv:
             )
             return self._record_observation(observation)
 
-        model = self._candidate_objects.get(candidate.candidate_id)
-        if model is None and candidate.artifact_path:
-            with open(candidate.artifact_path, "rb") as fh:
-                model = cloudpickle.load(fh)
+        try:
+            # Always reload through the verified private bundle. The in-memory
+            # cache must never let checksum drift bypass the integrity gate.
+            model = self.candidate_store.load_model(candidate)
+        except CandidateBundleError as exc:
+            return self._candidate_artifact_failure_observation(
+                candidate=candidate,
+                model_var=model_var,
+                failure=exc,
+            )
 
         try:
             X_test = self.state.test.drop(columns=[self.state.target_col])
@@ -817,7 +946,7 @@ class NotebookGymEnv:
             else:
                 preds = model.predict(X_test)
                 score = _score_with_coercion(self.metric_fn, y_test, preds)
-            candidate.submitted = True
+            self.candidates.mark_submitted(candidate.candidate_id)
             self.state.submitted = True
             self.private_summary["final_test_metric"] = score
             self.private_summary["valid_submit"] = True
@@ -897,7 +1026,7 @@ class NotebookGymEnv:
                 # they MUST do restart_and_run_all → validate → submit again (same
                 # rigorous check). We don't expose why hidden test failed (no data
                 # leakage), only that it failed and a retry is possible.
-                self.last_validated_candidate_id = None
+                self._invalidate_current_candidate(reason="hidden_submit_retry")
                 _retries_left = _max_retries - self.hidden_submit_fail_count
                 observation = self._observation(
                     action="submit",
@@ -958,6 +1087,12 @@ class NotebookGymEnv:
         """
         if self.state.submitted:
             return None
+        if self._protected_finalization_enabled():
+            return self._finalize_with_protected_reserve(
+                model_var,
+                trigger="host_finalize",
+                observation_action="finalize",
+            )
 
         attempted_vars: list[str] = []
         self.private_summary["finalized_by_host"] = True
@@ -1034,6 +1169,464 @@ class NotebookGymEnv:
             attempted_vars=attempted_vars,
         )
 
+    def _protected_finalization_enabled(self) -> bool:
+        return bool(
+            self.research_submission
+            and self.episode_budget is not None
+            and self.episode_budget.has_finalization_reserve
+        )
+
+    def record_exploration_exhaustion(
+        self,
+        detail_code: str,
+    ) -> StoppingDecision | None:
+        """Expose an arm-level exhaustion signal to the frozen M4 controller."""
+
+        controller = self.stopping_controller
+        if controller is None:
+            return None
+        decision = controller.observe_exploration_exhausted(
+            detail_code=detail_code,
+            incumbent_candidate_id=self._incumbent_candidate_id(),
+        )
+        self._record_event(
+            action="stopping_exploration_exhausted_observed",
+            detail_code=detail_code,
+            decision=(decision.to_dict() if decision is not None else None),
+        )
+        return decision
+
+    def record_agent_finalization_request(self) -> StoppingDecision | None:
+        controller = self.stopping_controller
+        if controller is None:
+            return None
+        incumbent_id = self._incumbent_candidate_id()
+        decision = controller.observe_agent_finalization_request(
+            has_valid_incumbent=incumbent_id is not None,
+            incumbent_candidate_id=incumbent_id,
+        )
+        self._record_event(
+            action="stopping_agent_finalization_observed",
+            incumbent_candidate_id=incumbent_id,
+            decision=(decision.to_dict() if decision is not None else None),
+        )
+        return decision
+
+    def record_unrecoverable_stopping_failure(
+        self,
+        detail_code: str,
+    ) -> StoppingDecision | None:
+        controller = self.stopping_controller
+        if controller is None:
+            return None
+        decision = controller.observe_unrecoverable_failure(
+            detail_code=detail_code,
+            incumbent_candidate_id=self._incumbent_candidate_id(),
+        )
+        self._record_event(
+            action="stopping_unrecoverable_failure_observed",
+            detail_code=detail_code,
+            decision=(decision.to_dict() if decision is not None else None),
+        )
+        if decision is not None:
+            self._publish_stopping_decision(decision)
+        return decision
+
+    def apply_stopping_policy(
+        self,
+        *,
+        model_var: str = "auto",
+        observation_action: str = "finalize",
+    ) -> Observation | None:
+        """Apply the first latched M4 decision exactly once.
+
+        Boundary inspection is read-only. Only this host method may perform the
+        one-way transition into protected M5 finalization or a fail-closed
+        terminal contract stop.
+        """
+
+        controller = self.stopping_controller
+        budget = self.episode_budget
+        if controller is None or budget is None or self.state.submitted:
+            return None
+        if controller.decision is None:
+            controller.observe_reserve_boundary(
+                boundary_resources=budget.exploration_boundary_resources(),
+                incumbent_candidate_id=self._incumbent_candidate_id(),
+            )
+        decision = controller.decision
+        if decision is None or self._stopping_decision_applied:
+            return None
+        self._stopping_decision_applied = True
+        self._publish_stopping_decision(decision)
+        self._record_event(
+            action="stopping_policy_decision_applied",
+            **decision.to_dict(),
+        )
+        if decision.transition == "finalize":
+            return self._finalize_with_protected_reserve(
+                model_var,
+                trigger=f"stopping:{decision.reason}",
+                observation_action=observation_action,
+            )
+        self.state.submitted = True
+        self.private_summary.update(
+            {
+                "valid_submit": False,
+                "final_test_metric": None,
+                "submit_failure_type": decision.detail_code or decision.reason,
+                "final_status": "stopped_unrecoverable_contract_failure",
+                "null_reason": (
+                    "The frozen stopping policy terminated the episode after an "
+                    "unrecoverable safety or contract failure."
+                ),
+                "finalize_path": "stopping_policy_terminate",
+            }
+        )
+        return self._record_observation(
+            self._observation(
+                action=observation_action,
+                done=True,
+                submitted=True,
+                final_status="stopped_unrecoverable_contract_failure",
+                null_reason=self.private_summary["null_reason"],
+                finalize_path="stopping_policy_terminate",
+            )
+        )
+
+    def _incumbent_candidate_id(self) -> str | None:
+        incumbent = self.candidates.incumbent()
+        return incumbent.candidate_id if incumbent is not None else None
+
+    def _publish_stopping_decision(self, decision: StoppingDecision) -> None:
+        self.private_summary["stopping_reason"] = decision.reason
+        self.private_summary["stopping_transition"] = decision.transition
+        self.private_summary["stopping_decision"] = decision.to_dict()
+
+    def _finalize_with_protected_reserve(
+        self,
+        model_var: str,
+        *,
+        trigger: str,
+        observation_action: str,
+    ) -> Observation:
+        """Submit only a host-selected incumbent replayed from its frozen bundle.
+
+        This is deliberately fail-closed. It never repairs notebook code, uses a
+        live-kernel estimator, creates a replacement candidate, or borrows from
+        exploration resources.
+        """
+
+        budget = self.episode_budget
+        if budget is None or not budget.has_finalization_reserve:
+            raise RuntimeError("Protected finalization requires a reserve policy")
+        try:
+            budget.begin_finalization(trigger=trigger)
+        except BudgetExhausted as exc:
+            return self._protected_finalization_failure(
+                final_status="finalization_reserve_exhausted",
+                null_reason="The protected finalization reserve was exhausted before replay.",
+                observation_action=observation_action,
+                requested_model_var=model_var,
+                failure=exc,
+            )
+        except Exception as exc:
+            return self._protected_finalization_failure(
+                final_status="protected_finalization_start_failed",
+                null_reason="The protected finalization phase could not start safely.",
+                observation_action=observation_action,
+                requested_model_var=model_var,
+                failure=exc,
+            )
+
+        self.private_summary["finalized_by_host"] = True
+        self.private_summary["protected_finalization_trigger"] = trigger
+        self.private_summary["finalize_path"] = "protected_incumbent_replay"
+        X_val = self.state.val.drop(columns=[self.state.target_col])
+        y_val = self.state.val[self.state.target_col]
+        X_test = self.state.test.drop(columns=[self.state.target_col])
+        y_test = self.state.test[self.state.target_col]
+
+        def selected(candidate: CandidateRecord) -> None:
+            self.private_summary["finalization_candidate_id"] = candidate.candidate_id
+            self.private_summary["finalize_attempted_vars"] = [candidate.model_var]
+            self._record_event(
+                action="protected_finalization_incumbent_selected",
+                candidate_id=candidate.candidate_id,
+                requested_model_var=model_var,
+                selected_model_var=candidate.model_var,
+                trigger=trigger,
+            )
+
+        def before_preflight() -> None:
+            budget.consume_tool_call("protected_replay_preflight")
+            self.validation_calls_total += 1
+            self._consume_validation_query("protected_finalization")
+
+        def before_artifact_write() -> None:
+            budget.consume_tool_call("protected_artifact_write")
+
+        def before_hidden_evaluation() -> None:
+            budget.consume_tool_call("protected_hidden_evaluation")
+
+        def resource_snapshot() -> dict[str, Any]:
+            return {
+                "terminal_contract_version": TERMINAL_CONTRACT_VERSION,
+                "step": self.state.step,
+                "validation_calls_total": self.validation_calls_total,
+                "tool_calls_total": self.tool_calls_total,
+                "cell_executions_total": self.cell_executions_total,
+                "episode_budget": budget.snapshot(),
+            }
+
+        def artifact_written(artifact: Any) -> None:
+            self._record_event(
+                action="protected_finalization_artifact_written",
+                **artifact.public_receipt(),
+                private={"artifact_dir": str(artifact.artifact_dir)},
+            )
+
+        controller = SymmetricTerminalController(
+            registry=self.candidates,
+            candidate_store=self.candidate_store,
+            finalization_store=self.finalization_store,
+            hidden_gate=self.hidden_evaluation_gate,
+            validation_features=X_val,
+            validation_target=y_val,
+            hidden_features=X_test,
+            hidden_target=y_test,
+            metric_fn=self.metric_fn,
+            protocol_version=self.protocol_version,
+            metric_normalizer=self._normalize_feedback_validation_metric,
+        )
+        result = controller.finalize(
+            replay_candidate=self._replay_protected_candidate,
+            before_preflight=before_preflight,
+            before_artifact_write=before_artifact_write,
+            before_hidden_evaluation=before_hidden_evaluation,
+            resource_snapshot=resource_snapshot,
+            on_candidate_selected=selected,
+            on_artifact_written=artifact_written,
+        )
+        self._record_terminal_preflight_diagnostic(result)
+        if not result.succeeded:
+            if result.final_status == "hidden_submit_failed":
+                self.hidden_submit_fail_count += 1
+            return self._protected_finalization_failure(
+                final_status=result.final_status,
+                null_reason=self._terminal_contract_null_reason(result),
+                observation_action=observation_action,
+                requested_model_var=model_var,
+                candidate=result.candidate,
+                failure=(
+                    RuntimeError(result.error_message)
+                    if result.error_message
+                    else None
+                ),
+                failure_type=result.error_type,
+            )
+
+        incumbent = result.candidate
+        if incumbent is None or result.hidden_metric is None:
+            raise RuntimeError("Successful terminal contract returned no candidate or score")
+        score = result.hidden_metric
+        self.state.submitted = True
+        self.private_summary.update(
+            {
+                "final_test_metric": score,
+                "valid_submit": True,
+                "submit_failure_type": None,
+                "final_status": "submitted_protected_replay",
+                "null_reason": None,
+                "reproducibility_level": "protected_producing_revision_replay",
+                "finalize_path": "protected_incumbent_replay",
+            }
+        )
+        self._record_event(
+            action="protected_finalization_submitted",
+            candidate_id=incumbent.candidate_id,
+            model_var=incumbent.model_var,
+            trigger=trigger,
+            private={"final_test_metric": score},
+        )
+        return self._record_observation(
+            self._observation(
+                action=observation_action,
+                done=True,
+                submitted=True,
+                model_var=incumbent.model_var,
+                final_status="submitted_protected_replay",
+                finalize_path="protected_incumbent_replay",
+            )
+        )
+
+    def _replay_protected_candidate(
+        self,
+        candidate: CandidateRecord,
+        snapshot_path: Path,
+    ) -> Any:
+        budget = self.episode_budget
+        if budget is None:
+            raise RuntimeError("Protected replay requires an episode budget")
+        replay_notebook = NotebookDocument.load(snapshot_path)
+        self.kernel.restart()
+        self.kernel_restarts_total += 1
+        self.kernel.inject_bootstrap_context(
+            train_csv=self.workspace_dir / "data" / "train.csv",
+            val_csv=self.workspace_dir / "data" / "val.csv",
+            target_col=self.state.target_col,
+        )
+        for cell in replay_notebook.notebook.cells:
+            if cell.cell_type != "code":
+                continue
+            budget.consume_code_execution()
+            cell_id = str(cell.get("id", "unknown"))
+            source = str(cell.source)
+            result = self.kernel.execute_cell(source, timeout=self.kernel_timeout)
+            self.cell_executions_total += 1
+            self._record_cell_execution(
+                cell_id=cell_id,
+                source=source,
+                result=result,
+            )
+            self._record_event(
+                action="protected_replay_cell",
+                candidate_id=candidate.candidate_id,
+                cell_id=cell_id,
+                source_hash=hashlib.sha256(
+                    source.encode("utf-8", errors="ignore")
+                ).hexdigest(),
+                success=result.success,
+                elapsed_seconds=result.elapsed_seconds,
+                private={"execution_result": result.to_dict()},
+            )
+            if not result.success:
+                self.errors_count += 1
+                raise RuntimeError(
+                    f"{result.error_name or 'RuntimeError'}: "
+                    f"{result.error_value or result.stderr}"
+                )
+        return self._load_candidate_from_kernel(candidate.model_var)
+
+    def _record_terminal_preflight_diagnostic(
+        self,
+        result: TerminalContractResult,
+    ) -> None:
+        validation = result.validation
+        candidate = result.candidate
+        if validation is None or candidate is None:
+            return
+        diagnostic = CandidateDiagnostic(
+            step=self.state.step,
+            candidate_var=candidate.model_var,
+            source="protected_finalization",
+            exists=validation.exists,
+            has_predict=validation.has_predict,
+            raw_val_predict_ok=validation.raw_prediction_ok,
+            prediction_length_ok=validation.prediction_length_ok,
+            prediction_nan_free=validation.prediction_nan_free,
+            serializable=validation.serializable,
+            error_type=validation.error_type,
+            error_message=_clip(validation.error_message or "", 800) or None,
+            validation_metric=result.validation_metric,
+            sample_rows=None,
+        )
+        self._record_candidate_diagnostic(diagnostic)
+
+    @staticmethod
+    def _terminal_contract_null_reason(result: TerminalContractResult) -> str:
+        return {
+            "no_incumbent_for_finalization": (
+                "No validated incumbent existed when protected finalization began."
+            ),
+            "invalid_candidate_artifact": (
+                "The incumbent bundle failed integrity verification before replay."
+            ),
+            "protected_replay_failed": (
+                "The immutable incumbent snapshot could not be replayed safely."
+            ),
+            "protected_replay_validation_failed": (
+                "The replayed incumbent failed raw-row or serialization preflight."
+            ),
+            "protected_replay_validation_mismatch": (
+                "The replayed validation metric did not match the frozen incumbent record."
+            ),
+            "protected_finalization_artifact_failed": (
+                "The replayed model could not be stored and verified atomically."
+            ),
+            "hidden_submit_failed": (
+                "The replayed artifact failed the single private hidden evaluation."
+            ),
+            "finalization_reserve_exhausted": (
+                "The protected finalization reserve was exhausted before completion."
+            ),
+        }.get(
+            result.final_status,
+            "Protected finalization ended without a hidden-test score.",
+        )
+
+    def _protected_finalization_failure(
+        self,
+        *,
+        final_status: str,
+        null_reason: str,
+        observation_action: str,
+        requested_model_var: str,
+        candidate: CandidateRecord | None = None,
+        failure: BaseException | None = None,
+        failure_type: str | None = None,
+    ) -> Observation:
+        self.state.submitted = True
+        self.private_summary.update(
+            {
+                "final_test_metric": None,
+                "valid_submit": False,
+                "submit_failure_type": (
+                    failure_type
+                    or (type(failure).__name__ if failure is not None else final_status)
+                ),
+                "final_status": final_status,
+                "null_reason": null_reason,
+                "reproducibility_level": "none",
+                "finalize_path": "protected_incumbent_replay",
+                "finalized_by_host": True,
+            }
+        )
+        self._record_event(
+            action="protected_finalization_failed",
+            final_status=final_status,
+            candidate_id=(candidate.candidate_id if candidate is not None else None),
+            requested_model_var=requested_model_var,
+            hidden_evaluations=int(self.hidden_evaluation_gate.attempted),
+            private=(
+                {
+                    "failure_type": failure_type or type(failure).__name__,
+                    "failure": str(failure),
+                }
+                if failure is not None
+                else None
+            ),
+        )
+        return self._record_observation(
+            self._observation(
+                action=observation_action,
+                stdout="[FINALIZE] Protected finalization did not produce a hidden-test score.",
+                feedback_items=[
+                    self._contract_feedback(
+                        "protected_finalization_failed",
+                        "Protected finalization ended without a valid submission. No repair or fallback was attempted.",
+                        severity="blocker",
+                    )
+                ],
+                done=True,
+                submitted=True,
+                model_var=(candidate.model_var if candidate is not None else None),
+                final_status=final_status,
+                null_reason=null_reason,
+                finalize_path="protected_incumbent_replay",
+            )
+        )
+
     def _finalize_from_candidate_vars(
         self,
         *,
@@ -1078,6 +1671,8 @@ class NotebookGymEnv:
         finalize_path = self.private_summary.get("finalize_path")
         if finalize_path is None:
             finalize_path = "not_attempted" if not self.private_summary.get("finalized_by_host") else "failed"
+        current_candidate = self.candidates.latest()
+        incumbent = self.candidates.incumbent()
         summary = {
             "steps_used": self.state.step,
             "thoughts_enabled": self.enable_thoughts,
@@ -1104,6 +1699,14 @@ class NotebookGymEnv:
             "validation_calls_total": self.validation_calls_total,
             "tool_calls_total": self.tool_calls_total,
             "best_validation_metric": self._best_validation_metric(),
+            "metric_direction": self.metric_direction,
+            "validated_candidates_total": len(self.candidates.all()),
+            "current_candidate_id": (
+                current_candidate.candidate_id if current_candidate is not None else None
+            ),
+            "incumbent_candidate_id": (
+                incumbent.candidate_id if incumbent is not None else None
+            ),
             "contract_feedback_count": self.contract_feedback_count,
             "model_check_failure_count": self.model_check_failure_count,
             "candidate_diagnostics_total": len(self.candidate_diagnostics),
@@ -1122,6 +1725,14 @@ class NotebookGymEnv:
         }
         if self.episode_budget is not None:
             summary["episode_budget"] = self.episode_budget.snapshot()
+        if self.stopping_controller is not None:
+            summary["stopping_policy"] = self.stopping_policy.to_dict()
+            summary["stopping_policy_state"] = (
+                self.stopping_controller.snapshot()
+            )
+            summary["stopping_events"] = list(
+                self.stopping_controller.events
+            )
         summary.update(self.private_summary)
         summary["test_metric"] = final_test_metric
         summary["final_test_metric"] = final_test_metric
@@ -1130,6 +1741,29 @@ class NotebookGymEnv:
         summary["final_status"] = final_status
         summary["null_reason"] = null_reason
         summary["finalize_path"] = finalize_path
+        if self._validation_query_control_enabled():
+            assert self.episode_budget is not None
+            query_snapshot = self.episode_budget.snapshot()[
+                "validation_query_budget"
+            ]
+            summary["validation_queries_total"] = query_snapshot["queries"]
+            summary["validation_queries_by_source"] = query_snapshot[
+                "queries_by_source"
+            ]
+            summary["validation_query_policy"] = query_snapshot["policy"]
+            summary["feedback_validation_metric"] = (
+                incumbent.validation_metric if incumbent is not None else None
+            )
+            gap = None
+            if incumbent is not None and final_test_metric is not None:
+                try:
+                    hidden_metric = float(final_test_metric)
+                    feedback_metric = float(incumbent.validation_metric)
+                    if np.isfinite(hidden_metric) and np.isfinite(feedback_metric):
+                        gap = hidden_metric - feedback_metric
+                except (TypeError, ValueError):
+                    gap = None
+            summary["hidden_minus_feedback_validation_metric"] = gap
         return summary
 
     def _think(self, action: Action) -> Observation:
@@ -1266,8 +1900,7 @@ class NotebookGymEnv:
 
     def _run_cell(self, cell_id: str) -> Observation:
         result = self._execute_and_store_cell(cell_id)
-        self.dirty_since_clean_run = True
-        self.last_validated_candidate_id = None
+        self._mark_dirty()
         source = str(self.notebook.get_cell(cell_id).source)
         self._record_event(
             action="run_cell",
@@ -1535,9 +2168,17 @@ class NotebookGymEnv:
 
     def _mark_dirty(self) -> None:
         self.dirty_since_clean_run = True
+        self._invalidate_current_candidate(reason="notebook_mutated")
+
+    def _invalidate_current_candidate(self, *, reason: str) -> None:
+        current = self.candidates.invalidate_current()
         self.last_validated_candidate_id = None
-        self.candidates.clear()
-        self._candidate_objects.clear()
+        if current is not None:
+            self._record_event(
+                action="candidate_current_invalidated",
+                candidate_id=current.candidate_id,
+                reason=reason,
+            )
 
     def _clean_state_blocker(self) -> FeedbackItem | None:
         if (
@@ -1575,25 +2216,94 @@ class NotebookGymEnv:
         diagnostic: CandidateDiagnostic,
         model_var: str,
     ) -> CandidateRecord:
+        previous_incumbent = self.candidates.incumbent()
         candidate_id = str(uuid.uuid4())
-        artifact_path = self.private_dir / "artifacts" / f"{candidate_id}.pkl"
-        artifact_path.parent.mkdir(parents=True, exist_ok=True)
-        with artifact_path.open("wb") as fh:
-            cloudpickle.dump(diagnostic.model, fh)
         record = CandidateRecord(
             candidate_id=candidate_id,
             model_var=model_var,
             notebook_revision=self.notebook.revision,
             clean_run_id=self.last_clean_run_id or "",
+            metric_name=self.state.metric_name,
+            metric_direction=self.metric_direction,
             validation_metric=diagnostic.validation_metric,
             validation_success=True,
             raw_inference_ready=True,
-            artifact_path=str(artifact_path),
+            created_step=self.state.step,
+            registration_index=len(self.candidates.all()),
         )
+        self.notebook.save()
+        resource_snapshot: dict[str, Any] = {
+            "step": self.state.step,
+            "validation_calls_total": self.validation_calls_total,
+            "tool_calls_total": self.tool_calls_total,
+            "cell_executions_total": self.cell_executions_total,
+        }
+        if self.episode_budget is not None:
+            resource_snapshot["episode_budget"] = self.episode_budget.snapshot()
+        bundle = self.candidate_store.write_bundle(
+            record,
+            diagnostic.model,
+            notebook_path=self.notebook.path,
+            protocol_version=self.protocol_version,
+            resource_snapshot=resource_snapshot,
+        )
+        record = bundle.record
         self.candidates.add(record)
         self._candidate_objects[candidate_id] = diagnostic.model
         self.last_validated_candidate_id = candidate_id
         self.validation_trajectory.append(record.to_dict())
+        self._record_event(
+            action="candidate_registered",
+            candidate=record.to_dict(),
+        )
+        self._record_event(
+            action="candidate_bundle_written",
+            **bundle.public_receipt(),
+            private={"bundle_dir": str(bundle.bundle_dir)},
+        )
+        incumbent = self.candidates.incumbent()
+        if incumbent is not None and incumbent.candidate_id == candidate_id:
+            self._record_event(
+                action="incumbent_selected",
+                candidate_id=candidate_id,
+                previous_incumbent_id=(
+                    previous_incumbent.candidate_id
+                    if previous_incumbent is not None
+                    else None
+                ),
+            )
+        elif incumbent is not None:
+            self._record_event(
+                action="incumbent_retained",
+                candidate_id=incumbent.candidate_id,
+                rejected_candidate_id=candidate_id,
+            )
+        if self.stopping_controller is not None:
+            improved = bool(
+                incumbent is not None
+                and incumbent.candidate_id == candidate_id
+                and (
+                    previous_incumbent is None
+                    or previous_incumbent.candidate_id != candidate_id
+                )
+            )
+            decision = self.stopping_controller.observe_validation_attempt(
+                eligible=True,
+                improved=improved,
+                candidate_id=candidate_id,
+                incumbent_candidate_id=(
+                    incumbent.candidate_id if incumbent is not None else None
+                ),
+            )
+            self._record_event(
+                action="stopping_validation_observed",
+                candidate_id=candidate_id,
+                improved=improved,
+                no_improvement_streak=(
+                    self.stopping_controller.no_improvement_streak
+                ),
+                decision=(decision.to_dict() if decision is not None else None),
+            )
         self.checklist.record_structural(
             "baseline_candidate_created",
             reason="candidate exists after clean run",
@@ -1630,6 +2340,125 @@ class NotebookGymEnv:
             step=self.state.step,
         )
         return record
+
+    def restore_candidate_registry(self) -> list[CandidateRecord]:
+        """Restore verified bundles as historical evidence after a process restart.
+
+        This deliberately does not restore the notebook kernel or mark any
+        candidate current/submit-eligible. Full episode resume is a separate
+        protocol layer.
+        """
+
+        if self.candidates.all():
+            raise CandidateBundleError("Candidate registry must be empty before restore")
+        records = self.candidate_store.load_records(
+            expected_protocol_version=self.protocol_version
+        )
+        try:
+            for record in records:
+                self.candidates.add(record)
+        except ValueError as exc:
+            self.candidates.clear()
+            raise CandidateBundleError(
+                "Stored candidates do not match the active metric contract"
+            ) from exc
+        self.candidates.invalidate_current()
+        self._candidate_objects = {}
+        self.last_validated_candidate_id = None
+        self.validation_trajectory = [record.to_dict() for record in records]
+        incumbent = self.candidates.incumbent()
+        self._record_event(
+            action="candidate_registry_restored",
+            restored_candidates=len(records),
+            incumbent_candidate_id=(
+                incumbent.candidate_id if incumbent is not None else None
+            ),
+            current_candidate_id=None,
+        )
+        return records
+
+    def _candidate_artifact_failure_observation(
+        self,
+        *,
+        candidate: CandidateRecord,
+        model_var: str,
+        failure: CandidateBundleError,
+    ) -> Observation:
+        self.record_unrecoverable_stopping_failure(
+            "candidate_artifact_integrity_failure"
+        )
+        terminal = self.research_submission
+        if terminal:
+            self.state.submitted = True
+        self._invalidate_current_candidate(reason="candidate_bundle_invalid")
+        self.private_summary["valid_submit"] = False
+        self.private_summary["final_test_metric"] = None
+        self.private_summary["submit_failure_type"] = "CandidateBundleError"
+        self.private_summary["reproducibility_level"] = "none"
+        self.private_summary.setdefault("finalize_path", "agent_submit")
+        if terminal:
+            self.private_summary["final_status"] = "invalid_candidate_artifact"
+            self.private_summary["null_reason"] = (
+                "The validated candidate bundle failed integrity verification before hidden evaluation."
+            )
+        self._record_event(
+            action="submit_blocked_invalid_candidate_artifact",
+            candidate_id=candidate.candidate_id,
+            terminal=terminal,
+            private={"failure_type": type(failure).__name__, "failure": str(failure)},
+        )
+        feedback = self._contract_feedback(
+            "candidate_artifact_invalid",
+            "The saved candidate failed integrity verification. Create and validate a new candidate before submitting.",
+            severity="blocker",
+        )
+        return self._record_observation(
+            self._observation(
+                action="submit",
+                feedback_items=[feedback],
+                done=terminal,
+                submitted=terminal,
+                model_var=model_var,
+                final_status="invalid_candidate_artifact" if terminal else None,
+                null_reason=(
+                    "Candidate integrity verification failed before hidden evaluation."
+                    if terminal
+                    else None
+                ),
+                finalize_path="agent_submit" if terminal else None,
+            )
+        )
+
+    def _candidate_bundle_write_failure_observation(
+        self,
+        *,
+        model_var: str,
+        failure: CandidateBundleError,
+    ) -> Observation:
+        decision = self.record_unrecoverable_stopping_failure(
+            "candidate_bundle_write_failure"
+        )
+        if decision is not None and decision.transition == "terminate":
+            applied = self.apply_stopping_policy(observation_action="validate")
+            if applied is not None:
+                return applied
+        self._record_event(
+            action="candidate_bundle_write_failed",
+            model_var=model_var,
+            private={"failure_type": type(failure).__name__, "failure": str(failure)},
+        )
+        feedback = self._contract_feedback(
+            "candidate_bundle_write_failed",
+            "The validated candidate could not be saved safely. No submit-ready artifact was registered.",
+            severity="blocker",
+        )
+        return self._record_observation(
+            self._observation(
+                action="validate",
+                feedback_items=[feedback],
+                model_var=model_var,
+            )
+        )
 
     def _discover_predictable_kernel_vars(self) -> list[str]:
         marker = f"__AUTOVIBE_VARS_{uuid.uuid4().hex}__"
@@ -1725,6 +2554,7 @@ print({marker!r} + _autovibe_json.dumps({{
         sample_rows: int | None = 32,
         compute_metric: bool = False,
     ) -> CandidateDiagnostic:
+        self._consume_validation_query(source)
         diagnostic = CandidateDiagnostic(
             step=self.state.step,
             candidate_var=model_var,
@@ -1772,10 +2602,14 @@ print({marker!r} + _autovibe_json.dumps({{
             diagnostic.error_message = _clip(validation.error_message or "", 800) or None
             if compute_metric and validation.valid:
                 try:
-                    diagnostic.validation_metric = _score_with_coercion(
-                        self.metric_fn,
-                        y_eval,
-                        validation.predictions,
+                    diagnostic.validation_metric = (
+                        self._normalize_feedback_validation_metric(
+                            _score_with_coercion(
+                                self.metric_fn,
+                                y_eval,
+                                validation.predictions,
+                            )
+                        )
                     )
                 except Exception as exc:
                     diagnostic.error_type = type(exc).__name__
@@ -1887,7 +2721,13 @@ print({marker!r} + _autovibe_json.dumps({{
                 compute_metric=True,
             )
             if self._diagnostic_is_submit_ready(diagnostic):
-                record = self._register_validated_candidate(diagnostic, name)
+                try:
+                    record = self._register_validated_candidate(diagnostic, name)
+                except CandidateBundleError as exc:
+                    return self._candidate_bundle_write_failure_observation(
+                        model_var=name,
+                        failure=exc,
+                    )
                 self._record_event(
                     action="validate",
                     model_var="auto",
@@ -1899,7 +2739,8 @@ print({marker!r} + _autovibe_json.dumps({{
                     action="validate",
                     stdout=(
                         f"selected_model_var={name}\n"
-                        f"validation_{self.state.metric_name}={diagnostic.validation_metric:.6f}"
+                        f"validation_{self.state.metric_name}="
+                        f"{self._format_feedback_validation_metric(diagnostic.validation_metric)}"
                     ),
                     model_var=name,
                     validation_metric=diagnostic.validation_metric,
@@ -1972,35 +2813,56 @@ print({marker!r} + _autovibe_json.dumps({{
             and diagnostic.prediction_nan_free
             and diagnostic.serializable
             and diagnostic.validation_metric is not None
+            and np.isfinite(diagnostic.validation_metric)
         )
 
     def inspect_data(self) -> Observation:
-        profile = build_compact_profile(
+        private_profile = build_compact_profile(
             self.state.train,
             self.state.val,
             self.state.target_col,
             self.state.metric_name,
         )
-        self._write_private_json("data_inspection_private.json", profile)
-        text = build_dataset_card(
-            self.state.train,
-            self.state.val,
-            self.state.target_col,
-            self.state.metric_name,
+        public_profile = (
+            build_compact_profile(
+                self.state.train,
+                self._agent_validation_frame(),
+                self.state.target_col,
+                self.state.metric_name,
+            )
+            if self._validation_query_control_enabled()
+            else private_profile
+        )
+        self._write_private_json("data_inspection_private.json", private_profile)
+        text = format_profile_for_agent(
+            public_profile,
             max_chars=5500,
-        )
+        ).replace("[DATA PROFILE]", "[DATA INSPECTION]", 1)
         self._record_event(action="inspect_data")
         observation = self._observation(action="inspect_data", stdout=text)
         return self._record_observation(observation)
 
     def profile_data(self, profile: str = "compact") -> Observation:
-        compact = build_compact_profile(
+        private_compact = build_compact_profile(
             self.state.train,
             self.state.val,
             self.state.target_col,
             self.state.metric_name,
         )
-        private_payload: dict[str, Any] = {"compact": compact, "backend": "compact"}
+        compact = (
+            build_compact_profile(
+                self.state.train,
+                self._agent_validation_frame(),
+                self.state.target_col,
+                self.state.metric_name,
+            )
+            if self._validation_query_control_enabled()
+            else private_compact
+        )
+        private_payload: dict[str, Any] = {
+            "compact": private_compact,
+            "backend": "compact",
+        }
         cfg = profile_config_from_env()
         ydata_result: dict[str, Any] = {}
         wants_ydata = profile == "ydata" or bool(cfg["enable_ydata"])
@@ -2097,7 +2959,8 @@ print({marker!r} + _autovibe_json.dumps({{
                 text = (
                     "[QUICK VALIDATE]\n"
                     f"selected_model_var={name}\n"
-                    f"validation_{self.state.metric_name}={diag.validation_metric:.6f}\n"
+                    f"validation_{self.state.metric_name}="
+                    f"{self._format_feedback_validation_metric(diag.validation_metric)}\n"
                     "raw_validation_ready=true\n"
                     "serializable=true\n"
                     "This does not create a clean submit-ready candidate; run restart_and_run_all and validate/finalize before submit."
@@ -2158,6 +3021,7 @@ print({marker!r} + _autovibe_json.dumps({{
             return self._record_observation(self._observation(action="cleanlab_diagnose", stdout=text, model_var=model_var))
 
         selected_name, model = selected
+        self._consume_validation_query("cleanlab_diagnose")
         max_rows = min(_int_env("AUTOVIBE_CLEANLAB_MAX_ROWS", 5000), len(self.state.val))
         X_val = self.state.val.drop(columns=[self.state.target_col]).head(max_rows)
         y_val = self.state.val[self.state.target_col].head(max_rows)
@@ -2192,7 +3056,9 @@ print({marker!r} + _autovibe_json.dumps({{
             ]
             for row in rows[:max_issues]:
                 lines.append(
-                    f"- validation_index={row['validation_index']} label={row['label']} predicted={row['predicted_label']} confidence={row['self_confidence']:.4f}"
+                    f"- validation_index={row['validation_index']} label={row['label']} "
+                    f"predicted={row['predicted_label']} confidence="
+                    f"{self._format_feedback_validation_metric(row['self_confidence'])}"
                 )
             self._record_event(action="cleanlab_diagnose", model_var=selected_name, issue_count=len(issue_indices))
             observation = self._observation(action="cleanlab_diagnose", stdout=_clip("\n".join(lines), 5000), model_var=selected_name)
@@ -2249,15 +3115,21 @@ print({marker!r} + _autovibe_json.dumps({{
         for trial_idx in range(n_trials):
             if time.time() - started >= timeout_sec:
                 break
+            self._consume_validation_query("tune_hyperparameters_trial")
             params = _sample_search_params(search_space, random.Random(42 + trial_idx))
             try:
                 model = clone(diagnostic.model)
                 model.set_params(**params)
                 model.fit(X_train, y_train)
                 preds = model.predict(X_val)
-                metric = _score_with_coercion(self.metric_fn, y_val, preds)
+                metric = self._normalize_feedback_validation_metric(
+                    _score_with_coercion(self.metric_fn, y_val, preds)
+                )
                 trials.append({"trial": trial_idx + 1, "params": params, "validation_metric": metric, "success": True})
-                if best_metric is None or metric > best_metric:
+                if best_metric is None or self.candidates.is_better_score(
+                    metric,
+                    best_metric,
+                ):
                     best_metric = metric
                     best_model = model
                     best_params = params
@@ -2295,7 +3167,8 @@ print({marker!r} + _autovibe_json.dumps({{
             f"base_model_var={model_var}",
             "new_model_var=tuned_model",
             f"trials_completed={sum(1 for t in trials if t.get('success'))}",
-            f"best_validation_metric={best_metric:.6f}",
+            "best_validation_metric="
+            f"{self._format_feedback_validation_metric(best_metric)}",
             f"best_params={_format_compact(best_params)}",
             f"raw_validation_ready={str(bool(tuned_diag.raw_val_predict_ok)).lower()}",
             f"serializable={str(bool(tuned_diag.serializable)).lower()}",
@@ -2406,6 +3279,8 @@ with open(_AutovibePath({self.kernel.kernel_visible_path(tmp_path)!r}), "rb") as
         self._append_private_jsonl("agent_trace_private.jsonl", payload)
 
     def build_context_pack(self) -> dict[str, Any]:
+        """Legacy mutable context pack retained for product compatibility."""
+
         recent_model_failures = [
             item
             for item in self.candidate_diagnostics[-10:]
@@ -2428,7 +3303,10 @@ with open(_AutovibePath({self.kernel.kernel_visible_path(tmp_path)!r}), "rb") as
             "metric": self.state.metric_name,
             "budget_remaining": self.budget_remaining(),
             "notebook_status": self._notebook_status(),
-            "validated_candidates": [self._public_candidate_record(r.to_dict()) for r in self.candidates.all()],
+            "validated_candidates": [
+                self._public_candidate_record(record)
+                for record in self.candidates.to_list()
+            ],
             "candidate_vars_seen": candidate_vars_seen,
             "best_validation_metric": self._best_validation_metric(),
             "active_blockers": active_blockers,
@@ -2439,6 +3317,273 @@ with open(_AutovibePath({self.kernel.kernel_visible_path(tmp_path)!r}), "rb") as
                 "When ready or low on budget, use finalize with model_var='auto'."
             ),
         }
+
+    def build_context_pack_v1(self) -> dict[str, Any]:
+        """Return the strict public-state input for Paper V2 M3 compression."""
+
+        feature_schema = [
+            {"name": str(column), "dtype": str(self.state.train[column].dtype)}
+            for column in self.state.train.columns
+            if column != self.state.target_col
+        ]
+        feature_schema_bytes = json.dumps(
+            feature_schema,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+        hypotheses = self._context_tested_hypotheses()
+        incumbent = self.candidates.incumbent()
+        active_errors: dict[str, dict[str, Any]] = {}
+        for observation in self.state.history:
+            feedback_keys = sorted(
+                {
+                    str(item.get("key"))
+                    for item in observation.feedback_items
+                    if isinstance(item, dict)
+                    and item.get("key")
+                    and item.get("severity") == "blocker"
+                }
+            )
+            if observation.stderr.strip() and not feedback_keys:
+                feedback_keys = ["runtime_error"]
+            if feedback_keys:
+                active_errors[observation.action] = {
+                    "action": observation.action,
+                    "feedback_keys": feedback_keys,
+                    "cell_id": observation.cell_id,
+                }
+            else:
+                active_errors.pop(observation.action, None)
+        unresolved_errors = list(active_errors.values())
+
+        if self.state.submitted:
+            allowed_actions: list[str] = []
+        elif self.state.step >= self.state.max_steps:
+            allowed_actions = ["submit", "finalize"]
+        else:
+            allowed_actions = [
+                action
+                for action in AGENT_ACTION_TYPE_VALUES
+                if self.enable_thoughts or action != "think"
+            ]
+        return {
+            "schema_version": CONTEXT_PACK_SCHEMA_VERSION,
+            "task_contract": {
+                "protocol_version": self.protocol_version,
+                "target_column": self.state.target_col,
+                "metric_name": self.state.metric_name,
+                "metric_direction": self.metric_direction,
+                "max_steps": self.state.max_steps,
+                "train_rows": len(self.state.train),
+                "feedback_validation_rows": len(self.state.val),
+                "feature_schema": feature_schema,
+                "feature_schema_sha256": hashlib.sha256(
+                    feature_schema_bytes
+                ).hexdigest(),
+            },
+            "tested_hypotheses": hypotheses,
+            "incumbent_state": (
+                self._context_hypothesis_record(incumbent)
+                if incumbent is not None
+                else None
+            ),
+            "unresolved_errors": unresolved_errors,
+            "remaining_resources": self._context_remaining_resources(),
+            "allowed_actions": allowed_actions,
+            "notebook_state": self._notebook_status(),
+            "finalization_contract": (
+                "Use only a validated host-owned incumbent. Finalization must not "
+                "repair code, autofit, expose hidden data, or retry hidden evaluation."
+            ),
+        }
+
+    def record_context_compression(
+        self,
+        receipt: dict[str, Any],
+        *,
+        private_receipt: dict[str, Any] | None = None,
+    ) -> None:
+        self._record_event(
+            action="context_compressed",
+            **receipt,
+            private=(dict(private_receipt) if private_receipt is not None else None),
+        )
+        self._save_artifacts()
+
+    def _context_hypothesis_record(
+        self, record: CandidateRecord
+    ) -> dict[str, Any]:
+        return {
+            "candidate_id": record.candidate_id,
+            "model_var": record.model_var,
+            "notebook_revision": record.notebook_revision,
+            "metric_name": record.metric_name,
+            "metric_direction": record.metric_direction,
+            "validation_metric": record.validation_metric,
+            "raw_inference_ready": record.raw_inference_ready,
+            "registration_index": record.registration_index,
+        }
+
+    def _context_tested_hypotheses(self) -> list[dict[str, Any]]:
+        candidates_by_evidence: dict[tuple[str, int, float], str] = {}
+        for record in self.candidates.all():
+            candidates_by_evidence[
+                (
+                    record.model_var,
+                    record.notebook_revision,
+                    float(record.validation_metric),
+                )
+            ] = record.candidate_id
+
+        tested: list[dict[str, Any]] = []
+        for observation in self.state.history:
+            if observation.action not in {
+                "validate",
+                "quick_validate",
+                "check_candidate",
+            }:
+                continue
+            feedback_keys = sorted(
+                {
+                    str(item.get("key"))
+                    for item in observation.feedback_items
+                    if isinstance(item, dict) and item.get("key")
+                }
+            )
+            revision = observation.notebook_status.get(
+                "notebook_revision", self.notebook.revision
+            )
+            metric = observation.validation_metric
+            candidate_id = None
+            if observation.model_var is not None and metric is not None:
+                candidate_id = candidates_by_evidence.get(
+                    (observation.model_var, int(revision), float(metric))
+                )
+            tested.append(
+                {
+                    "action": observation.action,
+                    "model_var": observation.model_var,
+                    "notebook_revision": int(revision),
+                    "outcome": (
+                        "validated"
+                        if metric is not None
+                        else "blocked"
+                        if feedback_keys
+                        else "checked"
+                    ),
+                    "validation_metric": metric,
+                    "feedback_keys": feedback_keys,
+                    "candidate_id": candidate_id,
+                }
+            )
+        return tested
+
+    def _context_remaining_resources(self) -> dict[str, Any]:
+        resources: dict[str, Any] = {
+            "steps_remaining": self.budget_remaining(),
+            "step_limit": self.state.max_steps,
+            "episode_budget": None,
+        }
+        budget = self.episode_budget
+        if budget is None:
+            return resources
+
+        global_remaining = {
+            "total_tokens": max(
+                0, budget.policy.total_token_limit - budget.total_tokens
+            ),
+            "llm_calls": max(0, budget.policy.max_llm_calls - budget.llm_calls),
+            "code_executions": max(
+                0,
+                budget.policy.max_code_executions - budget.code_executions,
+            ),
+            "tool_calls": max(
+                0, budget.policy.max_tool_calls - budget.tool_calls
+            ),
+        }
+        exploration_remaining = None
+        finalization_remaining = None
+        if budget.finalization_reserve is not None:
+            reserve = budget.finalization_reserve
+            if budget.phase == "exploration":
+                exploration_remaining = {
+                    "total_tokens": max(
+                        0,
+                        budget.policy.total_token_limit
+                        - reserve.total_token_limit
+                        - budget.total_tokens,
+                    ),
+                    "llm_calls": max(
+                        0,
+                        budget.policy.max_llm_calls
+                        - reserve.max_llm_calls
+                        - budget.llm_calls,
+                    ),
+                    "code_executions": max(
+                        0,
+                        budget.policy.max_code_executions
+                        - reserve.max_code_executions
+                        - budget.code_executions,
+                    ),
+                    "tool_calls": max(
+                        0,
+                        budget.policy.max_tool_calls
+                        - reserve.max_tool_calls
+                        - budget.tool_calls,
+                    ),
+                }
+            else:
+                exploration_remaining = {
+                    key: 0 for key in global_remaining
+                }
+            usage = budget.snapshot()["finalization_usage"]
+            finalization_remaining = {
+                "total_tokens": max(
+                    0, reserve.total_token_limit - int(usage["total_tokens"])
+                ),
+                "llm_calls": max(
+                    0, reserve.max_llm_calls - int(usage["llm_calls"])
+                ),
+                "code_executions": max(
+                    0,
+                    reserve.max_code_executions
+                    - int(usage["code_executions"]),
+                ),
+                "tool_calls": max(
+                    0, reserve.max_tool_calls - int(usage["tool_calls"])
+                ),
+            }
+        resources["episode_budget"] = {
+            "phase": budget.phase,
+            "global_remaining": global_remaining,
+            "exploration_remaining": exploration_remaining,
+            "finalization_remaining": finalization_remaining,
+            "exploration_exhausted_reason": budget.exploration_exhausted_reason,
+            "validation_query_budget": None,
+        }
+        if budget.has_validation_query_policy:
+            query_snapshot = budget.snapshot()["validation_query_budget"]
+            query_policy = query_snapshot["policy"]
+            resources["episode_budget"]["validation_query_budget"] = {
+                "policy_version": query_policy["policy_version"],
+                "max_queries": int(query_policy["max_queries"]),
+                "finalization_reserve_queries": int(
+                    query_policy["finalization_reserve_queries"]
+                ),
+                "feedback_numeric_decimals": int(
+                    query_policy["feedback_numeric_decimals"]
+                ),
+                "queries_used": int(query_snapshot["queries"]),
+                "phase_remaining_queries": int(
+                    query_snapshot["remaining_queries"]
+                ),
+                "global_remaining_queries": int(
+                    query_snapshot["global_remaining_queries"]
+                ),
+            }
+        return resources
 
     def _write_private_json(self, filename: str, data: Any) -> None:
         self.private_dir.mkdir(parents=True, exist_ok=True)
@@ -2500,7 +3645,7 @@ with open(_AutovibePath({self.kernel.kernel_visible_path(tmp_path)!r}), "rb") as
             shutil.rmtree(self.private_dir, ignore_errors=True)
 
     def _notebook_status(self) -> dict[str, Any]:
-        return {
+        status = {
             "dirty_since_clean_run": self.dirty_since_clean_run,
             "clean_run_available": self.last_clean_run_id is not None
             and not self.dirty_since_clean_run,
@@ -2508,15 +3653,41 @@ with open(_AutovibePath({self.kernel.kernel_visible_path(tmp_path)!r}), "rb") as
             "notebook_revision": self.notebook.revision,
             "last_clean_run_id": self.last_clean_run_id,
         }
+        if self._validation_query_control_enabled():
+            assert self.episode_budget is not None
+            policy = self.episode_budget.validation_query_policy
+            assert policy is not None
+            status.update(
+                {
+                    "validation_query_policy_version": policy.to_dict()[
+                        "policy_version"
+                    ],
+                    "validation_queries_used": self.episode_budget.validation_queries,
+                    "validation_queries_remaining": (
+                        self.episode_budget.validation_queries_remaining()
+                    ),
+                    "validation_feedback_numeric_decimals": (
+                        policy.feedback_numeric_decimals
+                    ),
+                }
+            )
+        return status
 
     def _build_context_prompt(self) -> dict:
         dataset_card = build_dataset_card(
             self.state.train,
-            self.state.val,
+            self._agent_validation_frame(),
             self.state.target_col,
             self.state.metric_name,
             max_chars=4500,
         )
+        validation_boundary = ""
+        if self._validation_query_control_enabled():
+            validation_boundary = (
+                "Feedback-validation labels are host-only and are not present in "
+                "val_df or workspace files. Use the allowed validation tools; each "
+                "validation-information access is charged before evaluation.\n\n"
+            )
         return {
             "task": (
                 "You are solving a supervised ML task in a real Jupyter notebook.\n"
@@ -2531,6 +3702,7 @@ with open(_AutovibePath({self.kernel.kernel_visible_path(tmp_path)!r}), "rb") as
                 "Kernel variables already available: train_df, val_df, target_col, pd, np. "
                 "You may import installed ML libraries, create artifacts in the episode "
                 "workspace, and display plots or DataFrames.\n\n"
+                f"{validation_boundary}"
                 "Hidden test data is not available in the kernel or workspace. "
                 "Interactive state is not enough for final acceptance: run "
                 "restart_and_run_all, then validate/finalize, then submit. The final candidate "
@@ -2543,14 +3715,8 @@ with open(_AutovibePath({self.kernel.kernel_visible_path(tmp_path)!r}), "rb") as
         }
 
     def _best_validation_metric(self) -> float | None:
-        metrics = [
-            record.validation_metric
-            for record in self.candidates.all()
-            if record.validation_metric is not None
-        ]
-        if not metrics:
-            return None
-        return max(metrics)
+        incumbent = self.candidates.incumbent()
+        return incumbent.validation_metric if incumbent is not None else None
 
     def _validation_progress_feedback(self, current: float | None):
         """Turn validation into an improvement driver: report best-so-far and
@@ -2571,29 +3737,44 @@ with open(_AutovibePath({self.kernel.kernel_visible_path(tmp_path)!r}), "rb") as
         if self._first_validation_metric is None:
             self._first_validation_metric = current
 
-        prior = sorted(
-            (r.validation_metric for r in self.candidates.all() if r.validation_metric is not None),
-            reverse=True,
-        )
-        prev_best = prior[1] if len(prior) > 1 else None
+        records = self.candidates.all()
+        latest = self.candidates.latest_registered()
+        incumbent = self.candidates.incumbent()
+        prior_metrics = [
+            record.validation_metric
+            for record in records[:-1]
+            if record.validation_metric is not None
+        ]
+        if self.metric_direction == "higher":
+            prev_best = max(prior_metrics) if prior_metrics else None
+        else:
+            prev_best = min(prior_metrics) if prior_metrics else None
+        current_text = self._format_feedback_validation_metric(current)
 
         if n_validated <= 1:
             msg = (
-                f"Baseline validated: {metric}={current:.4f}. You have {steps_left} steps left. "
+                f"Baseline validated: {metric}={current_text}. You have {steps_left} steps left. "
                 "Single-shot can't iterate — you can. Spend remaining budget on at least one "
                 "improvement (try a stronger/different model family, address class balance, or "
                 "tune key hyper-parameters), then restart_and_run_all and validate again. Keep "
                 "whichever candidate has the best validation score; submit that one."
             )
-        elif prev_best is not None and current > prev_best + 1e-9:
+        elif (
+            prev_best is not None
+            and latest is not None
+            and incumbent is not None
+            and latest.candidate_id == incumbent.candidate_id
+        ):
+            prev_best_text = self._format_feedback_validation_metric(prev_best)
             msg = (
-                f"Improved: {metric}={current:.4f} — new best (was {prev_best:.4f}). "
+                f"Improved: {metric}={current_text} — new best (was {prev_best_text}). "
                 f"{steps_left} steps left: you may try one more improvement or finalize this best candidate."
             )
         else:
             best = self._best_validation_metric()
+            best_text = self._format_feedback_validation_metric(best)
             msg = (
-                f"No improvement: {metric}={current:.4f} did not beat your best ({best:.4f}). "
+                f"No improvement: {metric}={current_text} did not beat your best ({best_text}). "
                 f"{steps_left} steps left: try a different direction (model family / features / "
                 "class weights) or finalize and submit your best candidate so far."
             )
