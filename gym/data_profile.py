@@ -532,8 +532,18 @@ def _quasi_constant_columns(df: pd.DataFrame, limit: int = 30) -> list[str]:
     return out[:limit]
 
 
+def _is_categorical_like(series: pd.Series) -> bool:
+    dtype = series.dtype
+    return bool(
+        pd.api.types.is_object_dtype(dtype)
+        or pd.api.types.is_string_dtype(dtype)
+        or isinstance(dtype, pd.CategoricalDtype)
+        or pd.api.types.is_bool_dtype(dtype)
+    )
+
+
 def _categorical_columns(df: pd.DataFrame, limit: int = 30) -> list[dict[str, Any]]:
-    cols = df.select_dtypes(include=["object", "category", "bool"]).columns
+    cols = [col for col in df.columns if _is_categorical_like(df[col])]
     return [
         {"column": str(col), "nunique": int(df[col].nunique(dropna=True))}
         for col in cols[:limit]
@@ -569,7 +579,9 @@ def _possible_datetime_columns(df: pd.DataFrame, limit: int = 20) -> list[str]:
         if pd.api.types.is_datetime64_any_dtype(series) or any(k in name for k in ("date", "time", "timestamp")):
             out.append(str(col))
             continue
-        if series.dtype == object:
+        if pd.api.types.is_object_dtype(series.dtype) or pd.api.types.is_string_dtype(
+            series.dtype
+        ):
             sample = series.dropna().astype(str).head(25)
             if len(sample) >= 3:
                 parsed = pd.to_datetime(sample, errors="coerce", format="mixed")
@@ -601,7 +613,7 @@ def _numeric_summary(df: pd.DataFrame, limit: int = 12) -> dict[str, dict[str, A
 
 
 def _categorical_summary(df: pd.DataFrame, limit: int = 12) -> dict[str, dict[str, Any]]:
-    cols = df.select_dtypes(include=["object", "category", "bool"]).columns[:limit]
+    cols = [col for col in df.columns if _is_categorical_like(df[col])][:limit]
     out: dict[str, dict[str, Any]] = {}
     for col in cols:
         counts = df[col].value_counts(dropna=False).head(5)
@@ -629,11 +641,7 @@ def _unseen_categories(train: pd.DataFrame, val: pd.DataFrame, limit: int = 15) 
     out = []
     common = [c for c in train.columns if c in val.columns]
     for col in common:
-        if not (
-            pd.api.types.is_object_dtype(train[col])
-            or isinstance(train[col].dtype, pd.CategoricalDtype)
-            or pd.api.types.is_bool_dtype(train[col])
-        ):
+        if not _is_categorical_like(train[col]):
             continue
         train_values = set(train[col].dropna().astype(str).unique())
         val_values = set(val[col].dropna().astype(str).unique())

@@ -1554,7 +1554,8 @@ print("\\n".join(hits))
 """.strip()
 
 
-def test_score_with_coercion_handles_label_encoding():
+@pytest.mark.parametrize("target_dtype", ["object", "string"])
+def test_score_with_coercion_handles_label_encoding(target_dtype):
     from sklearn.metrics import f1_score
 
     from gym.notebook_env import _score_with_coercion
@@ -1562,7 +1563,7 @@ def test_score_with_coercion_handles_label_encoding():
     def metric(y_true, y_pred):
         return f1_score(y_true, y_pred, average="macro")
 
-    y_true = pd.Series(["a", "b", "a", "c"])
+    y_true = pd.Series(["a", "b", "a", "c"], dtype=target_dtype)
     int_preds = [0, 1, 0, 2]  # LabelEncoded predictions against string labels
     assert _score_with_coercion(metric, y_true, int_preds) == 1.0
 
